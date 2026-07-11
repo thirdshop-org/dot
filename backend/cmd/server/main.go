@@ -19,6 +19,7 @@ func main() {
 	r.GET("/api/v1/health", handlers.Health)
 
 	r.GET("/api/v1/files", handlers.ListFiles)
+	r.GET("/api/v1/file/:id", handlers.ListFile)
 	r.POST("/api/v1/files/upload", handlers.UploadFile)
 	r.GET("/api/v1/files/:id", handlers.GetFile)
 	r.DELETE("/api/v1/files/:id", handlers.DeleteFile)

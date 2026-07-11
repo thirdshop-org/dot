@@ -70,6 +70,71 @@ func ListFiles(c *gin.Context) {
 	})
 }
 
+func ListFile(c *gin.Context) {
+
+	id := c.Query("id")
+
+	dirs, err := os.ReadDir("./uploads/")
+
+	if err != nil {
+
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"data": []interface{}{},
+			"meta": gin.H{
+				"page":  1,
+				"total": 0,
+			},
+		})
+
+		return
+	}
+
+	type Finfo struct {
+		Url  string   `json:"url"`
+		Name string   `json:"name"`
+		Size int64    `json:"size"`
+		Tags []string `json:"tags"`
+	}
+
+	file := Finfo{}
+
+	for _, dir := range dirs {
+
+		if dir.IsDir() {
+			continue
+		}
+
+		i, e := dir.Info()
+
+		if e != nil {
+			continue
+		}
+
+		if id != i.Name() {
+			continue
+		}
+
+		ps := Finfo{
+			Url:  service.GenerateFileDownloadUrl(i.Name()),
+			Name: i.Name(),
+			Size: i.Size(),
+			Tags: []string{},
+		}
+
+		file = ps
+
+		break
+
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"data": file,
+		"meta": gin.H{
+			"total": 1,
+		},
+	})
+}
+
 func GetFile(c *gin.Context) {
 
 	exp, _ := strconv.ParseInt(c.Query("expires"), 10, 64)
@@ -78,7 +143,7 @@ func GetFile(c *gin.Context) {
 
 	if r != true {
 
-		c.JSON(http.StatusNotFound, gin.H{
+		c.JSON(http.StatusForbidden, gin.H{
 			"error": gin.H{
 				"code":    "FILE_NOT_FOUND",
 				"message": "File not found",

@@ -1,7 +1,8 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, Image, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { FileItem } from '../types';
 import { TagChip } from './TagChip';
+import { useFileImage } from '../hooks/useFileImage';
 
 interface FileCardProps {
   file: FileItem;
@@ -9,16 +10,25 @@ interface FileCardProps {
 }
 
 export function FileCard({ file, onPress }: FileCardProps) {
+  const { localUri, loading } = useFileImage(file.url);
+console.log(localUri)
   const formatSize = (bytes: number) => {
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
-  console.log(file)
-
   return (
     <TouchableOpacity style={styles.container} onPress={() => onPress?.(file)}>
+      {file.url && (
+        <View style={styles.imageContainer}>
+          {loading && <ActivityIndicator style={styles.imageLoader} />}
+          {localUri && (
+            <Image source={{ uri: localUri }} style={styles.image} resizeMode="cover" />
+          )}
+        </View>
+      )}
+
       <View style={styles.header}>
         <Text style={styles.name} numberOfLines={1}>
           {file.name}
@@ -52,6 +62,25 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 2,
     elevation: 2,
+  },
+  imageContainer: {
+    width: '100%',
+    height: 200,
+    borderRadius: 8,
+    overflow: 'hidden',
+    marginBottom: 12,
+    backgroundColor: '#f0f0f0',
+  },
+  image: {
+    width: '100%',
+    height: '100%',
+  },
+  imageLoader: {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    marginTop: -10,
+    marginLeft: -10,
   },
   header: {
     flexDirection: 'row',

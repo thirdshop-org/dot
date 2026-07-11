@@ -7,6 +7,7 @@ export interface FileItem {
   updatedAt: string;
   ocrText?: string;
   tags: Tag[];
+  url?: string;
 }
 
 export interface Tag {
