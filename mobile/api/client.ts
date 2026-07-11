@@ -43,24 +43,6 @@ class ApiClient {
   async delete<T>(endpoint: string): Promise<T> {
     return this.request<T>(endpoint, { method: 'DELETE' });
   }
-
-  async uploadFile<T>(endpoint: string, formData: FormData): Promise<T> {
-    const url = `${this.baseUrl}${endpoint}`;
-    const response = await fetch(url, {
-      method: 'POST',
-      body: formData,
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
-
-    if (!response.ok) {
-      const error: ApiError = await response.json();
-      throw new Error(error.error?.message || 'Upload failed');
-    }
-
-    return response.json();
-  }
 }
 
 export const apiClient = new ApiClient(API_BASE_URL);

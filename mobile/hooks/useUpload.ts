@@ -1,20 +1,23 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { File, UploadType } from 'expo-file-system';
 import { apiClient } from '../api/client';
-import { ENDPOINTS } from '../constants/api';
+import { API_BASE_URL, ENDPOINTS } from '../constants/api';
 import { OcrJob } from '../types';
 
 export function useUpload() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (file: File) => {
-      const formData = new FormData();
-      formData.append('file', file);
+    mutationFn: async (file: { uri: string; type: string; name: string }) => {
+      const fsFile = new File(file.uri);
+      const result = await fsFile.upload(`${API_BASE_URL}${ENDPOINTS.UPLOAD}`, {
+        httpMethod: 'POST',
+        uploadType: UploadType.MULTIPART,
+        fieldName: 'file',
+        mimeType: file.type,
+      });
 
-      return apiClient.uploadFile<{ id: string; ocrJobId: string }>(
-        ENDPOINTS.UPLOAD,
-        formData
-      );
+      return JSON.parse(result.body) as { id: string; ocrJobId: string };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['files'] });

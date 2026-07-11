@@ -47,7 +47,7 @@ export function HomeScreen() {
       <FlatList
         data={data?.data || []}
         renderItem={renderItem}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => item.name}
         contentContainerStyle={styles.list}
       />
 

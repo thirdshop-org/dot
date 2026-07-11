@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
-import * as ImagePicker from 'react-native-image-picker';
+import * as ImagePicker from 'expo-image-picker';
 import { useUpload } from '../hooks/useUpload';
 import { UploadProgress } from '../components/UploadProgress';
 
@@ -11,28 +11,30 @@ export function UploadScreen() {
 
   const pickImage = async () => {
     try {
-      const result = await ImagePicker.launchImageLibrary({
-        mediaType: 'photo',
-        quality: 1,
-      });
-
-      if (result.didCancel) return;
-      if (result.errorCode) {
-        Alert.alert('Erreur', result.errorMessage || "Impossible d'accéder à la galerie");
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission requise', "L'accès à la galerie est nécessaire pour sélectionner une photo.");
         return;
       }
+      console.log('yes')
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        quality: 1,
+      });
+      console.log(result)
+      if (result.canceled) return;
 
       if (result.assets && result.assets[0]) {
         setUploadStatus('uploading');
         const asset = result.assets[0];
         const file = {
           uri: asset.uri,
-          type: asset.type || 'image/jpeg',
+          type: asset.mimeType || 'image/jpeg',
           name: asset.fileName || 'photo.jpg',
         };
 
         try {
-          const response = await upload.mutateAsync(file as any);
+          const response = await upload.mutateAsync(file);
           setUploadStatus('processing');
           console.log('Upload success:', response);
           setUploadStatus('success');

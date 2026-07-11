@@ -15,6 +15,8 @@ export function FileCard({ file, onPress }: FileCardProps) {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
+  console.log(file)
+
   return (
     <TouchableOpacity style={styles.container} onPress={() => onPress?.(file)}>
       <View style={styles.header}>

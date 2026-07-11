@@ -1,20 +1,22 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
-import * as ImagePicker from 'react-native-image-picker';
+import * as ImagePicker from 'expo-image-picker';
 
 export function ScanScreen() {
   const takePhoto = async () => {
     try {
-      const result = await ImagePicker.launchCamera({
-        mediaType: 'photo',
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission requise', "L'accès à la caméra est nécessaire pour scanner un document.");
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ['images'],
         quality: 1,
       });
 
-      if (result.didCancel) return;
-      if (result.errorCode) {
-        Alert.alert('Erreur', result.errorMessage || "Impossible d'accéder à la caméra");
-        return;
-      }
+      if (result.canceled) return;
 
       if (result.assets && result.assets[0]) {
         console.log('Photo taken:', result.assets[0]);
