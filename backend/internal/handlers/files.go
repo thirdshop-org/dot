@@ -13,7 +13,12 @@ import (
 
 // retourne qui est delete qui est updated et created
 func SyncFiles(c *gin.Context) {
-
+	c.JSON(http.StatusNotImplemented, gin.H{
+		"error": gin.H{
+			"code":    "NOT_IMPLEMENTED",
+			"message": "Sync not yet implemented",
+		},
+	})
 }
 
 func ListFiles(c *gin.Context) {
