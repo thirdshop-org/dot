@@ -11,6 +11,11 @@ import (
 	"github.com/vaultdrop/backend/internal/service"
 )
 
+// retourne qui est delete qui est updated et created
+func SyncFiles(c *gin.Context) {
+
+}
+
 func ListFiles(c *gin.Context) {
 
 	dirs, err := os.ReadDir("./uploads/")
