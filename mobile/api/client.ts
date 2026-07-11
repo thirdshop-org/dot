@@ -1,4 +1,4 @@
-import { API_BASE_URL } from '../constants/api';
+import { API_BASE_URL, ENDPOINTS } from '../constants/api';
 import { ApiError } from '../types';
 
 class ApiClient {
@@ -42,6 +42,10 @@ class ApiClient {
 
   async delete<T>(endpoint: string): Promise<T> {
     return this.request<T>(endpoint, { method: 'DELETE' });
+  }
+
+  async getFileUrl(fileName: string): Promise<{ data: { url: string; name: string } }> {
+    return this.request(`${ENDPOINTS.FILE}/${fileName}`);
   }
 }
 

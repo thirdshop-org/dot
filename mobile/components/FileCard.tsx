@@ -10,8 +10,7 @@ interface FileCardProps {
 }
 
 export function FileCard({ file, onPress }: FileCardProps) {
-  const { localUri, loading } = useFileImage(file.url);
-console.log(localUri)
+  const { localUri, loading } = useFileImage(file.url, file.name);
   const formatSize = (bytes: number) => {
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;

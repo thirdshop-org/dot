@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"fmt"
 	"net/http"
 	"os"
 	"path"
@@ -72,7 +71,7 @@ func ListFiles(c *gin.Context) {
 
 func ListFile(c *gin.Context) {
 
-	id := c.Query("id")
+	id := c.Param("id")
 
 	dirs, err := os.ReadDir("./uploads/")
 
@@ -175,12 +174,10 @@ func UploadFile(c *gin.Context) {
 
 	c.SaveUploadedFile(file, dst)
 
-	c.String(http.StatusOK, fmt.Sprintf("'%s' uploaded!", file.Filename))
-
-	c.JSON(http.StatusNotImplemented, gin.H{
+	c.JSON(http.StatusOK, gin.H{
 		"error": gin.H{
-			"code":    "NOT_IMPLEMENTED",
-			"message": "Upload not yet implemented",
+			"code":    "SUCCESS",
+			"message": "Uploaded",
 		},
 	})
 }
