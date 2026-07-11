@@ -4,9 +4,12 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/vaultdrop/backend/internal/service"
 )
 
 func ListFiles(c *gin.Context) {
@@ -15,7 +18,6 @@ func ListFiles(c *gin.Context) {
 
 	if err != nil {
 
-		fmt.Println("What")
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"data": []interface{}{},
 			"meta": gin.H{
@@ -28,6 +30,7 @@ func ListFiles(c *gin.Context) {
 	}
 
 	type Finfo struct {
+		Url  string   `json:"url"`
 		Name string   `json:"name"`
 		Size int64    `json:"size"`
 		Tags []string `json:"tags"`
@@ -48,6 +51,7 @@ func ListFiles(c *gin.Context) {
 		}
 
 		ps := Finfo{
+			Url:  service.GenerateFileDownloadUrl(i.Name()),
 			Name: i.Name(),
 			Size: i.Size(),
 			Tags: []string{},
@@ -67,12 +71,26 @@ func ListFiles(c *gin.Context) {
 }
 
 func GetFile(c *gin.Context) {
-	c.JSON(http.StatusNotFound, gin.H{
-		"error": gin.H{
-			"code":    "FILE_NOT_FOUND",
-			"message": "File not found",
-		},
-	})
+
+	exp, _ := strconv.ParseInt(c.Query("expires"), 10, 64)
+
+	r := service.Validate(c.Params.ByName("id"), c.Query("sig"), exp)
+
+	if r != true {
+
+		c.JSON(http.StatusNotFound, gin.H{
+			"error": gin.H{
+				"code":    "FILE_NOT_FOUND",
+				"message": "File not found",
+			},
+		})
+
+		return
+
+	}
+
+	c.File(path.Join("./uploads/", c.Params.ByName("id")))
+
 }
 
 func UploadFile(c *gin.Context) {
