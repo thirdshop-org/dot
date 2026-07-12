@@ -4,6 +4,7 @@ import logging
 from io import BytesIO
 
 import numpy as np
+import pypdfium2 as pdfium
 from fastapi import FastAPI, UploadFile, File
 from fastapi.responses import JSONResponse
 from paddleocr import PaddleOCR
@@ -58,32 +59,50 @@ def ocr_upload(file: UploadFile = File(...)):
     return run_ocr(img_bytes)
 
 
+def _is_pdf(data: bytes) -> bool:
+    return data[:5] == b"%PDF-"
+
+
+def _pdf_to_images(pdf_bytes: bytes):
+    doc = pdfium.PdfDocument(BytesIO(pdf_bytes))
+    images = []
+    for i in range(len(doc)):
+        page = doc[i]
+        bitmap = page.render(scale=3)
+        pil_image = bitmap.to_pil()
+        images.append(pil_image.convert("RGB"))
+    doc.close()
+    return images
+
+
 def run_ocr(img_bytes: bytes):
     try:
-        image = Image.open(BytesIO(img_bytes))
-        if image.mode != "RGB":
-            image = image.convert("RGB")
-        img_array = np.array(image)
-        print(f"[OCR] Image decoded: {img_array.shape}", flush=True)
-    except Exception as e:
-        print(f"[OCR] Image decode FAILED: {e}", flush=True)
-        return JSONResponse(
-            status_code=400,
-            content={"errorCode": 1, "message": f"failed to decode image: {e}"},
-        )
-
-    try:
-        result = list(ocr_engine.predict(img_array))
+        if _is_pdf(img_bytes):
+            images = _pdf_to_images(img_bytes)
+            print(f"[OCR] PDF: {len(images)} pages", flush=True)
+        else:
+            images = [Image.open(BytesIO(img_bytes)).convert("RGB")]
 
         pages = []
-        for r in result:
-            raw = r._to_json()
-            data = raw.get("res", raw)
+        for i, image in enumerate(images):
+            img_array = np.array(image)
+            print(f"[OCR] Page {i+1}/{len(images)}: {img_array.shape}", flush=True)
+            result = list(ocr_engine.predict(img_array))
+
+            texts, scores, boxes, polys = [], [], [], []
+            for r in result:
+                raw = r._to_json()
+                data = raw.get("res", raw)
+                texts.extend(data.get("rec_texts", []))
+                scores.extend(float(s) for s in data.get("rec_scores", []))
+                boxes.extend(data.get("rec_boxes", []))
+                polys.extend(data.get("rec_polys", []))
+
             pages.append({
-                "rec_texts": data.get("rec_texts", []),
-                "rec_scores": [float(s) for s in data.get("rec_scores", [])],
-                "rec_boxes": data.get("rec_boxes", []),
-                "rec_polys": data.get("rec_polys", []),
+                "rec_texts": texts,
+                "rec_scores": scores,
+                "rec_boxes": boxes,
+                "rec_polys": polys,
             })
 
         return {"errorCode": 0, "result": {"ocrResults": pages}}

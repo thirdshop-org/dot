@@ -12,7 +12,8 @@ RUN pip install --no-cache-dir \
     uvicorn \
     python-multipart \
     Pillow \
-    numpy
+    numpy \
+    pypdfium2
 
 COPY server.py /workspace/server.py
 
