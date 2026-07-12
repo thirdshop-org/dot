@@ -178,8 +178,8 @@ func (h *Handlers) UploadFiles(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": gin.H{
-				"code":    "NOT_FOUND",
-				"message": "form file with file name missing",
+				"code":    "ERROR_PARSING",
+				"message": "Error while parsing multipart form",
 			},
 		})
 		return
