@@ -1,10 +1,13 @@
 import React from 'react';
-import { View, FlatList, StyleSheet, TouchableOpacity, Text } from 'react-native';
+import { View, FlatList, StyleSheet, TouchableOpacity, Text, Dimensions, Image } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useFiles } from '../hooks/useFiles';
-import { FileCard } from '../components/FileCard';
 import { FileItem } from '../types';
+
+const NUM_COLUMNS = 3;
+const SCREEN_WIDTH = Dimensions.get('window').width;
+const ITEM_SIZE = (SCREEN_WIDTH - 16 * 2 - (NUM_COLUMNS - 1) * 6) / NUM_COLUMNS;
 
 type RootStackParamList = {
   Home: undefined;
@@ -15,21 +18,39 @@ type RootStackParamList = {
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
+type GroupedFiles = Record<string, FileItem[]>;
+
+function groupByDate(files: FileItem[]): GroupedFiles {
+  const groups: GroupedFiles = {};
+  for (const file of files) {
+    const d = new Date(file.createdAt);
+    const key = d.toLocaleDateString('fr-FR', {
+      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+    });
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(file);
+  }
+  return groups;
+}
+
+function formatDateLabel(key: string): string {
+  const d = new Date();
+  const today = d.toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  d.setDate(d.getDate() - 1);
+  const yesterday = d.toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  if (key === today) return "Aujourd'hui";
+  if (key === yesterday) return 'Hier';
+  return key.charAt(0).toUpperCase() + key.slice(1);
+}
+
 export function HomeScreen() {
   const navigation = useNavigation<NavigationProp>();
   const { data, isLoading, error } = useFiles();
 
-  const renderItem = ({ item }: { item: FileItem }) => (
-    <FileCard
-      file={item}
-      onPress={(file) => console.log('File pressed:', file.id)}
-    />
-  );
-
   if (isLoading) {
     return (
       <View style={styles.center}>
-        <Text>Chargement...</Text>
+        <Text style={styles.infoText}>Chargement...</Text>
       </View>
     );
   }
@@ -37,18 +58,43 @@ export function HomeScreen() {
   if (error) {
     return (
       <View style={styles.center}>
-        <Text>Erreur de chargement</Text>
+        <Text style={styles.infoText}>Erreur de chargement</Text>
       </View>
     );
   }
 
+  const files = data?.data ?? [];
+  const groups = groupByDate(files);
+  const groupKeys = Object.keys(groups);
+
   return (
     <View style={styles.container}>
       <FlatList
-        data={data?.data || []}
-        renderItem={renderItem}
-        keyExtractor={(item) => item.name}
+        data={groupKeys}
+        keyExtractor={(item) => item}
         contentContainerStyle={styles.list}
+        renderItem={({ item: dateKey }) => {
+          const groupFiles = groups[dateKey];
+          return (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>{formatDateLabel(dateKey)}</Text>
+              <View style={styles.grid}>
+                {groupFiles.map((file) => (
+                  <View key={file.id} style={styles.gridItem}>
+                    {file.url ? (
+                      <Image source={{ uri: file.url }} style={styles.thumb} />
+                    ) : (
+                      <View style={styles.placeholder}>
+                        <Text style={styles.placeholderText}>PDF</Text>
+                      </View>
+                    )}
+                    <Text style={styles.fileName} numberOfLines={1}>{file.name}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          );
+        }}
       />
 
       <View style={styles.bottomNav}>
@@ -87,8 +133,55 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  infoText: {
+    fontSize: 16,
+    color: '#666',
+  },
   list: {
     padding: 16,
+    paddingBottom: 80,
+  },
+  section: {
+    marginBottom: 24,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 12,
+    color: '#333',
+  },
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  gridItem: {
+    width: ITEM_SIZE,
+  },
+  thumb: {
+    width: ITEM_SIZE,
+    height: ITEM_SIZE,
+    borderRadius: 6,
+    backgroundColor: '#e0e0e0',
+  },
+  placeholder: {
+    width: ITEM_SIZE,
+    height: ITEM_SIZE,
+    borderRadius: 6,
+    backgroundColor: '#e3f2fd',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  placeholderText: {
+    fontSize: 12,
+    color: '#1976D2',
+    fontWeight: '600',
+  },
+  fileName: {
+    fontSize: 11,
+    color: '#666',
+    marginTop: 4,
+    textAlign: 'center',
   },
   bottomNav: {
     flexDirection: 'row',
