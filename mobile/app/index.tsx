@@ -341,7 +341,7 @@ const styles = StyleSheet.create({
     color: '#666',
   },
   list: {
-    padding: 16,
+    padding: 15,
     paddingBottom: 80,
   },
   empty: {
