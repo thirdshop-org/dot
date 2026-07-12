@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
-import { View, FlatList, StyleSheet, TouchableOpacity, Text, Dimensions, Image, ActivityIndicator } from 'react-native';
+import { View, FlatList, StyleSheet, TouchableOpacity, Text, Dimensions, Image, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useFiles, useFileImage } from '../hooks/useFiles';
@@ -98,6 +99,7 @@ function matchesQuery(file: FileItem, query: string, filters: SearchFilters): bo
 
 export function HomeScreen() {
   const navigation = useNavigation<NavigationProp>();
+  const insets = useSafeAreaInsets();
   const { data, isLoading, error } = useFiles();
   const [searchQuery, setSearchQuery] = useState('');
   const [filters, setFilters] = useState<SearchFilters>({ name: true, ocrText: true, tags: true });
@@ -135,11 +137,17 @@ export function HomeScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 96 : 0}
+    >
       <FlatList
         data={groupKeys}
         keyExtractor={(item) => item}
         contentContainerStyle={styles.list}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         ListEmptyComponent={
           <View style={styles.empty}>
             <Text style={styles.emptyText}>
@@ -177,6 +185,7 @@ export function HomeScreen() {
         onClear={() => setSearchQuery('')}
         filters={filters}
         onFiltersChange={setFilters}
+        bottomPadding={insets.bottom+8}
       />
 
       <View style={styles.bottomNav}>
@@ -201,7 +210,7 @@ export function HomeScreen() {
           <Text style={styles.navText}>Scan</Text>
         </TouchableOpacity>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 

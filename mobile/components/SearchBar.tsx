@@ -17,6 +17,7 @@ interface SearchBarProps {
   onClear: () => void;
   filters: SearchFilters;
   onFiltersChange: (f: SearchFilters) => void;
+  bottomPadding?: number;
 }
 
 const FILTER_OPTIONS: { key: keyof SearchFilters; label: string; icon: IconName }[] = [
@@ -25,7 +26,7 @@ const FILTER_OPTIONS: { key: keyof SearchFilters; label: string; icon: IconName 
   { key: 'tags', label: 'Tags', icon: 'label-outline' },
 ];
 
-export function SearchBar({ query, onQueryChange, onClear, filters, onFiltersChange }: SearchBarProps) {
+export function SearchBar({ query, onQueryChange, onClear, filters, onFiltersChange, bottomPadding = 0 }: SearchBarProps) {
   const animatedHeight = useRef(new Animated.Value(0)).current;
   const [panelOpen, setPanelOpen] = React.useState(false);
 
@@ -50,7 +51,7 @@ export function SearchBar({ query, onQueryChange, onClear, filters, onFiltersCha
   const hasActiveFilter = filters.name || filters.ocrText || filters.tags;
 
   return (
-    <View style={styles.wrapper}>
+    <View style={[styles.wrapper, { paddingBottom: bottomPadding }]}>
       <View style={styles.inputRow}>
         <View style={styles.inputContainer}>
           <MaterialIcons name="search" size={20} color="#999" style={styles.searchIcon} />
