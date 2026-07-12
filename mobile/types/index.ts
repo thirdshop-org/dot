@@ -38,3 +38,25 @@ export interface ApiError {
     message: string;
   };
 }
+
+export class HttpError extends Error {
+  status: number;
+  code?: string;
+
+  constructor(status: number, message: string, code?: string) {
+    super(message);
+    this.name = 'HttpError';
+    this.status = status;
+    this.code = code;
+  }
+}
+
+export class UploadError extends HttpError {
+  fileName: string;
+
+  constructor(fileName: string, status: number, message: string, code?: string) {
+    super(status, message, code);
+    this.name = 'UploadError';
+    this.fileName = fileName;
+  }
+}

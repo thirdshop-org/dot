@@ -1,5 +1,5 @@
 import { API_BASE_URL, ENDPOINTS } from '../constants/api';
-import { ApiError } from '../types';
+import { ApiError, HttpError } from '../types';
 
 class ApiClient {
   private baseUrl: string;
@@ -22,8 +22,14 @@ class ApiClient {
     });
 
     if (!response.ok) {
-      const error: ApiError = await response.json();
-      throw new Error(error.error?.message || 'Request failed');
+      let message = 'Request failed';
+      let code: string | undefined;
+      try {
+        const body: ApiError = await response.json();
+        message = body.error?.message || message;
+        code = body.error?.code;
+      } catch {}
+      throw new HttpError(response.status, message, code);
     }
 
     return response.json();

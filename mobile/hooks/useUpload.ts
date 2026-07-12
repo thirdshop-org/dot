@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { File, UploadType } from 'expo-file-system';
 import { apiClient } from '../api/client';
 import { API_BASE_URL, ENDPOINTS } from '../constants/api';
-import { OcrJob } from '../types';
+import { ApiError, OcrJob, UploadError } from '../types';
 
 export type UploadFile = { uri: string; type: string; name: string };
 export type UploadResult = { name: string; id: string };
@@ -21,23 +21,42 @@ export function useUpload() {
             fieldName: 'file',
             mimeType: file.type,
           });
+
+          if (result.status >= 400) {
+            let serverMessage = 'Erreur serveur';
+            let serverCode: string | undefined;
+            try {
+              const body: ApiError = JSON.parse(result.body);
+              serverMessage = body.error?.message || serverMessage;
+              serverCode = body.error?.code;
+            } catch {
+              serverMessage = result.body || serverMessage;
+            }
+            throw new UploadError(file.name, result.status, serverMessage, serverCode);
+          }
+
           return JSON.parse(result.body) as UploadResult;
         })
       );
 
       const uploaded: UploadResult[] = [];
-      const errors: { name: string; error: string }[] = [];
+      const errors: UploadError[] = [];
 
       results.forEach((r, i) => {
         if (r.status === 'fulfilled') {
           uploaded.push(r.value);
         } else {
-          errors.push({ name: files[i].name, error: r.reason?.message || 'Upload failed' });
+          const reason = r.reason;
+          if (reason instanceof UploadError) {
+            errors.push(reason);
+          } else {
+            errors.push(new UploadError(files[i].name, 0, reason?.message || 'Upload failed'));
+          }
         }
       });
 
       if (errors.length > 0 && uploaded.length === 0) {
-        throw new Error(errors.map((e) => `${e.name}: ${e.error}`).join('\n'));
+        throw errors[0];
       }
 
       return { uploaded, errors };

@@ -2,7 +2,7 @@ export const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://192.
 
 export const ENDPOINTS = {
   FILES: '/files',
-  FILE: '/file',
+  FILE: '/files',
   UPLOAD: '/files/upload',
   SEARCH: '/files/search',
   OCR_JOBS: '/ocr/jobs',

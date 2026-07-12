@@ -4,6 +4,24 @@ import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { useUpload, UploadFile } from '../hooks/useUpload';
 import { UploadProgress } from '../components/UploadProgress';
+import { UploadError } from '../types';
+
+function getUploadErrorMessage(err: UploadError): string {
+  switch (err.status) {
+    case 400:
+      return `${err.fileName} : format invalide (${err.message})`;
+    case 404:
+      return `${err.fileName} : endpoint introuvable`;
+    case 413:
+      return `${err.fileName} : fichier trop volumineux`;
+    case 500:
+      return `${err.fileName} : erreur serveur (${err.message})`;
+    case 0:
+      return `${err.fileName} : impossible de contacter le serveur`;
+    default:
+      return `${err.fileName} : erreur ${err.status} (${err.message})`;
+  }
+}
 
 export function UploadScreen() {
   const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'processing' | 'success' | 'error'>('idle');
@@ -16,6 +34,7 @@ export function UploadScreen() {
     setUploadStatus('uploading');
     setUploadedCount(0);
     setTotalCount(files.length);
+    setError(undefined);
 
     try {
       const response = await upload.mutateAsync(files);
@@ -23,13 +42,22 @@ export function UploadScreen() {
 
       if (response.errors.length > 0) {
         setUploadStatus('error');
-        setError(`${response.uploaded.length}/${totalCount} uploadés. Erreurs : ${response.errors.map((e) => e.name).join(', ')}`);
+        const messages = response.errors.map((e) => getUploadErrorMessage(e));
+        setError(
+          `${response.uploaded.length}/${totalCount} uploadés.\n${messages.join('\n')}`
+        );
       } else {
         setUploadStatus('success');
       }
     } catch (err) {
       setUploadStatus('error');
-      setError(err instanceof Error ? err.message : 'Upload failed');
+      if (err instanceof UploadError) {
+        setError(getUploadErrorMessage(err));
+      } else if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError("Erreur inconnue lors de l'upload");
+      }
     }
   };
 
