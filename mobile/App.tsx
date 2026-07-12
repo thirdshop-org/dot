@@ -18,7 +18,12 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <NavigationContainer>
         <Stack.Navigator initialRouteName="Home">
-          <Stack.Screen name="Home" component={HomeScreen} options={{ title: 'VaultDrop' }} />
+          <Stack.Screen name="Home" component={HomeScreen} 
+          options={{ 
+            title: 'Dot.',
+            headerTitleStyle: { fontSize: 18 },
+          }} 
+          />
           <Stack.Screen name="Upload" component={UploadScreen} options={{ title: 'Upload' }} />
           <Stack.Screen name="Scan" component={ScanScreen} options={{ title: 'Scan' }} />
           <Stack.Screen name="Search" component={SearchScreen} options={{ title: 'Recherche' }} />
