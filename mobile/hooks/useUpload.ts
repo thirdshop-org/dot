@@ -4,20 +4,43 @@ import { apiClient } from '../api/client';
 import { API_BASE_URL, ENDPOINTS } from '../constants/api';
 import { OcrJob } from '../types';
 
+export type UploadFile = { uri: string; type: string; name: string };
+export type UploadResult = { name: string; id: string };
+
 export function useUpload() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (file: { uri: string; type: string; name: string }) => {
-      const fsFile = new File(file.uri);
-      const result = await fsFile.upload(`${API_BASE_URL}${ENDPOINTS.UPLOAD}`, {
-        httpMethod: 'POST',
-        uploadType: UploadType.MULTIPART,
-        fieldName: 'file',
-        mimeType: file.type,
+    mutationFn: async (files: UploadFile[]) => {
+      const results = await Promise.allSettled(
+        files.map(async (file) => {
+          const fsFile = new File(file.uri);
+          const result = await fsFile.upload(`${API_BASE_URL}${ENDPOINTS.UPLOAD}`, {
+            httpMethod: 'POST',
+            uploadType: UploadType.MULTIPART,
+            fieldName: 'file',
+            mimeType: file.type,
+          });
+          return JSON.parse(result.body) as UploadResult;
+        })
+      );
+
+      const uploaded: UploadResult[] = [];
+      const errors: { name: string; error: string }[] = [];
+
+      results.forEach((r, i) => {
+        if (r.status === 'fulfilled') {
+          uploaded.push(r.value);
+        } else {
+          errors.push({ name: files[i].name, error: r.reason?.message || 'Upload failed' });
+        }
       });
 
-      return JSON.parse(result.body) as { id: string; ocrJobId: string };
+      if (errors.length > 0 && uploaded.length === 0) {
+        throw new Error(errors.map((e) => `${e.name}: ${e.error}`).join('\n'));
+      }
+
+      return { uploaded, errors };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['files'] });

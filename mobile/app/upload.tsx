@@ -7,41 +7,52 @@ import { UploadProgress } from '../components/UploadProgress';
 export function UploadScreen() {
   const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'processing' | 'success' | 'error'>('idle');
   const [error, setError] = useState<string>();
+  const [uploadedCount, setUploadedCount] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
   const upload = useUpload();
 
-  const pickImage = async () => {
+  const pickImages = async () => {
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission requise', "L'accès à la galerie est nécessaire pour sélectionner une photo.");
+        Alert.alert('Permission requise', "L'accès à la galerie est nécessaire pour sélectionner des photos.");
         return;
       }
-      console.log('yes')
+
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
         quality: 1,
+        allowsMultipleSelection: true,
       });
-      console.log(result)
+
       if (result.canceled) return;
 
-      if (result.assets && result.assets[0]) {
-        setUploadStatus('uploading');
-        const asset = result.assets[0];
-        const file = {
-          uri: asset.uri,
-          type: asset.mimeType || 'image/jpeg',
-          name: asset.fileName || 'photo.jpg',
-        };
+      const assets = result.assets;
+      if (assets.length === 0) return;
 
-        try {
-          const response = await upload.mutateAsync(file);
-          setUploadStatus('processing');
-          console.log('Upload success:', response);
-          setUploadStatus('success');
-        } catch (err) {
+      setUploadStatus('uploading');
+      setUploadedCount(0);
+      setTotalCount(assets.length);
+
+      const files = assets.map((asset) => ({
+        uri: asset.uri,
+        type: asset.mimeType || 'image/jpeg',
+        name: asset.fileName || 'photo.jpg',
+      }));
+
+      try {
+        const response = await upload.mutateAsync(files);
+        setUploadedCount(response.uploaded.length);
+
+        if (response.errors.length > 0) {
           setUploadStatus('error');
-          setError(err instanceof Error ? err.message : 'Upload failed');
+          setError(`${response.uploaded.length}/${totalCount} uploadés. Erreurs : ${response.errors.map((e) => e.name).join(', ')}`);
+        } else {
+          setUploadStatus('success');
         }
+      } catch (err) {
+        setUploadStatus('error');
+        setError(err instanceof Error ? err.message : 'Upload failed');
       }
     } catch (err) {
       Alert.alert('Erreur', "Impossible d'accéder à la galerie");
@@ -50,10 +61,15 @@ export function UploadScreen() {
 
   return (
     <View style={styles.container}>
-      <UploadProgress status={uploadStatus} error={error} />
+      <UploadProgress
+        status={uploadStatus}
+        error={error}
+        uploadedCount={uploadedCount}
+        totalCount={totalCount}
+      />
 
-      <TouchableOpacity style={styles.uploadButton} onPress={pickImage}>
-        <Text style={styles.uploadText}>Sélectionner une photo</Text>
+      <TouchableOpacity style={styles.uploadButton} onPress={pickImages}>
+        <Text style={styles.uploadText}>Sélectionner des photos</Text>
       </TouchableOpacity>
     </View>
   );

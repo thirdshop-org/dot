@@ -5,10 +5,14 @@ interface UploadProgressProps {
   progress?: number;
   status: 'idle' | 'uploading' | 'processing' | 'success' | 'error';
   error?: string;
+  uploadedCount?: number;
+  totalCount?: number;
 }
 
-export function UploadProgress({ progress, status, error }: UploadProgressProps) {
+export function UploadProgress({ progress, status, error, uploadedCount, totalCount }: UploadProgressProps) {
   if (status === 'idle') return null;
+
+  const hasMulti = totalCount !== undefined && totalCount > 1;
 
   return (
     <View style={styles.container}>
@@ -16,7 +20,9 @@ export function UploadProgress({ progress, status, error }: UploadProgressProps)
         <>
           <ActivityIndicator size="small" color="#1976D2" />
           <Text style={styles.text}>
-            Upload en cours... {progress !== undefined && `${progress}%`}
+            {hasMulti
+              ? `Upload ${uploadedCount || 0}/${totalCount}...`
+              : `Upload en cours...${progress !== undefined ? ` ${progress}%` : ''}`}
           </Text>
         </>
       )}
@@ -29,7 +35,9 @@ export function UploadProgress({ progress, status, error }: UploadProgressProps)
       )}
 
       {status === 'success' && (
-        <Text style={[styles.text, styles.success]}>Upload terminé !</Text>
+        <Text style={[styles.text, styles.success]}>
+          {hasMulti ? `${uploadedCount} fichiers uploadés !` : 'Upload terminé !'}
+        </Text>
       )}
 
       {status === 'error' && (
