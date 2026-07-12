@@ -36,7 +36,7 @@ func main() {
 
 	r.GET("/api/v1/files", h.ListFiles)
 	r.GET("/api/v1/file/:id", h.ListFile)
-	r.POST("/api/v1/files/upload", h.UploadFile)
+	r.POST("/api/v1/files/upload", h.UploadFiles)
 	r.GET("/api/v1/files/:id", h.GetFile)
 	r.DELETE("/api/v1/files/:id", h.DeleteFile)
 	r.GET("/api/v1/files/search", h.SearchFiles)

@@ -172,87 +172,98 @@ func (h *Handlers) GetFile(c *gin.Context) {
 
 }
 
-func (h *Handlers) UploadFile(c *gin.Context) {
+func (h *Handlers) UploadFiles(c *gin.Context) {
 
-	file, err := c.FormFile("file")
-
+	form, err := c.MultipartForm()
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
+		c.JSON(http.StatusBadRequest, gin.H{
 			"error": gin.H{
 				"code":    "NOT_FOUND",
 				"message": "form file with file name missing",
 			},
 		})
+		return
+	}
+	files := form.File["file"]
+
+	type FileStats struct {
+		Name string `json:"name"`
+		Id   string `json:"id"`
 	}
 
-	dst := filepath.Join("./uploads/", filepath.Base(file.Filename))
+	filesStats := []FileStats{}
 
-	err = c.SaveUploadedFile(file, dst)
+	for _, file := range files {
 
-	if err != nil {
+		dst := filepath.Join("./uploads/", filepath.Base(file.Filename))
 
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": gin.H{
-				"code":    "ERROR",
-				"message": "Uploaded",
-			},
+		err = c.SaveUploadedFile(file, dst)
+
+		if err != nil {
+
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": gin.H{
+					"code":    "ERROR",
+					"message": "Uploaded",
+				},
+			})
+
+			return
+
+		}
+
+		fileByte, err := os.ReadFile(dst)
+
+		if err != nil {
+
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": gin.H{
+					"code":    "ERROR",
+					"message": "Error reading file",
+				},
+			})
+
+			return
+
+		}
+		checksum := service.CreateSHA256Hash(fileByte)
+
+		ctx := context.Background()
+
+		id := make([]byte, 16)
+		rand.Read(id)
+
+		createFileParams := db.CreateFileParams{
+			ID:         hex.EncodeToString(id),
+			Name:       file.Filename,
+			Size:       file.Size,
+			StorageKey: dst,
+			Checksum:   hex.EncodeToString(checksum),
+		}
+
+		dbFile, err := h.queries.CreateFile(ctx, createFileParams)
+		if err != nil {
+
+			fmt.Println(err)
+
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": gin.H{
+					"code":    "DB_ERROR",
+					"message": "Failed to save file metadata",
+				},
+			})
+			return
+		}
+
+		filesStats = append(filesStats, FileStats{
+			Name: dbFile.Name,
+			Id:   dbFile.ID,
 		})
 
-		return
-
-	}
-
-	fileByte, err := os.ReadFile(dst)
-
-	if err != nil {
-
-		// fmt.Println("error reading file")
-
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": gin.H{
-				"code":    "ERROR",
-				"message": "Error reading file",
-			},
-		})
-
-		return
-
-	}
-
-	checksum := service.CreateSHA256Hash(fileByte)
-
-	ctx := context.Background()
-
-	id := make([]byte, 16)
-	rand.Read(id)
-
-	createFileParams := db.CreateFileParams{
-		ID:         hex.EncodeToString(id),
-		Name:       file.Filename,
-		Size:       file.Size,
-		StorageKey: dst,
-		Checksum:   hex.EncodeToString(checksum),
-	}
-
-	dbFile, err := h.queries.CreateFile(ctx, createFileParams)
-	if err != nil {
-
-		fmt.Println(err)
-
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": gin.H{
-				"code":    "DB_ERROR",
-				"message": "Failed to save file metadata",
-			},
-		})
-		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"data": gin.H{
-			"id":   dbFile.ID,
-			"name": dbFile.Name,
-		},
+		"data": filesStats,
 	})
 
 }
