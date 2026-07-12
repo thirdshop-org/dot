@@ -1,8 +1,9 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useCameraDevice, useCameraPermission, usePhotoOutput, type TorchMode, type CameraRef } from 'react-native-vision-camera';
 import { useUpload } from './useUpload';
+import { CapturedPhoto } from '../types';
 
-type CaptureStatus = 'idle' | 'capturing' | 'uploading' | 'processing' | 'success' | 'error';
+type CaptureStatus = 'idle' | 'capturing' | 'uploading' | 'success' | 'error';
 
 export function useCameraCapture() {
   const { hasPermission, requestPermission } = useCameraPermission();
@@ -13,6 +14,7 @@ export function useCameraCapture() {
   const [captureError, setCaptureError] = useState<string>();
   const [torchMode, setTorchMode] = useState<TorchMode>('off');
   const [cameraReady, setCameraReady] = useState(false);
+  const [capturedPhotos, setCapturedPhotos] = useState<CapturedPhoto[]>([]);
 
   const upload = useUpload();
 
@@ -53,35 +55,61 @@ export function useCameraCapture() {
     setCameraReady(false);
   }, []);
 
+  const addCapturedPhoto = useCallback((photo: CapturedPhoto) => {
+    setCapturedPhotos((prev) => [...prev, photo]);
+  }, []);
+
+  const removeCapturedPhoto = useCallback((id: string) => {
+    setCapturedPhotos((prev) => prev.filter((p) => p.id !== id));
+  }, []);
+
+  const clearCapturedPhotos = useCallback(() => {
+    setCapturedPhotos([]);
+  }, []);
+
   const capturePhoto = useCallback(async () => {
     if (!photoOutput) return;
+
+    const photoId = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 
     try {
       setCaptureStatus('capturing');
       setCaptureError(undefined);
 
-      const { filePath } = await photoOutput.capturePhotoToFile(
-        {},
-        {}
-      );
+      const { filePath } = await photoOutput.capturePhotoToFile({}, {});
 
       setCaptureStatus('uploading');
 
+      const capturedPhoto: CapturedPhoto = {
+        id: photoId,
+        filePath,
+        uri: 'file://' + filePath,
+      };
+
+      addCapturedPhoto(capturedPhoto);
+
       const result = await upload.mutateAsync([
-        { uri: 'file://' + filePath, type: 'image/jpeg', name: 'scan.jpg' },
+        { uri: capturedPhoto.uri, type: 'image/jpeg', name: `scan_${photoId}.jpg` },
       ]);
 
       if (result.errors.length > 0) {
         setCaptureStatus('error');
         setCaptureError(result.errors[0].message);
       } else {
+        capturedPhoto.uploadedId = result.uploaded[0]?.id;
+        capturedPhoto.uploadedAt = new Date().toISOString();
         setCaptureStatus('success');
       }
     } catch (err) {
       setCaptureStatus('error');
       setCaptureError(err instanceof Error ? err.message : 'Erreur lors de la capture');
     }
-  }, [photoOutput, upload]);
+
+    setTimeout(() => {
+      setCaptureStatus('idle');
+      setCaptureError(undefined);
+    }, 1500);
+  }, [photoOutput, upload, addCapturedPhoto]);
 
   return {
     cameraRef,
@@ -97,5 +125,9 @@ export function useCameraCapture() {
     toggleTorch,
     onStarted,
     onStopped,
+    capturedPhotos,
+    removeCapturedPhoto,
+    clearCapturedPhotos,
+    capturedCount: capturedPhotos.length,
   };
 }

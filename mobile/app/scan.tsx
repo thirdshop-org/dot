@@ -1,10 +1,25 @@
 import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Camera } from 'react-native-vision-camera';
 import { useCameraCapture } from '../hooks/useCameraCapture';
 import { UploadProgress } from '../components/UploadProgress';
+import { PhotoThumbnailStrip } from '../components/PhotoThumbnailStrip';
+import { useBatchStore } from '../hooks/useBatchStore';
+
+type RootStackParamList = {
+  Home: undefined;
+  Upload: undefined;
+  Scan: undefined;
+  Search: undefined;
+  BatchReview: { batchId: string };
+};
+
+type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 export function ScanScreen() {
+  const navigation = useNavigation<NavigationProp>();
   const {
     cameraRef,
     hasPermission,
@@ -19,7 +34,13 @@ export function ScanScreen() {
     toggleTorch,
     onStarted,
     onStopped,
+    capturedPhotos,
+    removeCapturedPhoto,
+    clearCapturedPhotos,
+    capturedCount,
   } = useCameraCapture();
+
+  const { saveBatch } = useBatchStore();
 
   useEffect(() => {
     if (!hasPermission) {
@@ -31,9 +52,27 @@ export function ScanScreen() {
     idle: 'idle',
     capturing: 'uploading',
     uploading: 'uploading',
-    processing: 'processing',
     success: 'success',
     error: 'error',
+  };
+
+  const finishBatch = () => {
+    if (capturedPhotos.length === 0) return;
+
+    const batchId = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    const now = new Date();
+    const name = `Lot du ${now.toLocaleDateString('fr-FR')} ${now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`;
+
+    saveBatch({
+      id: batchId,
+      name,
+      createdAt: now.toISOString(),
+      photos: capturedPhotos,
+      tags: [],
+    });
+
+    clearCapturedPhotos();
+    navigation.navigate('BatchReview', { batchId });
   };
 
   if (!hasPermission) {
@@ -79,7 +118,15 @@ export function ScanScreen() {
           totalCount={1}
           uploadedCount={captureStatus === 'success' ? 1 : 0}
         />
+
+        {capturedCount > 0 && (
+          <View style={styles.batchInfo}>
+            <Text style={styles.batchInfoText}>{capturedCount} photo{capturedCount > 1 ? 's' : ''} prise{capturedCount > 1 ? 's' : ''}</Text>
+          </View>
+        )}
       </View>
+
+      <PhotoThumbnailStrip photos={capturedPhotos} onRemove={removeCapturedPhoto} />
 
       <View style={styles.bottomBar}>
         <TouchableOpacity style={styles.torchButton} onPress={toggleTorch}>
@@ -94,7 +141,13 @@ export function ScanScreen() {
           <View style={styles.captureInner} />
         </TouchableOpacity>
 
-        <View style={styles.torchButton} />
+        {capturedCount > 0 ? (
+          <TouchableOpacity style={styles.finishButton} onPress={finishBatch}>
+            <Text style={styles.finishText}>✓</Text>
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.torchButton} />
+        )}
       </View>
     </View>
   );
@@ -153,6 +206,18 @@ const styles = StyleSheet.create({
     left: 16,
     right: 16,
   },
+  batchInfo: {
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: 8,
+    padding: 8,
+    marginTop: 8,
+    alignItems: 'center',
+  },
+  batchInfoText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
   bottomBar: {
     position: 'absolute',
     bottom: 50,
@@ -191,5 +256,18 @@ const styles = StyleSheet.create({
     height: 60,
     borderRadius: 30,
     backgroundColor: '#fff',
+  },
+  finishButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#4CAF50',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  finishText: {
+    color: '#fff',
+    fontSize: 22,
+    fontWeight: '700',
   },
 });

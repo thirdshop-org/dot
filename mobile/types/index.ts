@@ -60,3 +60,19 @@ export class UploadError extends HttpError {
     this.fileName = fileName;
   }
 }
+
+export type CapturedPhoto = {
+  id: string;
+  filePath: string;
+  uri: string;
+  uploadedId?: string;
+  uploadedAt?: string;
+};
+
+export type Batch = {
+  id: string;
+  name: string;
+  createdAt: string;
+  photos: CapturedPhoto[];
+  tags: string[];
+};
