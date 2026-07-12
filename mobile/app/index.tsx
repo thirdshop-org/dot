@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { View, FlatList, StyleSheet, TouchableOpacity, Text, Dimensions, Image, ActivityIndicator, TextInput } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { MaterialIcons } from '@expo/vector-icons';
 import { useFiles, useFileImage } from '../hooks/useFiles';
 import { FileItem } from '../types';
 
@@ -162,10 +163,16 @@ export function HomeScreen() {
       />
 
       <View style={styles.bottomNav}>
+        <TouchableOpacity style={styles.navButton} onPress={() => {}}>
+          <MaterialIcons name="home" size={24} color="#1976D2" />
+          <Text style={styles.navText}>Accueil</Text>
+        </TouchableOpacity>
+
         <TouchableOpacity
           style={styles.navButton}
           onPress={() => navigation.navigate('Upload')}
         >
+          <MaterialIcons name="cloud-upload" size={24} color="#1976D2" />
           <Text style={styles.navText}>Upload</Text>
         </TouchableOpacity>
 
@@ -173,6 +180,7 @@ export function HomeScreen() {
           style={styles.navButton}
           onPress={() => navigation.navigate('Scan')}
         >
+          <MaterialIcons name="document-scanner" size={24} color="#1976D2" />
           <Text style={styles.navText}>Scan</Text>
         </TouchableOpacity>
       </View>
@@ -282,7 +290,9 @@ const styles = StyleSheet.create({
     borderTopColor: '#e0e0e0',
   },
   navButton: {
+    alignItems: 'center',
     padding: 8,
+    gap: 4,
   },
   navText: {
     fontSize: 16,
