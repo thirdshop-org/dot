@@ -14,6 +14,7 @@ type RootStackParamList = {
   Home: undefined;
   Upload: undefined;
   Scan: undefined;
+  FileDetail: { fileIds: string[]; initialIndex: number };
 };
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -51,13 +52,13 @@ function formatDateLabel(key: string): string {
   return key.charAt(0).toUpperCase() + key.slice(1);
 }
 
-function FileGridItem({ file }: { file: FileItem }) {
+function FileGridItem({ file, onPress }: { file: FileItem; onPress?: () => void }) {
   const { data, isLoading } = useFileImage(file.id);
 
   const uri = data?.data?.url;
 
   return (
-    <View style={styles.gridItem}>
+    <TouchableOpacity style={styles.gridItem} onPress={onPress} activeOpacity={0.7}>
       {isLoading ? (
         <View style={styles.placeholder}>
           <ActivityIndicator size="small" color="#1976D2" />
@@ -70,7 +71,7 @@ function FileGridItem({ file }: { file: FileItem }) {
         </View>
       )}
       <Text style={styles.fileName} numberOfLines={1}>{file.name}</Text>
-    </View>
+    </TouchableOpacity>
   );
 }
 
@@ -100,6 +101,12 @@ export function HomeScreen() {
 
   const groups = groupByDate(filteredFiles);
   const groupKeys = Object.keys(groups);
+
+  const fileIdToIndex = useMemo(() => {
+    const map = new Map<string, number>();
+    filteredFiles.forEach((f, i) => map.set(f.id, i));
+    return map;
+  }, [filteredFiles]);
 
   if (isLoading) {
     return (
@@ -154,7 +161,16 @@ export function HomeScreen() {
               <Text style={styles.sectionTitle}>{formatDateLabel(dateKey)}</Text>
               <View style={styles.grid}>
                 {groupFiles.map((file) => (
-                  <FileGridItem key={file.id} file={file} />
+                  <FileGridItem
+                    key={file.id}
+                    file={file}
+                    onPress={() =>
+                      navigation.navigate('FileDetail', {
+                        fileIds: filteredFiles.map((f) => f.id),
+                        initialIndex: fileIdToIndex.get(file.id) ?? 0,
+                      })
+                    }
+                  />
                 ))}
               </View>
             </View>

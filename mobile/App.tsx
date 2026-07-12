@@ -9,6 +9,7 @@ import { ScanScreen } from './app/scan';
 import { SearchScreen } from './app/search';
 import { BatchReviewScreen } from './app/batch-review';
 import { PendingReviewScreen } from './app/pending-review';
+import { FileDetailScreen } from './app/file-detail';
 
 const Stack = createNativeStackNavigator();
 const queryClient = new QueryClient();
@@ -29,6 +30,11 @@ export default function App() {
           <Stack.Screen name="Search" component={SearchScreen} options={{ title: 'Recherche' }} />
           <Stack.Screen name="BatchReview" component={BatchReviewScreen} options={{ title: 'Revue du lot' }} />
           <Stack.Screen name="PendingReview" component={PendingReviewScreen} options={{ title: 'Réorganisation' }} />
+          <Stack.Screen
+            name="FileDetail"
+            component={FileDetailScreen}
+            options={{ title: 'Détails', headerTintColor: '#fff', headerStyle: { backgroundColor: '#000' } }}
+          />
         </Stack.Navigator>
       </NavigationContainer>
       <StatusBar style="auto" />
