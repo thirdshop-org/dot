@@ -7,7 +7,6 @@ package db
 
 import (
 	"context"
-	"database/sql"
 )
 
 const createFile = `-- name: CreateFile :one
@@ -20,9 +19,9 @@ RETURNING id, name, storage_key, checksum, created_at, updated_at, deleted_at
 `
 
 type CreateFileParams struct {
-	Name       string         `json:"name"`
-	StorageKey string         `json:"storage_key"`
-	Checksum   sql.NullString `json:"checksum"`
+	Name       string `json:"name"`
+	StorageKey string `json:"storage_key"`
+	Checksum   string `json:"checksum"`
 }
 
 func (q *Queries) CreateFile(ctx context.Context, arg CreateFileParams) (File, error) {

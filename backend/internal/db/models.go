@@ -9,13 +9,13 @@ import (
 )
 
 type File struct {
-	ID         string         `json:"id"`
-	Name       string         `json:"name"`
-	StorageKey string         `json:"storage_key"`
-	Checksum   sql.NullString `json:"checksum"`
-	CreatedAt  int64          `json:"created_at"`
-	UpdatedAt  int64          `json:"updated_at"`
-	DeletedAt  sql.NullInt64  `json:"deleted_at"`
+	ID         string        `json:"id"`
+	Name       string        `json:"name"`
+	StorageKey string        `json:"storage_key"`
+	Checksum   string        `json:"checksum"`
+	CreatedAt  int64         `json:"created_at"`
+	UpdatedAt  int64         `json:"updated_at"`
+	DeletedAt  sql.NullInt64 `json:"deleted_at"`
 }
 
 type FileTag struct {

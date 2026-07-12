@@ -2,7 +2,7 @@ CREATE TABLE files (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
   storage_key TEXT NOT NULL,
-  checksum TEXT,
+  checksum TEXT NOT NULL,
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL,
   deleted_at INTEGER

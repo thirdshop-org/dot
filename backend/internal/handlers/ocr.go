@@ -6,7 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func CreateOcrJob(c *gin.Context) {
+func (h *Handlers) CreateOcrJob(c *gin.Context) {
 	c.JSON(http.StatusNotImplemented, gin.H{
 		"error": gin.H{
 			"code":    "NOT_IMPLEMENTED",
@@ -15,7 +15,7 @@ func CreateOcrJob(c *gin.Context) {
 	})
 }
 
-func GetOcrJobStatus(c *gin.Context) {
+func (h *Handlers) GetOcrJobStatus(c *gin.Context) {
 	c.JSON(http.StatusNotFound, gin.H{
 		"error": gin.H{
 			"code":    "JOB_NOT_FOUND",

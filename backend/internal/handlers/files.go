@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"context"
+	"fmt"
 	"net/http"
 	"os"
 	"path"
@@ -8,11 +10,12 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/vaultdrop/backend/internal/db"
 	"github.com/vaultdrop/backend/internal/service"
 )
 
 // retourne qui est delete qui est updated et created
-func SyncFiles(c *gin.Context) {
+func (h *Handlers) SyncFiles(c *gin.Context) {
 	c.JSON(http.StatusNotImplemented, gin.H{
 		"error": gin.H{
 			"code":    "NOT_IMPLEMENTED",
@@ -21,7 +24,7 @@ func SyncFiles(c *gin.Context) {
 	})
 }
 
-func ListFiles(c *gin.Context) {
+func (h *Handlers) ListFiles(c *gin.Context) {
 
 	dirs, err := os.ReadDir("./uploads/")
 
@@ -79,7 +82,7 @@ func ListFiles(c *gin.Context) {
 	})
 }
 
-func ListFile(c *gin.Context) {
+func (h *Handlers) ListFile(c *gin.Context) {
 
 	id := c.Param("id")
 
@@ -144,7 +147,7 @@ func ListFile(c *gin.Context) {
 	})
 }
 
-func GetFile(c *gin.Context) {
+func (h *Handlers) GetFile(c *gin.Context) {
 
 	exp, _ := strconv.ParseInt(c.Query("expires"), 10, 64)
 
@@ -167,7 +170,9 @@ func GetFile(c *gin.Context) {
 
 }
 
-func UploadFile(c *gin.Context) {
+func (h *Handlers) UploadFile(c *gin.Context) {
+
+	ctx := context.Background()
 
 	file, err := c.FormFile("file")
 
@@ -182,7 +187,53 @@ func UploadFile(c *gin.Context) {
 
 	dst := filepath.Join("./uploads/", filepath.Base(file.Filename))
 
-	c.SaveUploadedFile(file, dst)
+	err = c.SaveUploadedFile(file, dst)
+
+	if err != nil {
+
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": gin.H{
+				"code":    "ERROR",
+				"message": "Uploaded",
+			},
+		})
+
+		return
+
+	}
+
+	fileByte, err := os.ReadFile(dst)
+
+	if err != nil {
+
+		// fmt.Println("error reading file")
+
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": gin.H{
+				"code":    "ERROR",
+				"message": "Error reading file",
+			},
+		})
+
+		return
+
+	}
+
+	checksum := service.CreateSHA256Hash(fileByte)
+	// save generate meta data
+	createFileParams := db.CreateFileParams{
+		Name:       file.Filename,
+		StorageKey: dst,
+		Checksum:   string(checksum[:]),
+	}
+
+	dbFile, err := h.queries.CreateFile(ctx, createFileParams)
+
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	fmt.Println(dbFile.Checksum)
 
 	c.JSON(http.StatusOK, gin.H{
 		"error": gin.H{
@@ -190,9 +241,10 @@ func UploadFile(c *gin.Context) {
 			"message": "Uploaded",
 		},
 	})
+
 }
 
-func DeleteFile(c *gin.Context) {
+func (h *Handlers) DeleteFile(c *gin.Context) {
 	c.JSON(http.StatusNotImplemented, gin.H{
 		"error": gin.H{
 			"code":    "NOT_IMPLEMENTED",
@@ -201,7 +253,7 @@ func DeleteFile(c *gin.Context) {
 	})
 }
 
-func SearchFiles(c *gin.Context) {
+func (h *Handlers) SearchFiles(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"data": []interface{}{},
 		"meta": gin.H{
@@ -211,7 +263,7 @@ func SearchFiles(c *gin.Context) {
 	})
 }
 
-func AddTags(c *gin.Context) {
+func (h *Handlers) AddTags(c *gin.Context) {
 	c.JSON(http.StatusNotImplemented, gin.H{
 		"error": gin.H{
 			"code":    "NOT_IMPLEMENTED",
@@ -220,7 +272,7 @@ func AddTags(c *gin.Context) {
 	})
 }
 
-func GetTags(c *gin.Context) {
+func (h *Handlers) GetTags(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"data": []interface{}{},
 	})

@@ -21,24 +21,25 @@ func main() {
 	}
 	defer database.Close()
 
-	_ = database // will be passed to handlers once queries are implemented
+	queries := db.New(database)
+	h := handlers.New(queries)
 
 	r := gin.Default()
 
-	r.GET("/api/v1/health", handlers.Health)
+	r.GET("/api/v1/health", h.Health)
 
-	r.GET("/api/v1/files", handlers.ListFiles)
-	r.GET("/api/v1/file/:id", handlers.ListFile)
-	r.POST("/api/v1/files/upload", handlers.UploadFile)
-	r.GET("/api/v1/files/:id", handlers.GetFile)
-	r.DELETE("/api/v1/files/:id", handlers.DeleteFile)
-	r.GET("/api/v1/files/search", handlers.SearchFiles)
+	r.GET("/api/v1/files", h.ListFiles)
+	r.GET("/api/v1/file/:id", h.ListFile)
+	r.POST("/api/v1/files/upload", h.UploadFile)
+	r.GET("/api/v1/files/:id", h.GetFile)
+	r.DELETE("/api/v1/files/:id", h.DeleteFile)
+	r.GET("/api/v1/files/search", h.SearchFiles)
 
-	r.POST("/api/v1/files/:id/tags", handlers.AddTags)
-	r.GET("/api/v1/files/:id/tags", handlers.GetTags)
+	r.POST("/api/v1/files/:id/tags", h.AddTags)
+	r.GET("/api/v1/files/:id/tags", h.GetTags)
 
-	r.POST("/api/v1/ocr/jobs", handlers.CreateOcrJob)
-	r.GET("/api/v1/ocr/jobs/:id", handlers.GetOcrJobStatus)
+	r.POST("/api/v1/ocr/jobs", h.CreateOcrJob)
+	r.GET("/api/v1/ocr/jobs/:id", h.GetOcrJobStatus)
 
 	log.Printf("Server starting on port %s", port)
 	if err := r.Run(":" + port); err != nil {
