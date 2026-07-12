@@ -76,20 +76,19 @@ export function PendingReviewScreen() {
         { text: 'Annuler', style: 'cancel', onPress: () => navigation.goBack() },
         {
           text: 'Uploader',
-          onPress: async () => {
+            onPress: async () => {
             try {
+              const pdfName = `${batch?.name ?? 'document'}.pdf`;
+              const pdfUriClean = pdfUri.startsWith('file://') ? pdfUri : 'file://' + pdfUri;
               await upload.mutateAsync([
-                {
-                  uri: 'file://' + pdfUri,
-                  type: 'application/pdf',
-                  name: `${batch?.name ?? 'document'}.pdf`,
-                },
+                { uri: pdfUriClean, type: 'application/pdf', name: pdfName },
               ]);
               Alert.alert('Succès', 'PDF uploadé avec succès', [
                 { text: 'OK', onPress: () => navigation.navigate('Home' as never) },
               ]);
-            } catch {
-              Alert.alert('Erreur', "Échec de l'upload du PDF");
+            } catch (e: any) {
+              const msg = e?.message || e?.toString() || "Erreur inconnue";
+              Alert.alert('Erreur', `Échec de l'upload du PDF: ${msg}`);
             }
           },
         },

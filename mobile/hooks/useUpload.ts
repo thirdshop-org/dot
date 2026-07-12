@@ -35,7 +35,10 @@ export function useUpload() {
             throw new UploadError(file.name, result.status, serverMessage, serverCode);
           }
 
-          return JSON.parse(result.body) as UploadResult;
+          const body = JSON.parse(result.body);
+          const items = body.data ?? body;
+          const item = Array.isArray(items) ? items[0] : items;
+          return item as UploadResult;
         })
       );
 
