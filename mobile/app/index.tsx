@@ -1,10 +1,10 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { View, FlatList, StyleSheet, TouchableOpacity, Text, Dimensions, KeyboardAvoidingView, Platform, Keyboard } from 'react-native';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import { View, FlatList, StyleSheet, TouchableOpacity, Text, Dimensions, KeyboardAvoidingView, Platform, Keyboard, Alert } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useFiles, useFileImage } from '../hooks/useFiles';
+import { useFiles, useFileImage, useDeleteFile } from '../hooks/useFiles';
 import { FileItem } from '../types';
 import { SearchBar, SearchFilters } from '../components/SearchBar';
 import { FileThumbnail } from '../components/FileThumbnail';
@@ -18,6 +18,7 @@ type RootStackParamList = {
   Upload: undefined;
   Scan: undefined;
   FileDetail: { fileIds: string[]; initialIndex: number };
+  FileEdit: { fileIds: string[] };
 };
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -55,11 +56,17 @@ function formatDateLabel(key: string): string {
   return key.charAt(0).toUpperCase() + key.slice(1);
 }
 
-function FileGridItem({ file, onPress }: { file: FileItem; onPress?: () => void }) {
+function FileGridItem({ file, onPress, onLongPress, selected }: { file: FileItem; onPress?: () => void; onLongPress?: () => void; selected?: boolean }) {
   const { data, isLoading } = useFileImage(file.id);
 
   return (
-    <TouchableOpacity style={styles.gridItem} onPress={onPress} activeOpacity={0.7}>
+    <TouchableOpacity
+      style={[styles.gridItem, selected && styles.gridItemSelected]}
+      onPress={onPress}
+      onLongPress={onLongPress}
+      delayLongPress={400}
+      activeOpacity={0.7}
+    >
       <FileThumbnail
         uri={data?.data?.url}
         mimeType={file.mimeType}
@@ -67,6 +74,13 @@ function FileGridItem({ file, onPress }: { file: FileItem; onPress?: () => void 
         size={ITEM_SIZE}
         isLoading={isLoading}
       />
+      {selected && (
+        <View style={styles.selectedOverlay}>
+          <View style={styles.checkCircle}>
+            <MaterialIcons name="check" size={18} color="#fff" />
+          </View>
+        </View>
+      )}
       <Text style={styles.fileName} numberOfLines={1}>{file.name}</Text>
     </TouchableOpacity>
   );
@@ -96,15 +110,19 @@ export function HomeScreen() {
   const navigation = useNavigation<NavigationProp>();
   const insets = useSafeAreaInsets();
   const { data, isLoading, error } = useFiles();
+  const deleteFile = useDeleteFile();
   const [searchQuery, setSearchQuery] = useState('');
   const [filters, setFilters] = useState<SearchFilters>({ name: true, ocrText: true, tags: true });
   const [keyboardOpen, setKeyboardOpen] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const show = Keyboard.addListener('keyboardDidShow', () => setKeyboardOpen(true));
     const hide = Keyboard.addListener('keyboardDidHide', () => setKeyboardOpen(false));
     return () => { show.remove(); hide.remove(); };
   }, []);
+
+  const selectionMode = selectedIds.size > 0;
 
   const files = data?.data ?? [];
 
@@ -121,6 +139,67 @@ export function HomeScreen() {
     filteredFiles.forEach((f, i) => map.set(f.id, i));
     return map;
   }, [filteredFiles]);
+
+  const toggleSelection = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const clearSelection = useCallback(() => {
+    setSelectedIds(new Set());
+  }, []);
+
+  const handleDelete = useCallback(() => {
+    const count = selectedIds.size;
+    if (count === 0) return;
+    const label = count === 1 ? 'ce fichier' : `ces ${count} fichiers`;
+    Alert.alert(
+      'Supprimer',
+      `Supprimer ${label} ?`,
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Supprimer',
+          style: 'destructive',
+          onPress: async () => {
+            const ids = Array.from(selectedIds);
+            for (const id of ids) {
+              await deleteFile.mutateAsync(id);
+            }
+            setSelectedIds(new Set());
+          },
+        },
+      ]
+    );
+  }, [selectedIds, deleteFile]);
+
+  const handleEdit = useCallback(() => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    navigation.navigate('FileEdit', { fileIds: ids });
+    setSelectedIds(new Set());
+  }, [selectedIds, navigation]);
+
+  const handleItemPress = useCallback((file: FileItem) => {
+    if (selectionMode) {
+      toggleSelection(file.id);
+    } else {
+      navigation.navigate('FileDetail', {
+        fileIds: filteredFiles.map((f) => f.id),
+        initialIndex: fileIdToIndex.get(file.id) ?? 0,
+      });
+    }
+  }, [selectionMode, toggleSelection, navigation, filteredFiles, fileIdToIndex]);
+
+  const handleItemLongPress = useCallback((file: FileItem) => {
+    if (!selectionMode) {
+      toggleSelection(file.id);
+    }
+  }, [selectionMode, toggleSelection]);
 
   if (isLoading) {
     return (
@@ -167,12 +246,9 @@ export function HomeScreen() {
                   <FileGridItem
                     key={file.id}
                     file={file}
-                    onPress={() =>
-                      navigation.navigate('FileDetail', {
-                        fileIds: filteredFiles.map((f) => f.id),
-                        initialIndex: fileIdToIndex.get(file.id) ?? 0,
-                      })
-                    }
+                    selected={selectedIds.has(file.id)}
+                    onPress={() => handleItemPress(file)}
+                    onLongPress={() => handleItemLongPress(file)}
                   />
                 ))}
               </View>
@@ -181,37 +257,71 @@ export function HomeScreen() {
         }}
       />
 
-      <SearchBar
-        query={searchQuery}
-        onQueryChange={setSearchQuery}
-        onClear={() => setSearchQuery('')}
-        filters={filters}
-        onFiltersChange={setFilters}
-        bottomPadding={keyboardOpen ? insets.bottom+8 : 0}
-      />
+      {!selectionMode && (
+        <SearchBar
+          query={searchQuery}
+          onQueryChange={setSearchQuery}
+          onClear={() => setSearchQuery('')}
+          filters={filters}
+          onFiltersChange={setFilters}
+          bottomPadding={keyboardOpen ? insets.bottom+8 : 0}
+        />
+      )}
 
-      <View style={styles.bottomNav}>
-        <TouchableOpacity style={styles.navButton} onPress={() => {}}>
-          <MaterialIcons name="home" size={24} color="#1976D2" />
-          <Text style={styles.navText}>Accueil</Text>
-        </TouchableOpacity>
+      {selectionMode ? (
+        <View style={[styles.selectionBar, { paddingBottom: insets.bottom + 8 }]}>
+          <View style={styles.selectionHeader}>
+            <TouchableOpacity onPress={clearSelection} style={styles.cancelBtn}>
+              <MaterialIcons name="close" size={22} color="#333" />
+            </TouchableOpacity>
+            <Text style={styles.selectionCount}>
+              {selectedIds.size} sélectionnée{selectedIds.size > 1 ? 's' : ''}
+            </Text>
+            <TouchableOpacity onPress={clearSelection} style={styles.selectAllBtn}>
+              <Text style={styles.selectAllText}>Tout</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.selectionActions}>
+            <TouchableOpacity
+              style={[styles.selectionActionBtn, styles.deleteActionBtn]}
+              onPress={handleDelete}
+            >
+              <MaterialIcons name="delete" size={20} color="#F44336" />
+              <Text style={[styles.selectionActionText, { color: '#F44336' }]}>Supprimer</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.selectionActionBtn, styles.editActionBtn]}
+              onPress={handleEdit}
+            >
+              <MaterialIcons name="edit" size={20} color="#1976D2" />
+              <Text style={[styles.selectionActionText, { color: '#1976D2' }]}>Éditer</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      ) : (
+        <View style={styles.bottomNav}>
+          <TouchableOpacity style={styles.navButton} onPress={() => {}}>
+            <MaterialIcons name="home" size={24} color="#1976D2" />
+            <Text style={styles.navText}>Accueil</Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.navButton}
-          onPress={() => navigation.navigate('Upload')}
-        >
-          <MaterialIcons name="cloud-upload" size={24} color="#1976D2" />
-          <Text style={styles.navText}>Upload</Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.navButton}
+            onPress={() => navigation.navigate('Upload')}
+          >
+            <MaterialIcons name="cloud-upload" size={24} color="#1976D2" />
+            <Text style={styles.navText}>Upload</Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.navButton}
-          onPress={() => navigation.navigate('Scan')}
-        >
-          <MaterialIcons name="document-scanner" size={24} color="#1976D2" />
-          <Text style={styles.navText}>Scan</Text>
-        </TouchableOpacity>
-      </View>
+          <TouchableOpacity
+            style={styles.navButton}
+            onPress={() => navigation.navigate('Scan')}
+          >
+            <MaterialIcons name="document-scanner" size={24} color="#1976D2" />
+            <Text style={styles.navText}>Scan</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </KeyboardAvoidingView>
   );
 }
@@ -259,6 +369,27 @@ const styles = StyleSheet.create({
   gridItem: {
     width: ITEM_SIZE,
   },
+  gridItemSelected: {
+    opacity: 0.85,
+  },
+  selectedOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 18,
+    justifyContent: 'flex-start',
+    alignItems: 'flex-end',
+    padding: 4,
+  },
+  checkCircle: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#1976D2',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   fileName: {
     fontSize: 11,
     color: '#666',
@@ -281,5 +412,61 @@ const styles = StyleSheet.create({
   navText: {
     fontSize: 16,
     color: '#1976D2',
+  },
+  selectionBar: {
+    backgroundColor: '#fff',
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+    paddingHorizontal: 16,
+    paddingTop: 12,
+  },
+  selectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  cancelBtn: {
+    padding: 4,
+  },
+  selectionCount: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+  selectAllBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  selectAllText: {
+    fontSize: 14,
+    color: '#1976D2',
+    fontWeight: '600',
+  },
+  selectionActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  selectionActionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderRadius: 8,
+    gap: 6,
+    borderWidth: 1.5,
+  },
+  deleteActionBtn: {
+    borderColor: '#F44336',
+    backgroundColor: 'transparent',
+  },
+  editActionBtn: {
+    borderColor: '#1976D2',
+    backgroundColor: 'transparent',
+  },
+  selectionActionText: {
+    fontSize: 15,
+    fontWeight: '600',
   },
 });
