@@ -1,10 +1,11 @@
 import React, { useState, useMemo } from 'react';
-import { View, FlatList, StyleSheet, TouchableOpacity, Text, Dimensions, Image, ActivityIndicator, TextInput } from 'react-native';
+import { View, FlatList, StyleSheet, TouchableOpacity, Text, Dimensions, Image, ActivityIndicator } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useFiles, useFileImage } from '../hooks/useFiles';
 import { FileItem } from '../types';
+import { SearchBar, SearchFilters } from '../components/SearchBar';
 
 const NUM_COLUMNS = 3;
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -75,15 +76,23 @@ function FileGridItem({ file, onPress }: { file: FileItem; onPress?: () => void 
   );
 }
 
-function matchesQuery(file: FileItem, query: string): boolean {
+function matchesQuery(file: FileItem, query: string, filters: SearchFilters): boolean {
   if (!query) return true;
   const q = query.toLowerCase();
-  if (file.name.toLowerCase().includes(q)) return true;
-  if (file.ocrText?.toLowerCase().includes(q)) return true;
-  if (file.tags?.some((t) => {
+  if (filters.name && file.name.toLowerCase().includes(q)) return true;
+  if (filters.ocrText && file.ocrText?.toLowerCase().includes(q)) return true;
+  if (filters.tags && file.tags?.some((t) => {
     const tagName = typeof t === 'string' ? t : t.name;
     return tagName?.toLowerCase().includes(q);
   })) return true;
+  if (!filters.name && !filters.ocrText && !filters.tags) {
+    if (file.name.toLowerCase().includes(q)) return true;
+    if (file.ocrText?.toLowerCase().includes(q)) return true;
+    if (file.tags?.some((t) => {
+      const tagName = typeof t === 'string' ? t : t.name;
+      return tagName?.toLowerCase().includes(q);
+    })) return true;
+  }
   return false;
 }
 
@@ -91,12 +100,13 @@ export function HomeScreen() {
   const navigation = useNavigation<NavigationProp>();
   const { data, isLoading, error } = useFiles();
   const [searchQuery, setSearchQuery] = useState('');
+  const [filters, setFilters] = useState<SearchFilters>({ name: true, ocrText: true, tags: true });
 
   const files = data?.data ?? [];
 
   const filteredFiles = useMemo(
-    () => searchQuery.trim() ? files.filter((f) => matchesQuery(f, searchQuery)) : files,
-    [files, searchQuery]
+    () => searchQuery.trim() ? files.filter((f) => matchesQuery(f, searchQuery, filters)) : files,
+    [files, searchQuery, filters]
   );
 
   const groups = groupByDate(filteredFiles);
@@ -126,23 +136,6 @@ export function HomeScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.searchBar}>
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Rechercher par nom, tag ou texte OCR..."
-          placeholderTextColor="#999"
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          returnKeyType="search"
-          autoCorrect={false}
-        />
-        {searchQuery.length > 0 && (
-          <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearBtn}>
-            <Text style={styles.clearText}>✕</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-
       <FlatList
         data={groupKeys}
         keyExtractor={(item) => item}
@@ -176,6 +169,14 @@ export function HomeScreen() {
             </View>
           );
         }}
+      />
+
+      <SearchBar
+        query={searchQuery}
+        onQueryChange={setSearchQuery}
+        onClear={() => setSearchQuery('')}
+        filters={filters}
+        onFiltersChange={setFilters}
       />
 
       <View style={styles.bottomNav}>
@@ -217,31 +218,6 @@ const styles = StyleSheet.create({
   infoText: {
     fontSize: 16,
     color: '#666',
-  },
-  searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 8,
-  },
-  searchInput: {
-    flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    fontSize: 15,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-  },
-  clearBtn: {
-    marginLeft: 8,
-    padding: 6,
-  },
-  clearText: {
-    fontSize: 18,
-    color: '#999',
   },
   list: {
     padding: 16,
