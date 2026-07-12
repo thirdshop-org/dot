@@ -1,0 +1,33 @@
+services:
+  paddleocr:
+    image: paddlecloud/paddleocr:2.6-cpu-latest
+    ports:
+      - "9090:8080"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # backend:
+  #   build:
+  #     context: ./backend
+  #     dockerfile: Dockerfile
+  #   ports:
+  #     - "8080:8080"
+  #   environment:
+  #     - PORT=8080
+  #     - DB_PATH=/data/vaultdrop.db
+  #     - OCR_ENDPOINT=http://paddleocr:8080
+  #   volumes:
+  #     - backend-data:/data
+  #     - ./backend/uploads:/app/uploads
+  #   depends_on:
+  #     paddleocr:
+  #       condition: service_healthy
+  #   restart: unless-stopped
+
+volumes:
+  backend-data:

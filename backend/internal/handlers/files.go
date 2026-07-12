@@ -13,6 +13,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/vaultdrop/backend/internal/db"
+	"github.com/vaultdrop/backend/internal/ocr"
 	"github.com/vaultdrop/backend/internal/service"
 )
 
@@ -191,6 +192,8 @@ func (h *Handlers) UploadFiles(c *gin.Context) {
 		Id   string `json:"id"`
 	}
 
+	client := ocr.NewClient("http://localhost:9090")
+
 	filesStats := []FileStats{}
 
 	for _, file := range files {
@@ -259,6 +262,15 @@ func (h *Handlers) UploadFiles(c *gin.Context) {
 			Name: dbFile.Name,
 			Id:   dbFile.ID,
 		})
+
+		text, err := client.Recognize(fileByte)
+
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+
+		fmt.Println(text)
 
 	}
 
