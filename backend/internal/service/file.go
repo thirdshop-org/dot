@@ -62,6 +62,7 @@ func (s *FileService) Upload(file *multipart.FileHeader) (*model.UploadResult, e
 	return &model.UploadResult{
 		ID:   dbFile.ID,
 		Name: dbFile.Name,
+		Path: dst,
 	}, nil
 }
 

@@ -13,6 +13,7 @@ import (
 type FileHandler struct {
 	files *service.FileService
 	urls  *service.URLService
+	ocr   *service.OCRService
 }
 
 func (h *FileHandler) Upload(c *gin.Context) {
@@ -35,6 +36,9 @@ func (h *FileHandler) Upload(c *gin.Context) {
 			api.Error(c, http.StatusInternalServerError, "UPLOAD_ERROR", err.Error())
 			return
 		}
+
+		h.ocr.Enqueue(result.ID, result.Path)
+
 		results = append(results, gin.H{
 			"id":   result.ID,
 			"name": result.Name,

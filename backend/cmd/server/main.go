@@ -27,8 +27,11 @@ func main() {
 	queries := db.New(database)
 
 	fileSvc := service.NewFileService(queries, cfg)
-	ocrSvc := service.NewOCRService(cfg)
+	ocrSvc := service.NewOCRService(cfg, fileSvc)
 	urlSvc := service.NewURLService(cfg.HMACSecret, cfg.ServerHost)
+
+	ocrSvc.Start()
+	defer ocrSvc.Stop()
 
 	h := handler.New(fileSvc, ocrSvc, urlSvc)
 
