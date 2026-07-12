@@ -24,3 +24,8 @@ WHERE id = ?;
 -- name: DeleteFile :exec
 DELETE FROM files
 WHERE id = ?;
+
+-- name: UpdateNLPData :exec
+UPDATE files
+SET nlp_data = ?, updated_at = CURRENT_TIMESTAMP
+WHERE id = ?;

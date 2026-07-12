@@ -27,13 +27,19 @@ func main() {
 	queries := db.New(database)
 
 	fileSvc := service.NewFileService(queries, cfg)
+	nlpSvc := service.NewNLPService(cfg, fileSvc)
 	ocrSvc := service.NewOCRService(cfg, fileSvc)
 	urlSvc := service.NewURLService(cfg.HMACSecret, cfg.ServerHost)
+
+	ocrSvc.SetNLPService(nlpSvc)
 
 	ocrSvc.Start()
 	defer ocrSvc.Stop()
 
-	h := handler.New(fileSvc, ocrSvc, urlSvc)
+	nlpSvc.Start()
+	defer nlpSvc.Stop()
+
+	h := handler.New(fileSvc, ocrSvc, nlpSvc, urlSvc)
 
 	r := gin.Default()
 	handler.SetupRoutes(r, h)

@@ -12,7 +12,7 @@ import (
 const createFile = `-- name: CreateFile :one
 INSERT INTO files (id, name, mime_type, size, storage_key, checksum, created_at, updated_at)
 VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-RETURNING id, name, mime_type, size, storage_key, checksum, ocr_text, created_at, updated_at
+RETURNING id, name, mime_type, size, storage_key, checksum, ocr_text, created_at, updated_at, nlp_data
 `
 
 type CreateFileParams struct {
@@ -44,6 +44,7 @@ func (q *Queries) CreateFile(ctx context.Context, arg CreateFileParams) (File, e
 		&i.OcrText,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.NlpData,
 	)
 	return i, err
 }
@@ -59,7 +60,7 @@ func (q *Queries) DeleteFile(ctx context.Context, id string) error {
 }
 
 const getFile = `-- name: GetFile :one
-SELECT id, name, mime_type, size, storage_key, checksum, ocr_text, created_at, updated_at FROM files
+SELECT id, name, mime_type, size, storage_key, checksum, ocr_text, created_at, updated_at, nlp_data FROM files
 WHERE id = ? LIMIT 1
 `
 
@@ -76,12 +77,13 @@ func (q *Queries) GetFile(ctx context.Context, id string) (File, error) {
 		&i.OcrText,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.NlpData,
 	)
 	return i, err
 }
 
 const listFiles = `-- name: ListFiles :many
-SELECT id, name, mime_type, size, storage_key, checksum, ocr_text, created_at, updated_at FROM files
+SELECT id, name, mime_type, size, storage_key, checksum, ocr_text, created_at, updated_at, nlp_data FROM files
 ORDER BY created_at DESC
 `
 
@@ -104,6 +106,7 @@ func (q *Queries) ListFiles(ctx context.Context) ([]File, error) {
 			&i.OcrText,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.NlpData,
 		); err != nil {
 			return nil, err
 		}
@@ -119,7 +122,7 @@ func (q *Queries) ListFiles(ctx context.Context) ([]File, error) {
 }
 
 const listFilesByID = `-- name: ListFilesByID :many
-SELECT id, name, mime_type, size, storage_key, checksum, ocr_text, created_at, updated_at FROM files
+SELECT id, name, mime_type, size, storage_key, checksum, ocr_text, created_at, updated_at, nlp_data FROM files
 WHERE id IN (SELECT value FROM json_each(?))
 ORDER BY created_at DESC
 `
@@ -143,6 +146,7 @@ func (q *Queries) ListFilesByID(ctx context.Context, jsonEach interface{}) ([]Fi
 			&i.OcrText,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.NlpData,
 		); err != nil {
 			return nil, err
 		}
@@ -177,5 +181,21 @@ func (q *Queries) UpdateFile(ctx context.Context, arg UpdateFileParams) error {
 		arg.OcrText,
 		arg.ID,
 	)
+	return err
+}
+
+const updateNLPData = `-- name: UpdateNLPData :exec
+UPDATE files
+SET nlp_data = ?, updated_at = CURRENT_TIMESTAMP
+WHERE id = ?
+`
+
+type UpdateNLPDataParams struct {
+	NlpData string `json:"nlp_data"`
+	ID      string `json:"id"`
+}
+
+func (q *Queries) UpdateNLPData(ctx context.Context, arg UpdateNLPDataParams) error {
+	_, err := q.db.ExecContext(ctx, updateNLPData, arg.NlpData, arg.ID)
 	return err
 }

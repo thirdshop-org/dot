@@ -18,4 +18,7 @@ func SetupRoutes(r *gin.Engine, h *Handler) {
 
 	api.POST("/ocr/jobs", h.OCR.CreateJob)
 	api.GET("/ocr/jobs/:id", h.OCR.GetJobStatus)
+
+	api.POST("/nlp/jobs", h.NLP.CreateJob)
+	api.GET("/nlp/jobs/:id", h.NLP.GetJobStatus)
 }

@@ -33,6 +33,8 @@ func (c *Client) Recognize(imageData []byte) ([]TextBlock, error) {
 	switch docType {
 	case PDFScanned:
 		fmt.Println("PDFScanned -> PaddleOCR")
+	case PDFText:
+		fmt.Println("PDFText -> PaddleOCR")
 	case Image:
 		fmt.Println("Image -> PaddleOCR")
 	default:
