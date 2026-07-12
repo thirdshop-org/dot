@@ -1,8 +1,6 @@
 package handlers
 
 import (
-	"context"
-	"fmt"
 	"net/http"
 	"os"
 	"path"
@@ -10,7 +8,6 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	"github.com/vaultdrop/backend/internal/db"
 	"github.com/vaultdrop/backend/internal/service"
 )
 
@@ -172,8 +169,6 @@ func (h *Handlers) GetFile(c *gin.Context) {
 
 func (h *Handlers) UploadFile(c *gin.Context) {
 
-	ctx := context.Background()
-
 	file, err := c.FormFile("file")
 
 	if err != nil {
@@ -220,20 +215,14 @@ func (h *Handlers) UploadFile(c *gin.Context) {
 	}
 
 	checksum := service.CreateSHA256Hash(fileByte)
-	// save generate meta data
-	createFileParams := db.CreateFileParams{
-		Name:       file.Filename,
-		StorageKey: dst,
-		Checksum:   string(checksum[:]),
-	}
-
-	dbFile, err := h.queries.CreateFile(ctx, createFileParams)
-
-	if err != nil {
-		fmt.Println(err)
-	}
-
-	fmt.Println(dbFile.Checksum)
+	// TODO: re-enable once files table + query are added
+	// createFileParams := db.CreateFileParams{
+	// 	Name:       file.Filename,
+	// 	StorageKey: dst,
+	// 	Checksum:   string(checksum[:]),
+	// }
+	// dbFile, err := h.queries.CreateFile(ctx, createFileParams)
+	_ = checksum
 
 	c.JSON(http.StatusOK, gin.H{
 		"error": gin.H{

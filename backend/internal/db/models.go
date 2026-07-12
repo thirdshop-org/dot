@@ -3,27 +3,3 @@
 //   sqlc v1.31.1
 
 package db
-
-import (
-	"database/sql"
-)
-
-type File struct {
-	ID         string        `json:"id"`
-	Name       string        `json:"name"`
-	StorageKey string        `json:"storage_key"`
-	Checksum   string        `json:"checksum"`
-	CreatedAt  int64         `json:"created_at"`
-	UpdatedAt  int64         `json:"updated_at"`
-	DeletedAt  sql.NullInt64 `json:"deleted_at"`
-}
-
-type FileTag struct {
-	FileID string `json:"file_id"`
-	TagID  string `json:"tag_id"`
-}
-
-type Tag struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
-}

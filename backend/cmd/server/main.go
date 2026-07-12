@@ -15,11 +15,17 @@ func main() {
 		port = "8080"
 	}
 
+	migrationsPath := "file://internal/db/migrations"
+
 	database, err := db.Connect()
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
 	defer database.Close()
+
+	if err := db.RunMigrations(database, migrationsPath); err != nil {
+		log.Fatalf("Failed to run migrations: %v", err)
+	}
 
 	queries := db.New(database)
 	h := handlers.New(queries)
