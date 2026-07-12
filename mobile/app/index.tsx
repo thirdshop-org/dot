@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, FlatList, StyleSheet, TouchableOpacity, Text, Dimensions, Image, ActivityIndicator } from 'react-native';
+import React, { useState, useMemo } from 'react';
+import { View, FlatList, StyleSheet, TouchableOpacity, Text, Dimensions, Image, ActivityIndicator, TextInput } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useFiles, useFileImage } from '../hooks/useFiles';
@@ -13,7 +13,6 @@ type RootStackParamList = {
   Home: undefined;
   Upload: undefined;
   Scan: undefined;
-  Search: undefined;
 };
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -51,9 +50,55 @@ function formatDateLabel(key: string): string {
   return key.charAt(0).toUpperCase() + key.slice(1);
 }
 
+function FileGridItem({ file }: { file: FileItem }) {
+  const { data, isLoading } = useFileImage(file.id);
+
+  const uri = data?.data?.url;
+
+  return (
+    <View style={styles.gridItem}>
+      {isLoading ? (
+        <View style={styles.placeholder}>
+          <ActivityIndicator size="small" color="#1976D2" />
+        </View>
+      ) : uri ? (
+        <Image source={{ uri }} style={styles.thumb} />
+      ) : (
+        <View style={styles.placeholder}>
+          <Text style={styles.placeholderText}>PDF</Text>
+        </View>
+      )}
+      <Text style={styles.fileName} numberOfLines={1}>{file.name}</Text>
+    </View>
+  );
+}
+
+function matchesQuery(file: FileItem, query: string): boolean {
+  if (!query) return true;
+  const q = query.toLowerCase();
+  if (file.name.toLowerCase().includes(q)) return true;
+  if (file.ocrText?.toLowerCase().includes(q)) return true;
+  if (file.tags?.some((t) => {
+    const tagName = typeof t === 'string' ? t : t.name;
+    return tagName?.toLowerCase().includes(q);
+  })) return true;
+  return false;
+}
+
 export function HomeScreen() {
   const navigation = useNavigation<NavigationProp>();
   const { data, isLoading, error } = useFiles();
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const files = data?.data ?? [];
+
+  const filteredFiles = useMemo(
+    () => searchQuery.trim() ? files.filter((f) => matchesQuery(f, searchQuery)) : files,
+    [files, searchQuery]
+  );
+
+  const groups = groupByDate(filteredFiles);
+  const groupKeys = Object.keys(groups);
 
   if (isLoading) {
     return (
@@ -71,16 +116,36 @@ export function HomeScreen() {
     );
   }
 
-  const files = data?.data ?? [];
-  const groups = groupByDate(files);
-  const groupKeys = Object.keys(groups);
-
   return (
     <View style={styles.container}>
+      <View style={styles.searchBar}>
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Rechercher par nom, tag ou texte OCR..."
+          placeholderTextColor="#999"
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          returnKeyType="search"
+          autoCorrect={false}
+        />
+        {searchQuery.length > 0 && (
+          <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearBtn}>
+            <Text style={styles.clearText}>✕</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
       <FlatList
         data={groupKeys}
         keyExtractor={(item) => item}
         contentContainerStyle={styles.list}
+        ListEmptyComponent={
+          <View style={styles.empty}>
+            <Text style={styles.emptyText}>
+              {searchQuery ? 'Aucun résultat' : 'Aucun fichier'}
+            </Text>
+          </View>
+        }
         renderItem={({ item: dateKey }) => {
           const groupFiles = groups[dateKey];
           return (
@@ -110,37 +175,7 @@ export function HomeScreen() {
         >
           <Text style={styles.navText}>Scan</Text>
         </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.navButton}
-          onPress={() => navigation.navigate('Search')}
-        >
-          <Text style={styles.navText}>Recherche</Text>
-        </TouchableOpacity>
       </View>
-    </View>
-  );
-}
-
-function FileGridItem({ file }: { file: FileItem }) {
-  const { data, isLoading } = useFileImage(file.id);
-
-  const uri = data?.data?.url;
-
-  return (
-    <View style={styles.gridItem}>
-      {isLoading ? (
-        <View style={styles.placeholder}>
-          <ActivityIndicator size="small" color="#1976D2" />
-        </View>
-      ) : uri ? (
-        <Image source={{ uri }} style={styles.thumb} />
-      ) : (
-        <View style={styles.placeholder}>
-          <Text style={styles.placeholderText}>PDF</Text>
-        </View>
-      )}
-      <Text style={styles.fileName} numberOfLines={1}>{file.name}</Text>
     </View>
   );
 }
@@ -159,9 +194,42 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
   },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 8,
+  },
+  searchInput: {
+    flex: 1,
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontSize: 15,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  clearBtn: {
+    marginLeft: 8,
+    padding: 6,
+  },
+  clearText: {
+    fontSize: 18,
+    color: '#999',
+  },
   list: {
     padding: 16,
     paddingBottom: 80,
+  },
+  empty: {
+    paddingVertical: 60,
+    alignItems: 'center',
+  },
+  emptyText: {
+    fontSize: 16,
+    color: '#999',
   },
   section: {
     marginBottom: 24,

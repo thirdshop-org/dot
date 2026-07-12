@@ -77,6 +77,7 @@ func (h *FileHandler) List(c *gin.Context) {
 			Size:      f.Size,
 			Tags:      []string{},
 			CreatedAt: f.CreatedAt,
+			OcrText:   f.OcrText,
 			UpdatedAt: f.UpdatedAt,
 			MimeType:  f.MimeType,
 		}
