@@ -11,17 +11,23 @@
       "infoPlist": {
         "NSCameraUsageDescription": "VaultDrop a besoin d'accéder à votre caméra pour scanner des documents.",
         "NSPhotoLibraryUsageDescription": "VaultDrop a besoin d'accéder à votre galerie pour sélectionner des photos."
-      }
+      },
+      "bundleIdentifier": "com.anonymous.webui"
     },
     "android": {
-      "permissions": ["CAMERA", "READ_EXTERNAL_STORAGE", "WRITE_EXTERNAL_STORAGE"],
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.anonymous.webui"
     },
     "web": {
       "favicon": "./assets/favicon.png"
