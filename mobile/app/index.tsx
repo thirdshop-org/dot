@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import { View, FlatList, StyleSheet, TouchableOpacity, Text, Dimensions, Image, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
+import React, { useState, useMemo, useEffect } from 'react';
+import { View, FlatList, StyleSheet, TouchableOpacity, Text, Dimensions, Image, ActivityIndicator, KeyboardAvoidingView, Platform, Keyboard } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -103,6 +103,13 @@ export function HomeScreen() {
   const { data, isLoading, error } = useFiles();
   const [searchQuery, setSearchQuery] = useState('');
   const [filters, setFilters] = useState<SearchFilters>({ name: true, ocrText: true, tags: true });
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
+
+  useEffect(() => {
+    const show = Keyboard.addListener('keyboardDidShow', () => setKeyboardOpen(true));
+    const hide = Keyboard.addListener('keyboardDidHide', () => setKeyboardOpen(false));
+    return () => { show.remove(); hide.remove(); };
+  }, []);
 
   const files = data?.data ?? [];
 
@@ -185,7 +192,7 @@ export function HomeScreen() {
         onClear={() => setSearchQuery('')}
         filters={filters}
         onFiltersChange={setFilters}
-        bottomPadding={insets.bottom+8}
+        bottomPadding={keyboardOpen ? insets.bottom+8 : 0}
       />
 
       <View style={styles.bottomNav}>
