@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { View, FlatList, StyleSheet, TouchableOpacity, Text, Dimensions, Image, ActivityIndicator, KeyboardAvoidingView, Platform, Keyboard } from 'react-native';
+import { View, FlatList, StyleSheet, TouchableOpacity, Text, Dimensions, KeyboardAvoidingView, Platform, Keyboard } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -7,6 +7,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useFiles, useFileImage } from '../hooks/useFiles';
 import { FileItem } from '../types';
 import { SearchBar, SearchFilters } from '../components/SearchBar';
+import { FileThumbnail } from '../components/FileThumbnail';
 
 const NUM_COLUMNS = 3;
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -57,21 +58,15 @@ function formatDateLabel(key: string): string {
 function FileGridItem({ file, onPress }: { file: FileItem; onPress?: () => void }) {
   const { data, isLoading } = useFileImage(file.id);
 
-  const uri = data?.data?.url;
-
   return (
     <TouchableOpacity style={styles.gridItem} onPress={onPress} activeOpacity={0.7}>
-      {isLoading ? (
-        <View style={styles.placeholder}>
-          <ActivityIndicator size="small" color="#1976D2" />
-        </View>
-      ) : uri ? (
-        <Image source={{ uri }} style={styles.thumb} />
-      ) : (
-        <View style={styles.placeholder}>
-          <Text style={styles.placeholderText}>PDF</Text>
-        </View>
-      )}
+      <FileThumbnail
+        uri={data?.data?.url}
+        mimeType={file.mimeType}
+        fileName={file.name}
+        size={ITEM_SIZE}
+        isLoading={isLoading}
+      />
       <Text style={styles.fileName} numberOfLines={1}>{file.name}</Text>
     </TouchableOpacity>
   );
@@ -263,25 +258,6 @@ const styles = StyleSheet.create({
   },
   gridItem: {
     width: ITEM_SIZE,
-  },
-  thumb: {
-    width: ITEM_SIZE,
-    height: ITEM_SIZE,
-    borderRadius: 6,
-    backgroundColor: '#e0e0e0',
-  },
-  placeholder: {
-    width: ITEM_SIZE,
-    height: ITEM_SIZE,
-    borderRadius: 6,
-    backgroundColor: '#e3f2fd',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  placeholderText: {
-    fontSize: 12,
-    color: '#1976D2',
-    fontWeight: '600',
   },
   fileName: {
     fontSize: 11,

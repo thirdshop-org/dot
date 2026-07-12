@@ -12,6 +12,7 @@ import {
 import { RouteProp, useRoute } from '@react-navigation/native';
 import { useFile, useFileImage } from '../hooks/useFiles';
 import { TagChip } from '../components/TagChip';
+import { FileThumbnail } from '../components/FileThumbnail';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
@@ -30,14 +31,17 @@ function DetailItem({ fileId }: { fileId: string }) {
   return (
     <ScrollView style={styles.page} contentContainerStyle={styles.pageContent}>
       <View style={styles.imageContainer}>
-        {imageLoading ? (
-          <ActivityIndicator size="large" color="#1976D2" />
-        ) : uri ? (
+        {uri ? (
           <Image source={{ uri }} style={styles.image} resizeMode="contain" />
+        ) : file ? (
+          <FileThumbnail
+            mimeType={file.mimeType ?? 'application/pdf'}
+            fileName={file.name ?? fileId}
+            size={SCREEN_WIDTH * 0.6}
+            isLoading={imageLoading}
+          />
         ) : (
-          <View style={styles.placeholder}>
-            <Text style={styles.placeholderText}>PDF</Text>
-          </View>
+          <ActivityIndicator size="large" color="#1976D2" />
         )}
       </View>
 

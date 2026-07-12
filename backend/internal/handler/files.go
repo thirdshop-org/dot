@@ -114,10 +114,14 @@ func (h *FileHandler) Get(c *gin.Context) {
 	}
 
 	api.Success(c, gin.H{
-		"id":   file.ID,
-		"name": file.Name,
-		"url":  h.urls.GenerateDownloadURL(file.ID),
-		"size": file.Size,
+		"id":        file.ID,
+		"name":      file.Name,
+		"url":       h.urls.GenerateDownloadURL(file.ID),
+		"size":      file.Size,
+		"mimeType":  file.MimeType,
+		"createdAt": file.CreatedAt,
+		"updatedAt": file.UpdatedAt,
+		"ocrText":   file.OcrText,
 	})
 }
 
