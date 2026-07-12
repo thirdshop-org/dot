@@ -3,14 +3,22 @@ package db
 import (
 	"fmt"
 	"log"
+	"os"
+
+	"database/sql"
 
 	"github.com/golang-migrate/migrate/v4"
-	"github.com/golang-migrate/migrate/v4/database/sqlite"
+	"github.com/golang-migrate/migrate/v4/database/postgres"
 	"github.com/golang-migrate/migrate/v4/source/file"
 )
 
 func RunMigrations(migrationsURL string) error {
-	migDB, err := Connect()
+	dsn := os.Getenv("DATABASE_URL")
+	if dsn == "" {
+		dsn = "postgres://localhost:5432/vaultdrop?sslmode=disable"
+	}
+
+	migDB, err := sql.Open("postgres", dsn)
 	if err != nil {
 		return fmt.Errorf("open migration db: %w", err)
 	}
@@ -21,12 +29,12 @@ func RunMigrations(migrationsURL string) error {
 		return fmt.Errorf("open migrations source: %w", err)
 	}
 
-	dbDriver, err := sqlite.WithInstance(migDB, &sqlite.Config{})
+	dbDriver, err := postgres.WithInstance(migDB, &postgres.Config{})
 	if err != nil {
-		return fmt.Errorf("create sqlite driver: %w", err)
+		return fmt.Errorf("create postgres driver: %w", err)
 	}
 
-	m, err := migrate.NewWithInstance("file", sourceDriver, "sqlite", dbDriver)
+	m, err := migrate.NewWithInstance("file", sourceDriver, "postgres", dbDriver)
 	if err != nil {
 		return fmt.Errorf("create migrate instance: %w", err)
 	}

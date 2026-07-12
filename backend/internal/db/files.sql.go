@@ -7,11 +7,13 @@ package db
 
 import (
 	"context"
+
+	"github.com/lib/pq"
 )
 
 const createFile = `-- name: CreateFile :one
 INSERT INTO files (id, name, mime_type, size, storage_key, checksum, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 RETURNING id, name, mime_type, size, storage_key, checksum, ocr_text, created_at, updated_at
 `
 
@@ -50,7 +52,7 @@ func (q *Queries) CreateFile(ctx context.Context, arg CreateFileParams) (File, e
 
 const deleteFile = `-- name: DeleteFile :exec
 DELETE FROM files
-WHERE id = ?
+WHERE id = $1
 `
 
 func (q *Queries) DeleteFile(ctx context.Context, id string) error {
@@ -60,7 +62,7 @@ func (q *Queries) DeleteFile(ctx context.Context, id string) error {
 
 const getFile = `-- name: GetFile :one
 SELECT id, name, mime_type, size, storage_key, checksum, ocr_text, created_at, updated_at FROM files
-WHERE id = ? LIMIT 1
+WHERE id = $1 LIMIT 1
 `
 
 func (q *Queries) GetFile(ctx context.Context, id string) (File, error) {
@@ -120,12 +122,12 @@ func (q *Queries) ListFiles(ctx context.Context) ([]File, error) {
 
 const listFilesByID = `-- name: ListFilesByID :many
 SELECT id, name, mime_type, size, storage_key, checksum, ocr_text, created_at, updated_at FROM files
-WHERE id IN (SELECT value FROM json_each(?))
+WHERE id = ANY($1::text[])
 ORDER BY created_at DESC
 `
 
-func (q *Queries) ListFilesByID(ctx context.Context, jsonEach interface{}) ([]File, error) {
-	rows, err := q.db.QueryContext(ctx, listFilesByID, jsonEach)
+func (q *Queries) ListFilesByID(ctx context.Context, dollar_1 []string) ([]File, error) {
+	rows, err := q.db.QueryContext(ctx, listFilesByID, pq.Array(dollar_1))
 	if err != nil {
 		return nil, err
 	}
@@ -159,8 +161,8 @@ func (q *Queries) ListFilesByID(ctx context.Context, jsonEach interface{}) ([]Fi
 
 const updateFile = `-- name: UpdateFile :exec
 UPDATE files
-SET name = ?, mime_type = ?, ocr_text = ?, updated_at = CURRENT_TIMESTAMP
-WHERE id = ?
+SET name = $1, mime_type = $2, ocr_text = $3, updated_at = CURRENT_TIMESTAMP
+WHERE id = $4
 `
 
 type UpdateFileParams struct {

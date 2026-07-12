@@ -15,6 +15,23 @@ services:
       retries: 5
       start_period: 120s
 
+  postgres:
+    image: postgres:17-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: vaultdrop
+      POSTGRES_USER: vaultdrop
+      POSTGRES_PASSWORD: vaultdrop
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vaultdrop"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # backend:
   #   build:
   #     context: ./backend
@@ -23,15 +40,16 @@ services:
   #     - "8080:8080"
   #   environment:
   #     - PORT=8080
-  #     - DB_PATH=/data/vaultdrop.db
+  #     - DATABASE_URL=postgres://vaultdrop:vaultdrop@postgres:5432/vaultdrop?sslmode=disable
   #     - OCR_ENDPOINT=http://paddleocr:8080
   #   volumes:
-  #     - backend-data:/data
   #     - ./backend/uploads:/app/uploads
   #   depends_on:
   #     paddleocr:
   #       condition: service_healthy
+  #     postgres:
+  #       condition: service_healthy
   #   restart: unless-stopped
 
 volumes:
-  backend-data:
+  postgres-data:

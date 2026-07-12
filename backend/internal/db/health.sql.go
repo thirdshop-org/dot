@@ -13,9 +13,9 @@ const getHealth = `-- name: GetHealth :one
 SELECT 1 AS ok
 `
 
-func (q *Queries) GetHealth(ctx context.Context) (int64, error) {
+func (q *Queries) GetHealth(ctx context.Context) (int32, error) {
 	row := q.db.QueryRowContext(ctx, getHealth)
-	var ok int64
+	var ok int32
 	err := row.Scan(&ok)
 	return ok, err
 }

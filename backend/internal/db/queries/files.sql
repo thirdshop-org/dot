@@ -1,6 +1,6 @@
 -- name: GetFile :one
 SELECT * FROM files
-WHERE id = ? LIMIT 1;
+WHERE id = $1 LIMIT 1;
 
 -- name: ListFiles :many
 SELECT * FROM files
@@ -8,19 +8,19 @@ ORDER BY created_at DESC;
 
 -- name: ListFilesByID :many
 SELECT * FROM files
-WHERE id IN (SELECT value FROM json_each(?))
+WHERE id = ANY($1::text[])
 ORDER BY created_at DESC;
 
 -- name: CreateFile :one
 INSERT INTO files (id, name, mime_type, size, storage_key, checksum, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 RETURNING *;
 
 -- name: UpdateFile :exec
 UPDATE files
-SET name = ?, mime_type = ?, ocr_text = ?, updated_at = CURRENT_TIMESTAMP
-WHERE id = ?;
+SET name = $1, mime_type = $2, ocr_text = $3, updated_at = CURRENT_TIMESTAMP
+WHERE id = $4;
 
 -- name: DeleteFile :exec
 DELETE FROM files
-WHERE id = ?;
+WHERE id = $1;

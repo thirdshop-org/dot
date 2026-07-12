@@ -4,6 +4,7 @@ import (
 	"log"
 
 	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 	"github.com/vaultdrop/backend/internal/config"
 	"github.com/vaultdrop/backend/internal/db"
 	"github.com/vaultdrop/backend/internal/handler"
@@ -11,6 +12,8 @@ import (
 )
 
 func main() {
+	_ = godotenv.Load()
+
 	cfg := config.Load()
 
 	database, err := db.Connect()

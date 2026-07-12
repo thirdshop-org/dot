@@ -6,7 +6,7 @@ Project initialized — `webui/` (React Native) and `backend/` (Go) have scaffol
 
 ## Architecture
 
-- **Backend**: Go, Gin HTTP framework, SQLite + FTS5, Tesseract OCR (system call)
+- **Backend**: Go, Gin HTTP framework, PostgreSQL, Tesseract OCR (system call)
 - **Frontend**: React Native (Expo SDK 57), React Navigation, TanStack Query, react-native-image-picker
 
 ## Key Commands
@@ -14,6 +14,9 @@ Project initialized — `webui/` (React Native) and `backend/` (Go) have scaffol
 ```bash
 # Backend
 cd backend && go run cmd/server/main.go
+
+# PostgreSQL (via docker-compose)
+docker compose up postgres -d
 
 # Frontend
 cd webui && npx expo start

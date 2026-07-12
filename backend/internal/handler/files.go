@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"log"
 	"net/http"
 	"path"
 	"strconv"
@@ -51,6 +52,7 @@ func (h *FileHandler) Upload(c *gin.Context) {
 func (h *FileHandler) List(c *gin.Context) {
 	files, err := h.files.List()
 	if err != nil {
+		log.Printf("ERROR List files: %v", err)
 		api.Error(c, http.StatusInternalServerError, "DB_ERROR", "Failed to list files")
 		return
 	}

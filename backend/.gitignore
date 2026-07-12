@@ -26,3 +26,6 @@ uploads/*
 *.db
 *.db-wal
 *.db-shm
+
+# Legacy SQLite (kept for safety)
+vaultdrop.db
