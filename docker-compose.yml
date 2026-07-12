@@ -1,15 +1,19 @@
 services:
   paddleocr:
-    image: paddlecloud/paddleocr:2.6-cpu-latest
+    build:
+      context: ./backend/ocr-server
+      dockerfile: Dockerfile
     ports:
       - "9090:8080"
+    environment:
+      - OCR_LANG=fr
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:8080/health"]
       interval: 30s
       timeout: 10s
       retries: 5
-      start_period: 60s
+      start_period: 120s
 
   # backend:
   #   build:

@@ -22,7 +22,7 @@ func GenerateFileDownloadUrl(fileID string) string {
 	sig := sign(fileID, expires, secret)
 
 	url := fmt.Sprintf(
-		"http://192.168.1.142:8080/api/v1/files/%s?expires=%d&sig=%s",
+		"http://192.168.1.17:8080/api/v1/files/%s?expires=%d&sig=%s",
 		fileID,
 		expires,
 		sig,
