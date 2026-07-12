@@ -1,6 +1,10 @@
 package handlers
 
 import (
+	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"fmt"
 	"net/http"
 	"os"
 	"path"
@@ -8,6 +12,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/vaultdrop/backend/internal/db"
 	"github.com/vaultdrop/backend/internal/service"
 )
 
@@ -215,19 +220,38 @@ func (h *Handlers) UploadFile(c *gin.Context) {
 	}
 
 	checksum := service.CreateSHA256Hash(fileByte)
-	// TODO: re-enable once files table + query are added
-	// createFileParams := db.CreateFileParams{
-	// 	Name:       file.Filename,
-	// 	StorageKey: dst,
-	// 	Checksum:   string(checksum[:]),
-	// }
-	// dbFile, err := h.queries.CreateFile(ctx, createFileParams)
-	_ = checksum
+
+	ctx := context.Background()
+
+	id := make([]byte, 16)
+	rand.Read(id)
+
+	createFileParams := db.CreateFileParams{
+		ID:         hex.EncodeToString(id),
+		Name:       file.Filename,
+		Size:       file.Size,
+		StorageKey: dst,
+		Checksum:   hex.EncodeToString(checksum),
+	}
+
+	dbFile, err := h.queries.CreateFile(ctx, createFileParams)
+	if err != nil {
+
+		fmt.Println(err)
+
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": gin.H{
+				"code":    "DB_ERROR",
+				"message": "Failed to save file metadata",
+			},
+		})
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"error": gin.H{
-			"code":    "SUCCESS",
-			"message": "Uploaded",
+		"data": gin.H{
+			"id":   dbFile.ID,
+			"name": dbFile.Name,
 		},
 	})
 

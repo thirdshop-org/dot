@@ -1,0 +1,11 @@
+CREATE TABLE files (
+  id         TEXT PRIMARY KEY NOT NULL,
+  name       TEXT NOT NULL,
+  mime_type  TEXT NOT NULL DEFAULT '',
+  size       INTEGER NOT NULL DEFAULT 0,
+  storage_key TEXT NOT NULL,
+  checksum   TEXT NOT NULL DEFAULT '',
+  ocr_text   TEXT NOT NULL DEFAULT '',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);

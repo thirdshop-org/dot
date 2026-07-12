@@ -3,3 +3,19 @@
 //   sqlc v1.31.1
 
 package db
+
+import (
+	"time"
+)
+
+type File struct {
+	ID         string    `json:"id"`
+	Name       string    `json:"name"`
+	MimeType   string    `json:"mime_type"`
+	Size       int64     `json:"size"`
+	StorageKey string    `json:"storage_key"`
+	Checksum   string    `json:"checksum"`
+	OcrText    string    `json:"ocr_text"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
+}

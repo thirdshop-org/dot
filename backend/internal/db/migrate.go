@@ -1,7 +1,6 @@
 package db
 
 import (
-	"database/sql"
 	"fmt"
 	"log"
 
@@ -10,13 +9,19 @@ import (
 	"github.com/golang-migrate/migrate/v4/source/file"
 )
 
-func RunMigrations(database *sql.DB, migrationsURL string) error {
+func RunMigrations(migrationsURL string) error {
+	migDB, err := Connect()
+	if err != nil {
+		return fmt.Errorf("open migration db: %w", err)
+	}
+	defer migDB.Close()
+
 	sourceDriver, err := (&file.File{}).Open(migrationsURL)
 	if err != nil {
 		return fmt.Errorf("open migrations source: %w", err)
 	}
 
-	dbDriver, err := sqlite.WithInstance(database, &sqlite.Config{})
+	dbDriver, err := sqlite.WithInstance(migDB, &sqlite.Config{})
 	if err != nil {
 		return fmt.Errorf("create sqlite driver: %w", err)
 	}
