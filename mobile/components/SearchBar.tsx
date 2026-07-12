@@ -17,6 +17,8 @@ interface SearchBarProps {
   onClear: () => void;
   filters: SearchFilters;
   onFiltersChange: (f: SearchFilters) => void;
+  groupByTags: boolean;
+  onGroupToggle: () => void;
   bottomPadding?: number;
 }
 
@@ -26,7 +28,7 @@ const FILTER_OPTIONS: { key: keyof SearchFilters; label: string; icon: IconName 
   { key: 'tags', label: 'Tags', icon: 'label-outline' },
 ];
 
-export function SearchBar({ query, onQueryChange, onClear, filters, onFiltersChange, bottomPadding = 0 }: SearchBarProps) {
+export function SearchBar({ query, onQueryChange, onClear, filters, onFiltersChange, groupByTags, onGroupToggle, bottomPadding = 0 }: SearchBarProps) {
   const animatedHeight = useRef(new Animated.Value(0)).current;
   const [panelOpen, setPanelOpen] = React.useState(false);
 
@@ -79,6 +81,17 @@ export function SearchBar({ query, onQueryChange, onClear, filters, onFiltersCha
             name="tune"
             size={22}
             color={hasActiveFilter ? '#fff' : '#1976D2'}
+          />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.groupBtn, groupByTags && styles.groupBtnActive]}
+          onPress={onGroupToggle}
+        >
+          <MaterialIcons
+            name="folder-special"
+            size={22}
+            color={groupByTags ? '#fff' : '#1976D2'}
           />
         </TouchableOpacity>
       </View>
@@ -149,6 +162,19 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   filterBtnActive: {
+    backgroundColor: '#1976D2',
+  },
+  groupBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#1976D2',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+  },
+  groupBtnActive: {
     backgroundColor: '#1976D2',
   },
   filterPanel: {

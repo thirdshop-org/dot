@@ -1,5 +1,11 @@
 package model
 
+type Tag struct {
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	TagType  string `json:"tagType"`
+}
+
 type File struct {
 	ID         string `json:"id"`
 	Name       string `json:"name"`
@@ -8,6 +14,7 @@ type File struct {
 	StorageKey string `json:"-"`
 	Checksum   string `json:"-"`
 	OcrText    string `json:"ocrText,omitempty"`
+	Tags       []Tag  `json:"tags"`
 	CreatedAt  string `json:"createdAt"`
 	UpdatedAt  string `json:"updatedAt"`
 }

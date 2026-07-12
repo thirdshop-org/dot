@@ -46,6 +46,25 @@ function groupByDate(files: FileItem[]): GroupedFiles {
   return groups;
 }
 
+function groupByTag(files: FileItem[]): GroupedFiles {
+  const groups: GroupedFiles = {};
+  for (const file of files) {
+    const tags = file.tags ?? [];
+    if (tags.length === 0) {
+      if (!groups['Sans tag']) groups['Sans tag'] = [];
+      groups['Sans tag'].push(file);
+    } else {
+      for (const tag of tags) {
+        const name = typeof tag === 'string' ? tag : tag.name;
+        if (!name) continue;
+        if (!groups[name]) groups[name] = [];
+        groups[name].push(file);
+      }
+    }
+  }
+  return groups;
+}
+
 function formatDateLabel(key: string): string {
   const d = new Date();
   const today = d.toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
@@ -115,6 +134,7 @@ export function HomeScreen() {
   const [filters, setFilters] = useState<SearchFilters>({ name: true, ocrText: true, tags: true });
   const [keyboardOpen, setKeyboardOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [groupByTags, setGroupByTags] = useState(false);
 
   useEffect(() => {
     const show = Keyboard.addListener('keyboardDidShow', () => setKeyboardOpen(true));
@@ -131,7 +151,7 @@ export function HomeScreen() {
     [files, searchQuery, filters]
   );
 
-  const groups = groupByDate(filteredFiles);
+  const groups = groupByTags ? groupByTag(filteredFiles) : groupByDate(filteredFiles);
   const groupKeys = Object.keys(groups);
 
   const fileIdToIndex = useMemo(() => {
@@ -236,11 +256,16 @@ export function HomeScreen() {
             </Text>
           </View>
         }
-        renderItem={({ item: dateKey }) => {
-          const groupFiles = groups[dateKey];
+        renderItem={({ item: groupKey }) => {
+          const groupFiles = groups[groupKey];
+          const label = groupByTags ? groupKey : formatDateLabel(groupKey);
           return (
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>{formatDateLabel(dateKey)}</Text>
+              <View style={styles.sectionHeader}>
+                {groupByTags && <MaterialIcons name="label" size={16} color="#1976D2" style={styles.sectionIcon} />}
+                <Text style={styles.sectionTitle}>{label}</Text>
+                <Text style={styles.sectionCount}>{groupFiles.length}</Text>
+              </View>
               <View style={styles.grid}>
                 {groupFiles.map((file) => (
                   <FileGridItem
@@ -264,6 +289,8 @@ export function HomeScreen() {
           onClear={() => setSearchQuery('')}
           filters={filters}
           onFiltersChange={setFilters}
+          groupByTags={groupByTags}
+          onGroupToggle={() => setGroupByTags(!groupByTags)}
           bottomPadding={keyboardOpen ? insets.bottom+8 : 0}
         />
       )}
@@ -358,8 +385,21 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: '700',
-    marginBottom: 12,
     color: '#333',
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    gap: 6,
+  },
+  sectionIcon: {
+    marginTop: 2,
+  },
+  sectionCount: {
+    fontSize: 14,
+    color: '#999',
+    fontWeight: '400',
   },
   grid: {
     flexDirection: 'row',

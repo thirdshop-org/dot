@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"database/sql"
 	"encoding/hex"
 	"fmt"
 	"mime/multipart"
@@ -74,7 +75,11 @@ func (s *FileService) List() ([]model.File, error) {
 
 	files := make([]model.File, len(dbFiles))
 	for i, f := range dbFiles {
-		files[i] = dbToModel(f)
+		tags, err := s.queries.GetTagsByFileID(context.Background(), sql.NullString{String: f.ID, Valid: true})
+		if err != nil {
+			return nil, fmt.Errorf("get tags for file %s: %w", f.ID, err)
+		}
+		files[i] = dbToModel(f, tags)
 	}
 	return files, nil
 }
@@ -84,7 +89,11 @@ func (s *FileService) Get(id string) (*model.File, error) {
 	if err != nil {
 		return nil, fmt.Errorf("get file: %w", err)
 	}
-	m := dbToModel(f)
+	tags, err := s.queries.GetTagsByFileID(context.Background(), sql.NullString{String: f.ID, Valid: true})
+	if err != nil {
+		return nil, fmt.Errorf("get tags: %w", err)
+	}
+	m := dbToModel(f, tags)
 	return &m, nil
 }
 
@@ -113,7 +122,51 @@ func (s *FileService) UpdateOCRText(id, text string) error {
 	})
 }
 
-func dbToModel(f db.File) model.File {
+func (s *FileService) AddTags(fileID string, tagNames []string) error {
+	for _, name := range tagNames {
+		tag, err := s.queries.GetTagByName(context.Background(), name)
+		if err == sql.ErrNoRows {
+			tag, err = s.queries.CreateTag(context.Background(), db.CreateTagParams{
+				ID:      uuid.New().String(),
+				TagName: name,
+				TagType: "none",
+			})
+			if err != nil {
+				return fmt.Errorf("create tag %q: %w", name, err)
+			}
+		} else if err != nil {
+			return fmt.Errorf("get tag %q: %w", name, err)
+		}
+
+		err = s.queries.AddTagToFile(context.Background(), db.AddTagToFileParams{
+			ID:     uuid.New().String(),
+			TagID:  sql.NullString{String: tag.ID, Valid: true},
+			FileID: sql.NullString{String: fileID, Valid: true},
+		})
+		if err != nil {
+			return fmt.Errorf("link tag %q to file: %w", name, err)
+		}
+	}
+	return nil
+}
+
+func (s *FileService) GetTagsByFileID(fileID string) ([]model.Tag, error) {
+	dbTags, err := s.queries.GetTagsByFileID(context.Background(), sql.NullString{String: fileID, Valid: true})
+	if err != nil {
+		return nil, fmt.Errorf("get tags: %w", err)
+	}
+	tags := make([]model.Tag, len(dbTags))
+	for i, t := range dbTags {
+		tags[i] = model.Tag{ID: t.ID, Name: t.TagName, TagType: t.TagType}
+	}
+	return tags, nil
+}
+
+func dbToModel(f db.File, dbTags []db.Tag) model.File {
+	tags := make([]model.Tag, len(dbTags))
+	for i, t := range dbTags {
+		tags[i] = model.Tag{ID: t.ID, Name: t.TagName, TagType: t.TagType}
+	}
 	return model.File{
 		ID:         f.ID,
 		Name:       f.Name,
@@ -122,6 +175,7 @@ func dbToModel(f db.File) model.File {
 		StorageKey: f.StorageKey,
 		Checksum:   f.Checksum,
 		OcrText:    f.OcrText,
+		Tags:       tags,
 		CreatedAt:  f.CreatedAt.String(),
 		UpdatedAt:  f.UpdatedAt.String(),
 	}

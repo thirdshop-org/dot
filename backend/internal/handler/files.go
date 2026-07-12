@@ -137,9 +137,36 @@ func (h *FileHandler) Delete(c *gin.Context) {
 }
 
 func (h *FileHandler) AddTags(c *gin.Context) {
-	api.Error(c, http.StatusNotImplemented, "NOT_IMPLEMENTED", "Tags not yet implemented")
+	id := c.Param("id")
+
+	var body struct {
+		Tags []string `json:"tags" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		api.Error(c, http.StatusBadRequest, "INVALID_BODY", "Body must contain a 'tags' array")
+		return
+	}
+
+	if err := h.files.AddTags(id, body.Tags); err != nil {
+		api.Error(c, http.StatusInternalServerError, "DB_ERROR", "Failed to add tags")
+		return
+	}
+
+	tags, err := h.files.GetTagsByFileID(id)
+	if err != nil {
+		api.Error(c, http.StatusInternalServerError, "DB_ERROR", "Failed to fetch tags")
+		return
+	}
+
+	api.Success(c, tags)
 }
 
 func (h *FileHandler) GetTags(c *gin.Context) {
-	api.Success(c, []interface{}{})
+	id := c.Param("id")
+	tags, err := h.files.GetTagsByFileID(id)
+	if err != nil {
+		api.Error(c, http.StatusInternalServerError, "DB_ERROR", "Failed to fetch tags")
+		return
+	}
+	api.Success(c, tags)
 }
