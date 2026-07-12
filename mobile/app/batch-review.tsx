@@ -1,24 +1,27 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, Alert, ActivityIndicator, Share } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, Alert, ActivityIndicator } from 'react-native';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useBatchStore } from '../hooks/useBatchStore';
 import { usePdfGeneration } from '../hooks/usePdfGeneration';
 
-type BatchReviewRouteParams = {
+type RootStackParamList = {
+  Home: undefined;
   BatchReview: { batchId: string };
+  PendingReview: { batchId: string; photoIds: string[] };
 };
+
+type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
+type BatchReviewRouteParams = { BatchReview: { batchId: string } };
 
 export function BatchReviewScreen() {
   const route = useRoute<RouteProp<BatchReviewRouteParams, 'BatchReview'>>();
-  const navigation = useNavigation();
-  const { getBatch, addTagToBatch, removeTagFromBatch } = useBatchStore();
-  const { generatePdf, generating } = usePdfGeneration();
+  const navigation = useNavigation<NavigationProp>();
+  const { getBatch, removePhotoFromBatch } = useBatchStore();
 
   const batch = getBatch(route.params.batchId);
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [editingTags, setEditingTags] = useState(false);
-  const [tagInput, setTagInput] = useState('');
 
   if (!batch) {
     return (
@@ -37,44 +40,39 @@ export function BatchReviewScreen() {
     });
   };
 
-  const selectedPhotos = batch.photos.filter((p) => selectedIds.has(p.id));
   const selectedCount = selectedIds.size;
 
-  const handleGeneratePdf = async () => {
-    const photos = selectedCount > 0 ? selectedPhotos : batch.photos;
-    if (photos.length === 0) return;
-
-    const uri = await generatePdf(photos);
-    if (uri) {
-      Alert.alert('PDF généré', 'Voulez-vous partager le fichier ?', [
+  const handleDelete = () => {
+    if (selectedCount === 0) return;
+    const label = selectedCount === 1 ? 'cette photo' : `ces ${selectedCount} photos`;
+    Alert.alert(
+      'Supprimer',
+      `Retirer ${label} du lot ?`,
+      [
         { text: 'Annuler', style: 'cancel' },
         {
-          text: 'Partager',
+          text: 'Supprimer',
+          style: 'destructive',
           onPress: () => {
-            Share.share({ url: uri, title: batch.name });
+            selectedIds.forEach((id) => removePhotoFromBatch(batch.id, id));
+            setSelectedIds(new Set());
           },
         },
-      ]);
-    } else {
-      Alert.alert('Erreur', 'Impossible de générer le PDF');
-    }
+      ]
+    );
   };
 
-  const handleAddTag = () => {
-    const tag = tagInput.trim().toLowerCase();
-    if (!tag || batch.tags.includes(tag)) return;
-    addTagToBatch(batch.id, tag);
-    setTagInput('');
+  const handleGroup = () => {
+    if (selectedCount === 0) return;
+    const ids = Array.from(selectedIds);
+    navigation.navigate('PendingReview', { batchId: batch.id, photoIds: ids });
   };
 
   const formatDate = (iso: string) => {
     const d = new Date(iso);
     return d.toLocaleDateString('fr-FR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
+      day: '2-digit', month: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit',
     });
   };
 
@@ -111,36 +109,25 @@ export function BatchReviewScreen() {
       />
 
       <View style={styles.footer}>
-        <View style={styles.tagSection}>
-          <View style={styles.tagRow}>
-            {batch.tags.map((tag) => (
-              <TouchableOpacity
-                key={tag}
-                style={styles.tagChip}
-                onPress={() => removeTagFromBatch(batch.id, tag)}
-              >
-                <Text style={styles.tagText}>{tag} ✕</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-          <Text style={styles.disabledNote}>Tags disponibles avec le backend (bientôt)</Text>
-        </View>
+        <Text style={styles.selectionInfo}>
+          {selectedCount > 0 ? `${selectedCount} sélectionnée${selectedCount > 1 ? 's' : ''}` : 'Touchez une photo pour sélectionner'}
+        </Text>
 
         <View style={styles.actions}>
-          <Text style={styles.selectionInfo}>
-            {selectedCount > 0 ? `${selectedCount} sélectionnée${selectedCount > 1 ? 's' : ''}` : 'Toutes les photos'}
-          </Text>
+          <TouchableOpacity
+            style={[styles.actionBtn, styles.deleteBtn, selectedCount === 0 && styles.actionBtnDisabled]}
+            onPress={handleDelete}
+            disabled={selectedCount === 0}
+          >
+            <Text style={styles.actionText}>🗑 Supprimer</Text>
+          </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.actionButton, generating && styles.actionButtonDisabled]}
-            onPress={handleGeneratePdf}
-            disabled={generating}
+            style={[styles.actionBtn, styles.groupBtn, selectedCount === 0 && styles.actionBtnDisabled]}
+            onPress={handleGroup}
+            disabled={selectedCount === 0}
           >
-            {generating ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <Text style={styles.actionText}>📄 Générer PDF</Text>
-            )}
+            <Text style={styles.actionText}>📦 Regrouper</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -212,47 +199,29 @@ const styles = StyleSheet.create({
     borderTopColor: '#e0e0e0',
     gap: 12,
   },
-  tagSection: {
-    gap: 8,
-  },
-  tagRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  tagChip: {
-    backgroundColor: '#E3F2FD',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  tagText: {
-    fontSize: 13,
-    color: '#1976D2',
-  },
-  disabledNote: {
-    fontSize: 12,
-    color: '#999',
-    fontStyle: 'italic',
-  },
-  actions: {
-    gap: 8,
-    alignItems: 'center',
-  },
   selectionInfo: {
     fontSize: 14,
     color: '#666',
+    textAlign: 'center',
   },
-  actionButton: {
-    backgroundColor: '#1976D2',
-    paddingHorizontal: 24,
+  actions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  actionBtn: {
+    flex: 1,
     paddingVertical: 12,
     borderRadius: 8,
-    width: '100%',
     alignItems: 'center',
   },
-  actionButtonDisabled: {
-    opacity: 0.6,
+  actionBtnDisabled: {
+    opacity: 0.4,
+  },
+  deleteBtn: {
+    backgroundColor: '#F44336',
+  },
+  groupBtn: {
+    backgroundColor: '#4CAF50',
   },
   actionText: {
     color: '#fff',

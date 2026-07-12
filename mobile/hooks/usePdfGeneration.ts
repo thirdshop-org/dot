@@ -1,22 +1,21 @@
 import { useState, useCallback } from 'react';
 import * as Print from 'expo-print';
-import * as FileSystem from 'expo-file-system';
-import { CapturedPhoto } from '../types';
 
 export function usePdfGeneration() {
   const [generating, setGenerating] = useState(false);
+  const [progress, setProgress] = useState(0);
 
-  const generatePdf = useCallback(async (photos: CapturedPhoto[]): Promise<string | null> => {
-    if (photos.length === 0) return null;
+  const generatePdf = useCallback(async (items: { uri: string }[], progressCb?: (pct: number) => void): Promise<string | null> => {
+    if (items.length === 0) return null;
 
     setGenerating(true);
+    setProgress(0);
+    progressCb?.(0);
 
     try {
-      const imagesHtml = photos.map((p) => {
-        const ext = p.filePath.split('.').pop()?.toLowerCase() || 'jpeg';
-        const mime = ext === 'png' ? 'image/png' : 'image/jpeg';
+      const imagesHtml = items.map((item) => {
         return `<div style="page-break-after: always; display: flex; justify-content: center; align-items: center; height: 100vh;">
-          <img src="${p.uri}" style="max-width: 100%; max-height: 100vh; object-fit: contain;" />
+          <img src="${item.uri}" style="max-width: 100%; max-height: 100vh; object-fit: contain;" />
         </div>`;
       }).join('');
 
@@ -37,6 +36,8 @@ export function usePdfGeneration() {
 </html>`;
 
       const { uri } = await Print.printToFileAsync({ html });
+      setProgress(100);
+      progressCb?.(100);
       return uri;
     } catch (err) {
       console.error('PDF generation failed:', err);
@@ -49,5 +50,6 @@ export function usePdfGeneration() {
   return {
     generatePdf,
     generating,
+    progress,
   };
 }

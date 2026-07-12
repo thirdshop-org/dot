@@ -48,6 +48,17 @@ export function useBatchStore() {
     setBatchIds((batchIds ?? []).filter((id) => id !== batchId));
   }, [batchIds, setBatchIds]);
 
+  const removePhotoFromBatch = useCallback((batchId: string, photoId: string) => {
+    const batch = getBatch(batchId);
+    if (!batch) return;
+    batch.photos = batch.photos.filter((p) => p.id !== photoId);
+    if (batch.photos.length === 0) {
+      deleteBatch(batchId);
+    } else {
+      storage.set(`batch_${batchId}`, JSON.stringify(batch));
+    }
+  }, [getBatch, deleteBatch]);
+
   return {
     saveBatch,
     getBatch,
@@ -55,5 +66,6 @@ export function useBatchStore() {
     addTagToBatch,
     removeTagFromBatch,
     deleteBatch,
+    removePhotoFromBatch,
   };
 }
