@@ -118,6 +118,45 @@ func (q *Queries) ListFiles(ctx context.Context) ([]File, error) {
 	return items, nil
 }
 
+const listFilesByID = `-- name: ListFilesByID :many
+SELECT id, name, mime_type, size, storage_key, checksum, ocr_text, created_at, updated_at FROM files
+WHERE id IN (SELECT value FROM json_each(?))
+ORDER BY created_at DESC
+`
+
+func (q *Queries) ListFilesByID(ctx context.Context, jsonEach interface{}) ([]File, error) {
+	rows, err := q.db.QueryContext(ctx, listFilesByID, jsonEach)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []File
+	for rows.Next() {
+		var i File
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.MimeType,
+			&i.Size,
+			&i.StorageKey,
+			&i.Checksum,
+			&i.OcrText,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateFile = `-- name: UpdateFile :exec
 UPDATE files
 SET name = ?, mime_type = ?, ocr_text = ?, updated_at = CURRENT_TIMESTAMP

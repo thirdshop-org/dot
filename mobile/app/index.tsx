@@ -1,8 +1,8 @@
 import React from 'react';
-import { View, FlatList, StyleSheet, TouchableOpacity, Text, Dimensions, Image } from 'react-native';
+import { View, FlatList, StyleSheet, TouchableOpacity, Text, Dimensions, Image, ActivityIndicator } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { useFiles } from '../hooks/useFiles';
+import { useFiles, useFileImage } from '../hooks/useFiles';
 import { FileItem } from '../types';
 
 const NUM_COLUMNS = 3;
@@ -20,10 +20,18 @@ type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 type GroupedFiles = Record<string, FileItem[]>;
 
+function parseBackendDate(dateStr: string): Date | null {
+  if (!dateStr) return null;
+  const match = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})/);
+  if (!match) return new Date(dateStr);
+  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]), Number(match[4]), Number(match[5]), Number(match[6]));
+}
+
 function groupByDate(files: FileItem[]): GroupedFiles {
   const groups: GroupedFiles = {};
   for (const file of files) {
-    const d = new Date(file.createdAt);
+    const d = parseBackendDate(file.createdAt);
+    if (!d) continue;
     const key = d.toLocaleDateString('fr-FR', {
       weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
     });
@@ -80,16 +88,7 @@ export function HomeScreen() {
               <Text style={styles.sectionTitle}>{formatDateLabel(dateKey)}</Text>
               <View style={styles.grid}>
                 {groupFiles.map((file) => (
-                  <View key={file.id} style={styles.gridItem}>
-                    {file.url ? (
-                      <Image source={{ uri: file.url }} style={styles.thumb} />
-                    ) : (
-                      <View style={styles.placeholder}>
-                        <Text style={styles.placeholderText}>PDF</Text>
-                      </View>
-                    )}
-                    <Text style={styles.fileName} numberOfLines={1}>{file.name}</Text>
-                  </View>
+                  <FileGridItem key={file.id} file={file} />
                 ))}
               </View>
             </View>
@@ -119,6 +118,29 @@ export function HomeScreen() {
           <Text style={styles.navText}>Recherche</Text>
         </TouchableOpacity>
       </View>
+    </View>
+  );
+}
+
+function FileGridItem({ file }: { file: FileItem }) {
+  const { data, isLoading } = useFileImage(file.id);
+
+  const uri = data?.data?.url;
+
+  return (
+    <View style={styles.gridItem}>
+      {isLoading ? (
+        <View style={styles.placeholder}>
+          <ActivityIndicator size="small" color="#1976D2" />
+        </View>
+      ) : uri ? (
+        <Image source={{ uri }} style={styles.thumb} />
+      ) : (
+        <View style={styles.placeholder}>
+          <Text style={styles.placeholderText}>PDF</Text>
+        </View>
+      )}
+      <Text style={styles.fileName} numberOfLines={1}>{file.name}</Text>
     </View>
   );
 }

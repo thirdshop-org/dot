@@ -6,6 +6,11 @@ WHERE id = ? LIMIT 1;
 SELECT * FROM files
 ORDER BY created_at DESC;
 
+-- name: ListFilesByID :many
+SELECT * FROM files
+WHERE id IN (SELECT value FROM json_each(?))
+ORDER BY created_at DESC;
+
 -- name: CreateFile :one
 INSERT INTO files (id, name, mime_type, size, storage_key, checksum, created_at, updated_at)
 VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)

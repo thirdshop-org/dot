@@ -3,12 +3,12 @@ package config
 import "os"
 
 type Config struct {
-	Port         string
-	DBPath       string
-	OCREndpoint  string
-	UploadDir    string
-	HMACSecret   string
-	ServerHost   string
+	Port        string
+	DBPath      string
+	OCREndpoint string
+	UploadDir   string
+	HMACSecret  string
+	ServerHost  string
 }
 
 func Load() *Config {
@@ -18,7 +18,7 @@ func Load() *Config {
 		OCREndpoint: envOr("OCR_ENDPOINT", "http://localhost:9090"),
 		UploadDir:   envOr("UPLOAD_DIR", "./uploads"),
 		HMACSecret:  envOr("HMAC_SECRET", "thisismyrandomstring"),
-		ServerHost:  envOr("SERVER_HOST", "http://localhost:8080"),
+		ServerHost:  envOr("SERVER_HOST", "http://192.168.1.17:8080"),
 	}
 }
 

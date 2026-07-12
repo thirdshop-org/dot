@@ -21,6 +21,14 @@ export function useFile(id: string) {
   });
 }
 
+export function useFileImage(fileId: string) {
+  return useQuery({
+    queryKey: ['fileImage', fileId],
+    queryFn: () => apiClient.get<{ data: { id: string; name: string; url: string; size: number } }>(`${ENDPOINTS.FILE}/${fileId}`),
+    enabled: !!fileId,
+  });
+}
+
 export function useDeleteFile() {
   const queryClient = useQueryClient();
 

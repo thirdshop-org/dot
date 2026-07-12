@@ -29,7 +29,7 @@ func (s *URLService) GenerateDownloadURL(fileUUID string) string {
 	sig := s.sign(fileUUID, expires)
 
 	return fmt.Sprintf(
-		"%s/api/v1/files/%s?expires=%d&sig=%s",
+		"%s/api/v1/files/download/%s?expires=%d&sig=%s",
 		s.serverHost,
 		fileUUID,
 		expires,

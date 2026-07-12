@@ -60,21 +60,38 @@ func (h *FileHandler) List(c *gin.Context) {
 	}
 
 	type fileResponse struct {
-		ID   string   `json:"id"`
-		URL  string   `json:"url"`
-		Name string   `json:"name"`
-		Size int64    `json:"size"`
-		Tags []string `json:"tags"`
+		ID        string   `json:"id"`
+		URL       string   `json:"url"`
+		Name      string   `json:"name"`
+		Size      int64    `json:"size"`
+		Tags      []string `json:"tags"`
+		CreatedAt string   `json:"createdAt"`
 	}
 
 	resp := make([]fileResponse, len(files))
 	for i, f := range files {
+
+		metadata, err := h.files.Get(f.ID)
+		if err != nil {
+
+			resp[i] = fileResponse{
+				ID:   f.ID,
+				URL:  h.urls.GenerateDownloadURL(f.ID),
+				Name: f.Name,
+				Size: f.Size,
+				Tags: []string{},
+			}
+			continue
+
+		}
+
 		resp[i] = fileResponse{
-			ID:   f.ID,
-			URL:  h.urls.GenerateDownloadURL(f.ID),
-			Name: f.Name,
-			Size: f.Size,
-			Tags: []string{},
+			ID:        f.ID,
+			URL:       h.urls.GenerateDownloadURL(f.ID),
+			Name:      f.Name,
+			Size:      f.Size,
+			Tags:      []string{},
+			CreatedAt: metadata.CreatedAt,
 		}
 	}
 
