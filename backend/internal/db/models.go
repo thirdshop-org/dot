@@ -5,6 +5,7 @@
 package db
 
 import (
+	"database/sql"
 	"time"
 )
 
@@ -18,4 +19,19 @@ type File struct {
 	OcrText    string    `json:"ocr_text"`
 	CreatedAt  time.Time `json:"created_at"`
 	UpdatedAt  time.Time `json:"updated_at"`
+}
+
+type FileTag struct {
+	ID     string         `json:"id"`
+	TagID  sql.NullString `json:"tag_id"`
+	FileID sql.NullString `json:"file_id"`
+}
+
+type Tag struct {
+	ID          string         `json:"id"`
+	ParentTagID sql.NullString `json:"parent_tag_id"`
+	TagName     string         `json:"tag_name"`
+	TagType     string         `json:"tag_type"`
+	CreatedAt   time.Time      `json:"created_at"`
+	UpdatedAt   time.Time      `json:"updated_at"`
 }
