@@ -18,5 +18,4 @@ type File struct {
 	OcrText    string    `json:"ocr_text"`
 	CreatedAt  time.Time `json:"created_at"`
 	UpdatedAt  time.Time `json:"updated_at"`
-	NlpData    string    `json:"nlp_data"`
 }

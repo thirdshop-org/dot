@@ -64,7 +64,6 @@ func (h *FileHandler) List(c *gin.Context) {
 		CreatedAt string   `json:"createdAt"`
 		MimeType  string   `json:"mimeType"`
 		OcrText   string   `json:"ocrText,omitempty"`
-		NlpData   string   `json:"nlpData,omitempty"`
 		UpdatedAt string   `json:"updatedAt"`
 	}
 
@@ -79,7 +78,6 @@ func (h *FileHandler) List(c *gin.Context) {
 			Tags:      []string{},
 			CreatedAt: f.CreatedAt,
 			OcrText:   f.OcrText,
-			NlpData:   f.NlpData,
 			UpdatedAt: f.UpdatedAt,
 			MimeType:  f.MimeType,
 		}
@@ -124,7 +122,6 @@ func (h *FileHandler) Get(c *gin.Context) {
 		"createdAt": file.CreatedAt,
 		"updatedAt": file.UpdatedAt,
 		"ocrText":   file.OcrText,
-		"nlpData":   file.NlpData,
 	})
 }
 

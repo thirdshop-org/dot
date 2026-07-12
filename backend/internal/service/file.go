@@ -113,13 +113,6 @@ func (s *FileService) UpdateOCRText(id, text string) error {
 	})
 }
 
-func (s *FileService) UpdateNLPData(id, nlpData string) error {
-	return s.queries.UpdateNLPData(context.Background(), db.UpdateNLPDataParams{
-		NlpData: nlpData,
-		ID:      id,
-	})
-}
-
 func dbToModel(f db.File) model.File {
 	return model.File{
 		ID:         f.ID,
@@ -129,7 +122,6 @@ func dbToModel(f db.File) model.File {
 		StorageKey: f.StorageKey,
 		Checksum:   f.Checksum,
 		OcrText:    f.OcrText,
-		NlpData:    f.NlpData,
 		CreatedAt:  f.CreatedAt.String(),
 		UpdatedAt:  f.UpdatedAt.String(),
 	}

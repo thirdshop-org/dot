@@ -8,7 +8,6 @@ type File struct {
 	StorageKey string `json:"-"`
 	Checksum   string `json:"-"`
 	OcrText    string `json:"ocrText,omitempty"`
-	NlpData    string `json:"nlpData,omitempty"`
 	CreatedAt  string `json:"createdAt"`
 	UpdatedAt  string `json:"updatedAt"`
 }

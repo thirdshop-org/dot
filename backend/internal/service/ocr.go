@@ -17,7 +17,6 @@ type OCRJob struct {
 type OCRService struct {
 	client  *ocr.Client
 	fileSvc *FileService
-	nlpSvc  *NLPService
 	jobs    chan OCRJob
 }
 
@@ -27,10 +26,6 @@ func NewOCRService(cfg *config.Config, fileSvc *FileService) *OCRService {
 		fileSvc: fileSvc,
 		jobs:    make(chan OCRJob, 100),
 	}
-}
-
-func (s *OCRService) SetNLPService(nlpSvc *NLPService) {
-	s.nlpSvc = nlpSvc
 }
 
 func (s *OCRService) Start() {
@@ -77,10 +72,6 @@ func (s *OCRService) process(job OCRJob) {
 	}
 
 	log.Printf("[OCR] Completed file %s (%d chars)", job.FileID, len(text))
-
-	if s.nlpSvc != nil {
-		s.nlpSvc.Enqueue(job.FileID, job.FilePath, text)
-	}
 }
 
 func (s *OCRService) RecognizeFromBytes(data []byte) ([]ocr.TextBlock, error) {
