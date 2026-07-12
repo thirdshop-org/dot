@@ -1,10 +1,14 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, TextInput, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, TextInput, Alert, ActivityIndicator, Modal, Dimensions } from 'react-native';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { useBatchStore } from '../hooks/useBatchStore';
 import { usePdfGeneration } from '../hooks/usePdfGeneration';
 import { useUpload } from '../hooks/useUpload';
 import { CapturedPhoto } from '../types';
+
+const NUM_COLUMNS = 3;
+const SCREEN_WIDTH = Dimensions.get('window').width;
+const ITEM_SIZE = (SCREEN_WIDTH - 16 * 2 - (NUM_COLUMNS - 1) * 6) / NUM_COLUMNS;
 
 type PendingReviewRouteParams = {
   PendingReview: { batchId: string; photoIds: string[] };
@@ -24,26 +28,21 @@ export function PendingReviewScreen() {
   );
 
   const [photos, setPhotos] = useState<CapturedPhoto[]>(initialPhotos);
+  const [selectedSet, setSelectedSet] = useState<Set<string>>(new Set(initialPhotos.map((p) => p.id)));
   const [batchTags, setBatchTags] = useState<string[]>(batch?.tags ?? []);
   const [tagInput, setTagInput] = useState('');
+  const [previewUri, setPreviewUri] = useState<string | null>(null);
 
-  const moveUp = useCallback((index: number) => {
-    if (index === 0) return;
-    setPhotos((prev) => {
-      const next = [...prev];
-      [next[index - 1], next[index]] = [next[index], next[index - 1]];
+  const orderedPhotos = photos.filter((p) => selectedSet.has(p.id));
+
+  const togglePhoto = (id: string) => {
+    setSelectedSet((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
-  }, []);
-
-  const moveDown = useCallback((index: number) => {
-    if (index >= photos.length - 1) return;
-    setPhotos((prev) => {
-      const next = [...prev];
-      [next[index], next[index + 1]] = [next[index + 1], next[index]];
-      return next;
-    });
-  }, [photos.length]);
+  };
 
   const handleAddTag = () => {
     const tag = tagInput.trim().toLowerCase();
@@ -59,9 +58,12 @@ export function PendingReviewScreen() {
   };
 
   const handleFinalize = async () => {
-    if (photos.length === 0) return;
+    if (orderedPhotos.length === 0) {
+      Alert.alert('Aucune photo', 'Sélectionnez au moins une photo');
+      return;
+    }
 
-    const pdfUri = await generatePdf(photos.map((p) => ({ uri: p.uri })));
+    const pdfUri = await generatePdf(orderedPhotos.map((p) => ({ uri: p.uri })));
     if (!pdfUri) {
       Alert.alert('Erreur', 'Échec de la génération du PDF');
       return;
@@ -103,39 +105,44 @@ export function PendingReviewScreen() {
     );
   }
 
+  const renderPhoto = ({ item, index }: { item: CapturedPhoto; index: number }) => {
+    const isSelected = selectedSet.has(item.id);
+    const pageNumber = isSelected
+      ? orderedPhotos.findIndex((p) => p.id === item.id) + 1
+      : null;
+
+    return (
+      <TouchableOpacity
+        style={styles.gridItem}
+        onPress={() => togglePhoto(item.id)}
+        onLongPress={() => setPreviewUri(item.uri)}
+      >
+        <Image source={{ uri: item.uri }} style={styles.thumb} />
+        {isSelected && (
+          <View style={styles.selectedOverlay}>
+            <Text style={styles.pageNumber}>{pageNumber}</Text>
+          </View>
+        )}
+      </TouchableOpacity>
+    );
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Réorganiser les photos</Text>
-        <Text style={styles.subtitle}>{photos.length} photo{photos.length > 1 ? 's' : ''}</Text>
+        <Text style={styles.subtitle}>
+          {orderedPhotos.length}/{photos.length} sélectionnée{orderedPhotos.length > 1 ? 's' : ''}
+        </Text>
       </View>
 
       <FlatList
         data={photos}
+        numColumns={NUM_COLUMNS}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.list}
-        renderItem={({ item, index }) => (
-          <View style={styles.photoRow}>
-            <Image source={{ uri: item.uri }} style={styles.thumb} />
-            <Text style={styles.photoIndex}>#{index + 1}</Text>
-            <View style={styles.arrows}>
-              <TouchableOpacity
-                style={[styles.arrowBtn, index === 0 && styles.arrowDisabled]}
-                onPress={() => moveUp(index)}
-                disabled={index === 0}
-              >
-                <Text style={styles.arrowText}>▲</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.arrowBtn, index >= photos.length - 1 && styles.arrowDisabled]}
-                onPress={() => moveDown(index)}
-                disabled={index >= photos.length - 1}
-              >
-                <Text style={styles.arrowText}>▼</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
+        contentContainerStyle={styles.grid}
+        columnWrapperStyle={styles.gridRow}
+        renderItem={renderPhoto}
       />
 
       <View style={styles.tagSection}>
@@ -181,6 +188,14 @@ export function PendingReviewScreen() {
           )}
         </TouchableOpacity>
       </View>
+
+      <Modal visible={previewUri !== null} transparent animationType="fade" onRequestClose={() => setPreviewUri(null)}>
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setPreviewUri(null)}>
+          {previewUri && (
+            <Image source={{ uri: previewUri }} style={styles.previewImage} resizeMode="contain" />
+          )}
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
@@ -213,47 +228,34 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
   },
-  list: {
+  grid: {
     padding: 16,
   },
-  photoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-    backgroundColor: '#f9f9f9',
-    borderRadius: 8,
-    padding: 8,
+  gridRow: {
+    gap: 6,
+  },
+  gridItem: {
+    width: ITEM_SIZE,
+    height: ITEM_SIZE,
+    borderRadius: 6,
+    overflow: 'hidden',
+    backgroundColor: '#f0f0f0',
+    marginBottom: 6,
   },
   thumb: {
-    width: 60,
-    height: 60,
-    borderRadius: 6,
-    backgroundColor: '#e0e0e0',
+    width: '100%',
+    height: '100%',
   },
-  photoIndex: {
-    marginLeft: 12,
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    flex: 1,
-  },
-  arrows: {
-    gap: 4,
-  },
-  arrowBtn: {
-    width: 36,
-    height: 28,
-    borderRadius: 4,
-    backgroundColor: '#e0e0e0',
+  selectedOverlay: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(25,118,210,0.35)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  arrowDisabled: {
-    opacity: 0.3,
-  },
-  arrowText: {
-    fontSize: 14,
-    color: '#333',
+  pageNumber: {
+    color: '#fff',
+    fontSize: 28,
+    fontWeight: '800',
   },
   tagSection: {
     padding: 16,
@@ -335,5 +337,15 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  previewImage: {
+    width: SCREEN_WIDTH * 0.95,
+    height: '80%',
   },
 });
