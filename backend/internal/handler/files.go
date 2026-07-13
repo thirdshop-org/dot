@@ -242,3 +242,13 @@ func (h *FileHandler) CreateFolder(c *gin.Context) {
 
 	api.Success(c, folder)
 }
+
+func (h *FileHandler) ListFilesByParent(c *gin.Context) {
+	parentID := c.Param("id")
+	files, err := h.files.ListFilesByParentID(parentID)
+	if err != nil {
+		api.Error(c, http.StatusInternalServerError, "DB_ERROR", "Failed to list files in folder")
+		return
+	}
+	api.Success(c, files)
+}

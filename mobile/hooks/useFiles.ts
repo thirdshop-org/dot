@@ -70,3 +70,12 @@ export function useFolders() {
     queryFn: () => apiClient.get<{ data: FileItem[] }>(ENDPOINTS.FOLDERS),
   });
 }
+
+export function useFilesByParent(parentId: string) {
+  return useQuery({
+    queryKey: ['files', 'parent', parentId],
+    queryFn: () =>
+      apiClient.get<{ data: FileItem[] }>(`${ENDPOINTS.FOLDERS}/${parentId}/files`),
+    enabled: !!parentId,
+  });
+}

@@ -3,7 +3,7 @@ import { View, FlatList, StyleSheet, TouchableOpacity, Text, Dimensions, Alert }
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useFiles, useFileImage, useDeleteFile } from '../hooks/useFiles';
+import { useFilesByParent, useFileImage, useDeleteFile } from '../hooks/useFiles';
 import { FileItem, isFolder } from '../types';
 import { FileThumbnail } from '../components/FileThumbnail';
 
@@ -61,7 +61,7 @@ export function FolderScreen() {
   const route = useRoute<FolderRouteProp>();
   const navigation = useNavigation<NavigationProp>();
   const { folderId, folderName } = route.params;
-  const { data, isLoading, error } = useFiles();
+  const { data, isLoading, error } = useFilesByParent(folderId);
   const deleteFile = useDeleteFile();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
@@ -72,9 +72,8 @@ export function FolderScreen() {
   }, [navigation, folderName]);
 
   const files = useMemo(() => {
-    const all = data?.data ?? [];
-    return all.filter((f) => f.parentFileId === folderId);
-  }, [data, folderId]);
+    return data?.data ?? [];
+  }, [data]);
 
   const fileIdToIndex = useMemo(() => {
     const map = new Map<string, number>();
