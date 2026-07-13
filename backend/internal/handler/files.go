@@ -57,27 +57,45 @@ func (h *FileHandler) List(c *gin.Context) {
 		return
 	}
 
+	type tagResponse struct {
+		ID      string `json:"id"`
+		TagName string `json:"tag_name"`
+		TagType string `json:"tag_type"`
+	}
+
 	type fileResponse struct {
-		ID        string   `json:"id"`
-		URL       string   `json:"url"`
-		Name      string   `json:"name"`
-		Size      int64    `json:"size"`
-		Tags      []string `json:"tags"`
-		CreatedAt string   `json:"createdAt"`
-		MimeType  string   `json:"mimeType"`
-		OcrText   string   `json:"ocrText,omitempty"`
-		UpdatedAt string   `json:"updatedAt"`
+		ID        string        `json:"id"`
+		URL       string        `json:"url"`
+		Name      string        `json:"name"`
+		Size      int64         `json:"size"`
+		Tags      []tagResponse `json:"tags"`
+		CreatedAt string        `json:"createdAt"`
+		MimeType  string        `json:"mimeType"`
+		OcrText   string        `json:"ocrText,omitempty"`
+		UpdatedAt string        `json:"updatedAt"`
 	}
 
 	resp := make([]fileResponse, len(files))
 	for i, f := range files {
+
+		tags := []tagResponse{}
+
+		for _, tag := range f.Tags {
+
+			tags = append(tags, tagResponse{
+				ID:      tag.ID,
+				TagName: tag.Name,
+				TagType: tag.TagType,
+			})
+
+		}
 
 		resp[i] = fileResponse{
 			ID:        f.ID,
 			URL:       h.urls.GenerateDownloadURL(f.ID),
 			Name:      f.Name,
 			Size:      f.Size,
-			Tags:      []string{},
+			Tags:      tags,
 			CreatedAt: f.CreatedAt,
 			OcrText:   f.OcrText,
 			UpdatedAt: f.UpdatedAt,

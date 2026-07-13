@@ -12,7 +12,8 @@ export interface FileItem {
 
 export interface Tag {
   id: string;
-  name: string;
+  tag_name: string;
+  tag_type: string;
 }
 
 export interface OcrJob {
