@@ -73,6 +73,7 @@ func (h *FileHandler) List(c *gin.Context) {
 		MimeType     string        `json:"mimeType"`
 		OcrText      string        `json:"ocrText,omitempty"`
 		ParentFileID string        `json:"parentFileID,omitempty"`
+		IsFolder     bool          `json:"isFolder"`
 		UpdatedAt    string        `json:"updatedAt"`
 	}
 
@@ -99,6 +100,7 @@ func (h *FileHandler) List(c *gin.Context) {
 			CreatedAt:    f.CreatedAt,
 			ParentFileID: f.ParentFileID,
 			OcrText:      f.OcrText,
+			IsFolder:     f.IsFolder,
 			UpdatedAt:    f.UpdatedAt,
 			MimeType:     f.MimeType,
 		}

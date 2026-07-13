@@ -9,7 +9,7 @@ ORDER BY created_at DESC;
 
 -- name: ListFolders :many
 SELECT * FROM files
-WHERE parent_file_id IS NOT NULL
+WHERE is_folder = true
 ORDER BY created_at DESC;
 
 -- name: ListFilesByID :many
@@ -23,9 +23,14 @@ VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 RETURNING *;
 
 -- name: CreateFolder :one
-INSERT INTO files (id, name, created_at, updated_at)
-VALUES ($1, $2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+INSERT INTO files (id, name, is_folder, created_at, updated_at)
+VALUES ($1, $2, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 RETURNING *;
+
+-- name: ListFilesByParentID :many
+SELECT * FROM files
+WHERE parent_file_id = $1
+ORDER BY is_folder DESC, created_at DESC;
 
 -- name: UpdateFile :exec
 UPDATE files

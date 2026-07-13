@@ -15,9 +15,10 @@ type File struct {
 	Checksum     string `json:"-"`
 	OcrText      string `json:"ocrText,omitempty"`
 	Tags         []Tag  `json:"tags"`
+	IsFolder     bool   `json:"isFolder"`
+	ParentFileID string `json:"parentFileId,omitempty"`
 	CreatedAt    string `json:"createdAt"`
 	UpdatedAt    string `json:"updatedAt"`
-	ParentFileID string `json:"parentFileID,omitempty"`
 }
 
 type UploadResult struct {

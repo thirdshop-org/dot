@@ -20,6 +20,7 @@ type File struct {
 	CreatedAt    time.Time      `json:"created_at"`
 	UpdatedAt    time.Time      `json:"updated_at"`
 	ParentFileID sql.NullString `json:"parent_file_id"`
+	IsFolder     bool           `json:"is_folder"`
 }
 
 type FileTag struct {

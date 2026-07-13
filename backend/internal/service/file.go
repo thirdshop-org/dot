@@ -176,6 +176,7 @@ func dbToModel(f db.File, dbTags []db.Tag) model.File {
 		StorageKey:   f.StorageKey,
 		Checksum:     f.Checksum,
 		OcrText:      f.OcrText,
+		IsFolder:     f.IsFolder,
 		ParentFileID: f.ParentFileID.String,
 		Tags:         tags,
 		CreatedAt:    f.CreatedAt.String(),
