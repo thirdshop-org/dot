@@ -3,22 +3,22 @@ package config
 import "os"
 
 type Config struct {
-	Port          string
-	DatabaseURL   string
-	OCREndpoint   string
-	UploadDir     string
-	HMACSecret    string
-	ServerHost    string
+	Port        string
+	DatabaseURL string
+	OCREndpoint string
+	UploadDir   string
+	HMACSecret  string
+	ServerHost  string
 }
 
 func Load() *Config {
 	return &Config{
-		Port:          envOr("PORT", "8080"),
-		DatabaseURL:   envOr("DATABASE_URL", "postgres://localhost:5432/vaultdrop?sslmode=disable"),
-		OCREndpoint:   envOr("OCR_ENDPOINT", "http://localhost:9090"),
-		UploadDir:     envOr("UPLOAD_DIR", "./uploads"),
-		HMACSecret:    envOr("HMAC_SECRET", "thisismyrandomstring"),
-		ServerHost:    envOr("SERVER_HOST", "http://192.168.1.17:8080"),
+		Port:        envOr("PORT", "8080"),
+		DatabaseURL: envOr("DATABASE_URL", "postgres://localhost:5432/vaultdrop?sslmode=disable"),
+		OCREndpoint: envOr("OCR_ENDPOINT", "http://localhost:9090"),
+		UploadDir:   envOr("UPLOAD_DIR", "./uploads"),
+		HMACSecret:  envOr("HMAC_SECRET", "thisismyrandomstring"),
+		ServerHost:  envOr("SERVER_HOST", "http://192.168.1.17:8080"),
 	}
 }
 

@@ -140,14 +140,20 @@ func (h *FileHandler) AddTags(c *gin.Context) {
 	id := c.Param("id")
 
 	var body struct {
-		Tags []string `json:"tags" binding:"required"`
+		Tags    []string `json:"tags" binding:"required"`
+		TagType string   `json:"tag_type"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		api.Error(c, http.StatusBadRequest, "INVALID_BODY", "Body must contain a 'tags' array")
 		return
 	}
 
-	if err := h.files.AddTags(id, body.Tags); err != nil {
+	tagType := body.TagType
+	if tagType == "" {
+		tagType = "none"
+	}
+
+	if err := h.files.AddTags(id, body.Tags, tagType); err != nil {
 		api.Error(c, http.StatusInternalServerError, "DB_ERROR", "Failed to add tags")
 		return
 	}

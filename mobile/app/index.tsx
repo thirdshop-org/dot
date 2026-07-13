@@ -1,10 +1,10 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { View, FlatList, StyleSheet, TouchableOpacity, Text, Dimensions, KeyboardAvoidingView, Platform, Keyboard, Alert } from 'react-native';
+import { View, FlatList, StyleSheet, TouchableOpacity, Text, Dimensions, KeyboardAvoidingView, Platform, Keyboard, Alert, Modal, TextInput } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useFiles, useFileImage, useDeleteFile } from '../hooks/useFiles';
+import { useFiles, useFileImage, useDeleteFile, useAddTags } from '../hooks/useFiles';
 import { FileItem } from '../types';
 import { SearchBar, SearchFilters } from '../components/SearchBar';
 import { FileThumbnail } from '../components/FileThumbnail';
@@ -135,6 +135,10 @@ export function HomeScreen() {
   const [keyboardOpen, setKeyboardOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [groupByTags, setGroupByTags] = useState(false);
+  const [tagModalVisible, setTagModalVisible] = useState(false);
+  const [tagModalMode, setTagModalMode] = useState<'tag' | 'folder'>('tag');
+  const [tagInput, setTagInput] = useState('');
+  const addTags = useAddTags();
 
   useEffect(() => {
     const show = Keyboard.addListener('keyboardDidShow', () => setKeyboardOpen(true));
@@ -150,6 +154,8 @@ export function HomeScreen() {
     () => searchQuery.trim() ? files.filter((f) => matchesQuery(f, searchQuery, filters)) : files,
     [files, searchQuery, filters]
   );
+
+  console.log(filteredFiles.map(f => f.tags))
 
   const groups = groupByTags ? groupByTag(filteredFiles) : groupByDate(filteredFiles);
   const groupKeys = Object.keys(groups);
@@ -203,6 +209,24 @@ export function HomeScreen() {
     navigation.navigate('FileEdit', { fileIds: ids });
     setSelectedIds(new Set());
   }, [selectedIds, navigation]);
+
+  const openTagModal = useCallback((mode: 'tag' | 'folder') => {
+    setTagModalMode(mode);
+    setTagInput('');
+    setTagModalVisible(true);
+  }, []);
+
+  const handleAddTag = useCallback(async () => {
+    const name = tagInput.trim();
+    if (!name) return;
+    const ids = Array.from(selectedIds);
+    const tagType = tagModalMode === 'folder' ? 'folder' : 'none';
+    for (const id of ids) {
+      await addTags.mutateAsync({ fileId: id, tags: [name], tagType });
+    }
+    setTagModalVisible(false);
+    setSelectedIds(new Set());
+  }, [tagInput, selectedIds, tagModalMode, addTags]);
 
   const handleItemPress = useCallback((file: FileItem) => {
     if (selectionMode) {
@@ -323,6 +347,20 @@ export function HomeScreen() {
               <MaterialIcons name="edit" size={20} color="#1976D2" />
               <Text style={[styles.selectionActionText, { color: '#1976D2' }]}>Éditer</Text>
             </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.selectionActionBtn, styles.tagActionBtn]}
+              onPress={() => openTagModal('tag')}
+            >
+              <MaterialIcons name="label" size={20} color="#7B1FA2" />
+              <Text style={[styles.selectionActionText, { color: '#7B1FA2' }]}>Tags</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.selectionActionBtn, styles.folderActionBtn]}
+              onPress={() => openTagModal('folder')}
+            >
+              <MaterialIcons name="create-new-folder" size={20} color="#F57C00" />
+              <Text style={[styles.selectionActionText, { color: '#F57C00' }]}>Folder</Text>
+            </TouchableOpacity>
           </View>
         </View>
       ) : (
@@ -349,6 +387,38 @@ export function HomeScreen() {
           </TouchableOpacity>
         </View>
       )}
+
+      <Modal visible={tagModalVisible} transparent animationType="fade" onRequestClose={() => setTagModalVisible(false)}>
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setTagModalVisible(false)}>
+          <TouchableOpacity activeOpacity={1} style={styles.modalContent} onPress={() => {}}>
+            <Text style={styles.modalTitle}>
+              {tagModalMode === 'folder' ? 'Créer un dossier' : 'Ajouter un tag'}
+            </Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder={tagModalMode === 'folder' ? 'Nom du dossier...' : 'Nom du tag...'}
+              placeholderTextColor="#999"
+              value={tagInput}
+              onChangeText={setTagInput}
+              autoFocus
+              returnKeyType="done"
+              onSubmitEditing={handleAddTag}
+            />
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setTagModalVisible(false)}>
+                <Text style={styles.modalCancelText}>Annuler</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalConfirmBtn, !tagInput.trim() && styles.modalConfirmDisabled]}
+                onPress={handleAddTag}
+                disabled={!tagInput.trim()}
+              >
+                <Text style={styles.modalConfirmText}>Ajouter</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -507,6 +577,69 @@ const styles = StyleSheet.create({
   },
   selectionActionText: {
     fontSize: 15,
+    fontWeight: '600',
+  },
+  tagActionBtn: {
+    borderColor: '#7B1FA2',
+    backgroundColor: 'transparent',
+  },
+  folderActionBtn: {
+    borderColor: '#F57C00',
+    backgroundColor: 'transparent',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 20,
+    width: '80%',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#333',
+    marginBottom: 16,
+  },
+  modalInput: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 16,
+    color: '#333',
+    marginBottom: 16,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 12,
+  },
+  modalCancelBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  modalCancelText: {
+    fontSize: 15,
+    color: '#666',
+  },
+  modalConfirmBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: '#1976D2',
+    borderRadius: 8,
+  },
+  modalConfirmDisabled: {
+    backgroundColor: '#ccc',
+  },
+  modalConfirmText: {
+    fontSize: 15,
+    color: '#fff',
     fontWeight: '600',
   },
 });

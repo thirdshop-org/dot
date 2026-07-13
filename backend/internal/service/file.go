@@ -122,14 +122,14 @@ func (s *FileService) UpdateOCRText(id, text string) error {
 	})
 }
 
-func (s *FileService) AddTags(fileID string, tagNames []string) error {
+func (s *FileService) AddTags(fileID string, tagNames []string, tagType string) error {
 	for _, name := range tagNames {
 		tag, err := s.queries.GetTagByName(context.Background(), name)
 		if err == sql.ErrNoRows {
 			tag, err = s.queries.CreateTag(context.Background(), db.CreateTagParams{
 				ID:      uuid.New().String(),
 				TagName: name,
-				TagType: "none",
+				TagType: tagType,
 			})
 			if err != nil {
 				return fmt.Errorf("create tag %q: %w", name, err)

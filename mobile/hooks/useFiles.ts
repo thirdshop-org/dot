@@ -44,10 +44,10 @@ export function useAddTags() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ fileId, tags }: { fileId: string; tags: string[] }) =>
-      apiClient.post(`${ENDPOINTS.FILES}/${fileId}/tags`, { tags }),
-    onSuccess: (_, { fileId }) => {
-      queryClient.invalidateQueries({ queryKey: ['files', fileId] });
+    mutationFn: ({ fileId, tags, tagType }: { fileId: string; tags: string[]; tagType?: string }) =>
+      apiClient.post(`${ENDPOINTS.FILES}/${fileId}/tags`, { tags, tag_type: tagType }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['files'] });
     },
   });
 }
