@@ -16,6 +16,11 @@ INSERT INTO files (id, name, mime_type, size, storage_key, checksum, created_at,
 VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 RETURNING *;
 
+-- name: CreateFolder :one
+INSERT INTO files (id, name, created_at, updated_at)
+VALUES ($1, $2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+RETURNING *;
+
 -- name: UpdateFile :exec
 UPDATE files
 SET name = $1, mime_type = $2, ocr_text = $3, updated_at = CURRENT_TIMESTAMP
