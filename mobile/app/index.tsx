@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useFiles, useFileImage, useDeleteFile, useAddTags } from '../hooks/useFiles';
-import { FileItem } from '../types';
+import { FileItem, isFolder } from '../types';
 import { SearchBar, SearchFilters } from '../components/SearchBar';
 import { FileThumbnail } from '../components/FileThumbnail';
 
@@ -19,6 +19,7 @@ type RootStackParamList = {
   Scan: undefined;
   FileDetail: { fileIds: string[]; initialIndex: number };
   FileEdit: { fileIds: string[] };
+  Folder: { folderId: string; folderName: string };
 };
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -111,14 +112,14 @@ function matchesQuery(file: FileItem, query: string, filters: SearchFilters): bo
   if (filters.name && file.name.toLowerCase().includes(q)) return true;
   if (filters.ocrText && file.ocrText?.toLowerCase().includes(q)) return true;
   if (filters.tags && file.tags?.some((t) => {
-    const tagName = typeof t === 'string' ? t : t.name;
+    const tagName = typeof t === 'string' ? t : t.tag_name;
     return tagName?.toLowerCase().includes(q);
   })) return true;
   if (!filters.name && !filters.ocrText && !filters.tags) {
     if (file.name.toLowerCase().includes(q)) return true;
     if (file.ocrText?.toLowerCase().includes(q)) return true;
     if (file.tags?.some((t) => {
-      const tagName = typeof t === 'string' ? t : t.name;
+      const tagName = typeof t === 'string' ? t : t.tag_name;
       return tagName?.toLowerCase().includes(q);
     })) return true;
   }
@@ -231,6 +232,8 @@ export function HomeScreen() {
   const handleItemPress = useCallback((file: FileItem) => {
     if (selectionMode) {
       toggleSelection(file.id);
+    } else if (isFolder(file)) {
+      navigation.navigate('Folder', { folderId: file.id, folderName: file.name });
     } else {
       navigation.navigate('FileDetail', {
         fileIds: filteredFiles.map((f) => f.id),

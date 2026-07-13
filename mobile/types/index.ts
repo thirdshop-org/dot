@@ -7,7 +7,12 @@ export interface FileItem {
   updatedAt: string;
   ocrText?: string;
   tags: Tag[];
+  parentFileId?: string;
   url?: string;
+}
+
+export function isFolder(file: FileItem): boolean {
+  return file.parentFileId != null;
 }
 
 export interface Tag {

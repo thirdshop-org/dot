@@ -43,7 +43,7 @@ export function FileCard({ file, onPress }: FileCardProps) {
 
       <View style={styles.tags}>
         {file.tags.map((tag) => (
-          <TagChip key={tag.id} name={tag.name} />
+          <TagChip key={tag.id} name={tag.tag_name} />
         ))}
       </View>
     </TouchableOpacity>

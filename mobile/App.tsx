@@ -11,6 +11,7 @@ import { BatchReviewScreen } from './app/batch-review';
 import { PendingReviewScreen } from './app/pending-review';
 import { FileDetailScreen } from './app/file-detail';
 import { FileEditScreen } from './app/file-edit';
+import { FolderScreen } from './app/folder';
 
 const Stack = createNativeStackNavigator();
 const queryClient = new QueryClient();
@@ -37,6 +38,7 @@ export default function App() {
             options={{ title: 'Détails', headerTintColor: '#fff', headerStyle: { backgroundColor: '#000' } }}
           />
           <Stack.Screen name="FileEdit" component={FileEditScreen} options={{ title: 'Édition' }} />
+          <Stack.Screen name="Folder" component={FolderScreen} options={{ title: 'Dossier' }} />
         </Stack.Navigator>
       </NavigationContainer>
       <StatusBar style="auto" />
