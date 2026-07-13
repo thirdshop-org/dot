@@ -197,3 +197,48 @@ func (h *FileHandler) GetTags(c *gin.Context) {
 	}
 	api.Success(c, tags)
 }
+
+func (h *FileHandler) MoveFiles(c *gin.Context) {
+	var body struct {
+		FileIDs       []string `json:"file_ids" binding:"required"`
+		ParentFileID  *string  `json:"parent_file_id"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		api.Error(c, http.StatusBadRequest, "INVALID_BODY", "Body must contain 'file_ids' array")
+		return
+	}
+
+	if err := h.files.MoveFiles(body.FileIDs, body.ParentFileID); err != nil {
+		api.Error(c, http.StatusInternalServerError, "DB_ERROR", "Failed to move files")
+		return
+	}
+
+	api.Success(c, gin.H{"moved": len(body.FileIDs)})
+}
+
+func (h *FileHandler) ListFolders(c *gin.Context) {
+	folders, err := h.files.ListFolders()
+	if err != nil {
+		api.Error(c, http.StatusInternalServerError, "DB_ERROR", "Failed to list folders")
+		return
+	}
+	api.Success(c, folders)
+}
+
+func (h *FileHandler) CreateFolder(c *gin.Context) {
+	var body struct {
+		Name string `json:"name" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		api.Error(c, http.StatusBadRequest, "INVALID_BODY", "Body must contain 'name'")
+		return
+	}
+
+	folder, err := h.files.CreateFolder(body.Name)
+	if err != nil {
+		api.Error(c, http.StatusInternalServerError, "DB_ERROR", "Failed to create folder")
+		return
+	}
+
+	api.Success(c, folder)
+}

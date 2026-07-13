@@ -162,6 +162,57 @@ func (s *FileService) GetTagsByFileID(fileID string) ([]model.Tag, error) {
 	return tags, nil
 }
 
+func (s *FileService) MoveFiles(fileIDs []string, parentFileID *string) error {
+	var parentID sql.NullString
+	if parentFileID != nil {
+		parentID = sql.NullString{String: *parentFileID, Valid: true}
+	}
+	return s.queries.MoveFiles(context.Background(), db.MoveFilesParams{
+		ParentFileID: parentID,
+		Column2:      fileIDs,
+	})
+}
+
+func (s *FileService) CreateFolder(name string) (*model.File, error) {
+	f, err := s.queries.CreateFolder(context.Background(), db.CreateFolderParams{
+		ID:   uuid.New().String(),
+		Name: name,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("create folder: %w", err)
+	}
+	m := dbToModel(f, nil)
+	return &m, nil
+}
+
+func (s *FileService) ListFolders() ([]model.File, error) {
+	dbFiles, err := s.queries.ListFolders(context.Background())
+	if err != nil {
+		return nil, fmt.Errorf("list folders: %w", err)
+	}
+	folders := make([]model.File, len(dbFiles))
+	for i, f := range dbFiles {
+		folders[i] = dbToModel(f, nil)
+	}
+	return folders, nil
+}
+
+func (s *FileService) ListFilesByParentID(parentID string) ([]model.File, error) {
+	dbFiles, err := s.queries.ListFilesByParentID(context.Background(), sql.NullString{String: parentID, Valid: true})
+	if err != nil {
+		return nil, fmt.Errorf("list files by parent: %w", err)
+	}
+	files := make([]model.File, len(dbFiles))
+	for i, f := range dbFiles {
+		tags, err := s.queries.GetTagsByFileID(context.Background(), sql.NullString{String: f.ID, Valid: true})
+		if err != nil {
+			return nil, fmt.Errorf("get tags for file %s: %w", f.ID, err)
+		}
+		files[i] = dbToModel(f, tags)
+	}
+	return files, nil
+}
+
 func dbToModel(f db.File, dbTags []db.Tag) model.File {
 	tags := make([]model.Tag, len(dbTags))
 	for i, t := range dbTags {

@@ -51,3 +51,22 @@ export function useAddTags() {
     },
   });
 }
+
+export function useMoveFiles() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ fileIds, parentFileId }: { fileIds: string[]; parentFileId: string | null }) =>
+      apiClient.post(ENDPOINTS.MOVE, { file_ids: fileIds, parent_file_id: parentFileId }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['files'] });
+    },
+  });
+}
+
+export function useFolders() {
+  return useQuery({
+    queryKey: ['folders'],
+    queryFn: () => apiClient.get<{ data: FileItem[] }>(ENDPOINTS.FOLDERS),
+  });
+}

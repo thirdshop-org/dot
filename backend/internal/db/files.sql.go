@@ -120,7 +120,7 @@ func (q *Queries) GetFile(ctx context.Context, id string) (File, error) {
 const listFiles = `-- name: ListFiles :many
 SELECT id, name, mime_type, size, storage_key, checksum, ocr_text, created_at, updated_at, parent_file_id, is_folder FROM files
 WHERE parent_file_id IS NULL
-ORDER BY created_at DESC
+ORDER BY is_folder DESC, created_at DESC
 `
 
 func (q *Queries) ListFiles(ctx context.Context) ([]File, error) {
@@ -279,6 +279,22 @@ func (q *Queries) ListFolders(ctx context.Context) ([]File, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const moveFiles = `-- name: MoveFiles :exec
+UPDATE files
+SET parent_file_id = $1, updated_at = CURRENT_TIMESTAMP
+WHERE id = ANY($2::text[])
+`
+
+type MoveFilesParams struct {
+	ParentFileID sql.NullString `json:"parent_file_id"`
+	Column2      []string       `json:"column_2"`
+}
+
+func (q *Queries) MoveFiles(ctx context.Context, arg MoveFilesParams) error {
+	_, err := q.db.ExecContext(ctx, moveFiles, arg.ParentFileID, pq.Array(arg.Column2))
+	return err
 }
 
 const updateFile = `-- name: UpdateFile :exec

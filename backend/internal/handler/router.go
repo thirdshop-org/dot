@@ -9,9 +9,12 @@ func SetupRoutes(r *gin.Engine, h *Handler) {
 
 	api.GET("/files", h.File.List)
 	api.POST("/files/upload", h.File.Upload)
+	api.POST("/files/move", h.File.MoveFiles)
+	api.POST("/files/folders", h.File.CreateFolder)
+	api.GET("/files/folders", h.File.ListFolders)
 	api.GET("/files/download/:id", h.File.Download)
-	api.GET("/files/:id", h.File.Get)
 	api.DELETE("/files/:id", h.File.Delete)
+	api.GET("/files/:id", h.File.Get)
 
 	api.POST("/files/:id/tags", h.File.AddTags)
 	api.GET("/files/:id/tags", h.File.GetTags)

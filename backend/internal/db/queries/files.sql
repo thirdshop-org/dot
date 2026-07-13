@@ -5,7 +5,7 @@ WHERE id = $1 LIMIT 1;
 -- name: ListFiles :many
 SELECT * FROM files
 WHERE parent_file_id IS NULL
-ORDER BY created_at DESC;
+ORDER BY is_folder DESC, created_at DESC;
 
 -- name: ListFolders :many
 SELECT * FROM files
@@ -31,6 +31,11 @@ RETURNING *;
 SELECT * FROM files
 WHERE parent_file_id = $1
 ORDER BY is_folder DESC, created_at DESC;
+
+-- name: MoveFiles :exec
+UPDATE files
+SET parent_file_id = $1, updated_at = CURRENT_TIMESTAMP
+WHERE id = ANY($2::text[]);
 
 -- name: UpdateFile :exec
 UPDATE files

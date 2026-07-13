@@ -5,6 +5,8 @@ export const ENDPOINTS = {
   FILE: '/files',
   UPLOAD: '/files/upload',
   SEARCH: '/files/search',
+  MOVE: '/files/move',
+  FOLDERS: '/files/folders',
   OCR_JOBS: '/ocr/jobs',
   HEALTH: '/health',
 } as const;

@@ -4,7 +4,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useFiles, useFileImage, useDeleteFile, useAddTags } from '../hooks/useFiles';
+import { useFiles, useFileImage, useDeleteFile, useAddTags, useMoveFiles, useFolders } from '../hooks/useFiles';
 import { FileItem, isFolder } from '../types';
 import { SearchBar, SearchFilters } from '../components/SearchBar';
 import { FileThumbnail } from '../components/FileThumbnail';
@@ -140,6 +140,9 @@ export function HomeScreen() {
   const [tagModalMode, setTagModalMode] = useState<'tag' | 'folder'>('tag');
   const [tagInput, setTagInput] = useState('');
   const addTags = useAddTags();
+  const moveFiles = useMoveFiles();
+  const { data: foldersData } = useFolders();
+  const [moveModalVisible, setMoveModalVisible] = useState(false);
 
   useEffect(() => {
     const show = Keyboard.addListener('keyboardDidShow', () => setKeyboardOpen(true));
@@ -228,6 +231,13 @@ export function HomeScreen() {
     setTagModalVisible(false);
     setSelectedIds(new Set());
   }, [tagInput, selectedIds, tagModalMode, addTags]);
+
+  const handleMove = useCallback(async (folderId: string | null) => {
+    const ids = Array.from(selectedIds);
+    await moveFiles.mutateAsync({ fileIds: ids, parentFileId: folderId });
+    setMoveModalVisible(false);
+    setSelectedIds(new Set());
+  }, [selectedIds, moveFiles]);
 
   const handleItemPress = useCallback((file: FileItem) => {
     if (selectionMode) {
@@ -364,6 +374,13 @@ export function HomeScreen() {
               <MaterialIcons name="create-new-folder" size={20} color="#F57C00" />
               <Text style={[styles.selectionActionText, { color: '#F57C00' }]}>Folder</Text>
             </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.selectionActionBtn, styles.moveActionBtn]}
+              onPress={() => setMoveModalVisible(true)}
+            >
+              <MaterialIcons name="drive-file-move" size={20} color="#00897B" />
+              <Text style={[styles.selectionActionText, { color: '#00897B' }]}>Déplacer</Text>
+            </TouchableOpacity>
           </View>
         </View>
       ) : (
@@ -419,6 +436,31 @@ export function HomeScreen() {
                 <Text style={styles.modalConfirmText}>Ajouter</Text>
               </TouchableOpacity>
             </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      <Modal visible={moveModalVisible} transparent animationType="fade" onRequestClose={() => setMoveModalVisible(false)}>
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setMoveModalVisible(false)}>
+          <TouchableOpacity activeOpacity={1} style={styles.modalContent} onPress={() => {}}>
+            <Text style={styles.modalTitle}>Déplacer vers...</Text>
+            <TouchableOpacity
+              style={styles.folderOption}
+              onPress={() => handleMove(null)}
+            >
+              <MaterialIcons name="home" size={20} color="#666" />
+              <Text style={styles.folderOptionText}>Racine</Text>
+            </TouchableOpacity>
+            {(foldersData?.data ?? []).map((folder) => (
+              <TouchableOpacity
+                key={folder.id}
+                style={styles.folderOption}
+                onPress={() => handleMove(folder.id)}
+              >
+                <MaterialIcons name="folder" size={20} color="#F57C00" />
+                <Text style={styles.folderOptionText}>{folder.name}</Text>
+              </TouchableOpacity>
+            ))}
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
@@ -589,6 +631,23 @@ const styles = StyleSheet.create({
   folderActionBtn: {
     borderColor: '#F57C00',
     backgroundColor: 'transparent',
+  },
+  moveActionBtn: {
+    borderColor: '#00897B',
+    backgroundColor: 'transparent',
+  },
+  folderOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    gap: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  folderOptionText: {
+    fontSize: 16,
+    color: '#333',
   },
   modalOverlay: {
     flex: 1,
