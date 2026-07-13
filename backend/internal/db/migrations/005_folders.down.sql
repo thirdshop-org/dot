@@ -1,0 +1,3 @@
+ALTER TABLE files DROP CONSTRAINT IF EXISTS fk_parent_file_id
+
+ALTER TABLE files DROP COLUMN IF EXISTS parent_file_id;

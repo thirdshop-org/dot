@@ -167,17 +167,19 @@ func dbToModel(f db.File, dbTags []db.Tag) model.File {
 	for i, t := range dbTags {
 		tags[i] = model.Tag{ID: t.ID, Name: t.TagName, TagType: t.TagType}
 	}
+
 	return model.File{
-		ID:         f.ID,
-		Name:       f.Name,
-		MimeType:   f.MimeType,
-		Size:       f.Size,
-		StorageKey: f.StorageKey,
-		Checksum:   f.Checksum,
-		OcrText:    f.OcrText,
-		Tags:       tags,
-		CreatedAt:  f.CreatedAt.String(),
-		UpdatedAt:  f.UpdatedAt.String(),
+		ID:           f.ID,
+		Name:         f.Name,
+		MimeType:     f.MimeType,
+		Size:         f.Size,
+		StorageKey:   f.StorageKey,
+		Checksum:     f.Checksum,
+		OcrText:      f.OcrText,
+		ParentFileID: f.ParentFileID.String,
+		Tags:         tags,
+		CreatedAt:    f.CreatedAt.String(),
+		UpdatedAt:    f.UpdatedAt.String(),
 	}
 }
 

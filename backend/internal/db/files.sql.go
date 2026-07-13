@@ -14,7 +14,7 @@ import (
 const createFile = `-- name: CreateFile :one
 INSERT INTO files (id, name, mime_type, size, storage_key, checksum, created_at, updated_at)
 VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-RETURNING id, name, mime_type, size, storage_key, checksum, ocr_text, created_at, updated_at, is_folder
+RETURNING id, name, mime_type, size, storage_key, checksum, ocr_text, created_at, updated_at, is_folder, parent_file_id
 `
 
 type CreateFileParams struct {
@@ -47,6 +47,7 @@ func (q *Queries) CreateFile(ctx context.Context, arg CreateFileParams) (File, e
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.IsFolder,
+		&i.ParentFileID,
 	)
 	return i, err
 }
@@ -54,7 +55,7 @@ func (q *Queries) CreateFile(ctx context.Context, arg CreateFileParams) (File, e
 const createFolder = `-- name: CreateFolder :one
 INSERT INTO files (id, name, created_at, updated_at)
 VALUES ($1, $2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-RETURNING id, name, mime_type, size, storage_key, checksum, ocr_text, created_at, updated_at, is_folder
+RETURNING id, name, mime_type, size, storage_key, checksum, ocr_text, created_at, updated_at, is_folder, parent_file_id
 `
 
 type CreateFolderParams struct {
@@ -76,6 +77,7 @@ func (q *Queries) CreateFolder(ctx context.Context, arg CreateFolderParams) (Fil
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.IsFolder,
+		&i.ParentFileID,
 	)
 	return i, err
 }
@@ -91,7 +93,7 @@ func (q *Queries) DeleteFile(ctx context.Context, id string) error {
 }
 
 const getFile = `-- name: GetFile :one
-SELECT id, name, mime_type, size, storage_key, checksum, ocr_text, created_at, updated_at, is_folder FROM files
+SELECT id, name, mime_type, size, storage_key, checksum, ocr_text, created_at, updated_at, is_folder, parent_file_id FROM files
 WHERE id = $1 LIMIT 1
 `
 
@@ -109,12 +111,13 @@ func (q *Queries) GetFile(ctx context.Context, id string) (File, error) {
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.IsFolder,
+		&i.ParentFileID,
 	)
 	return i, err
 }
 
 const listFiles = `-- name: ListFiles :many
-SELECT id, name, mime_type, size, storage_key, checksum, ocr_text, created_at, updated_at, is_folder FROM files
+SELECT id, name, mime_type, size, storage_key, checksum, ocr_text, created_at, updated_at, is_folder, parent_file_id FROM files
 ORDER BY created_at DESC
 `
 
@@ -138,6 +141,7 @@ func (q *Queries) ListFiles(ctx context.Context) ([]File, error) {
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.IsFolder,
+			&i.ParentFileID,
 		); err != nil {
 			return nil, err
 		}
@@ -153,7 +157,7 @@ func (q *Queries) ListFiles(ctx context.Context) ([]File, error) {
 }
 
 const listFilesByID = `-- name: ListFilesByID :many
-SELECT id, name, mime_type, size, storage_key, checksum, ocr_text, created_at, updated_at, is_folder FROM files
+SELECT id, name, mime_type, size, storage_key, checksum, ocr_text, created_at, updated_at, is_folder, parent_file_id FROM files
 WHERE id = ANY($1::text[])
 ORDER BY created_at DESC
 `
@@ -178,6 +182,48 @@ func (q *Queries) ListFilesByID(ctx context.Context, dollar_1 []string) ([]File,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.IsFolder,
+			&i.ParentFileID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listFolders = `-- name: ListFolders :many
+SELECT id, name, mime_type, size, storage_key, checksum, ocr_text, created_at, updated_at, is_folder, parent_file_id FROM files
+WHERE is_folder = true
+ORDER BY created_at DESC
+`
+
+func (q *Queries) ListFolders(ctx context.Context) ([]File, error) {
+	rows, err := q.db.QueryContext(ctx, listFolders)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []File
+	for rows.Next() {
+		var i File
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.MimeType,
+			&i.Size,
+			&i.StorageKey,
+			&i.Checksum,
+			&i.OcrText,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.IsFolder,
+			&i.ParentFileID,
 		); err != nil {
 			return nil, err
 		}

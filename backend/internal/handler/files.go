@@ -64,15 +64,16 @@ func (h *FileHandler) List(c *gin.Context) {
 	}
 
 	type fileResponse struct {
-		ID        string        `json:"id"`
-		URL       string        `json:"url"`
-		Name      string        `json:"name"`
-		Size      int64         `json:"size"`
-		Tags      []tagResponse `json:"tags"`
-		CreatedAt string        `json:"createdAt"`
-		MimeType  string        `json:"mimeType"`
-		OcrText   string        `json:"ocrText,omitempty"`
-		UpdatedAt string        `json:"updatedAt"`
+		ID           string        `json:"id"`
+		URL          string        `json:"url"`
+		Name         string        `json:"name"`
+		Size         int64         `json:"size"`
+		Tags         []tagResponse `json:"tags"`
+		CreatedAt    string        `json:"createdAt"`
+		MimeType     string        `json:"mimeType"`
+		OcrText      string        `json:"ocrText,omitempty"`
+		ParentFileID string        `json:"parentFileID,omitempty"`
+		UpdatedAt    string        `json:"updatedAt"`
 	}
 
 	resp := make([]fileResponse, len(files))
@@ -89,17 +90,17 @@ func (h *FileHandler) List(c *gin.Context) {
 			})
 
 		}
-
 		resp[i] = fileResponse{
-			ID:        f.ID,
-			URL:       h.urls.GenerateDownloadURL(f.ID),
-			Name:      f.Name,
-			Size:      f.Size,
-			Tags:      tags,
-			CreatedAt: f.CreatedAt,
-			OcrText:   f.OcrText,
-			UpdatedAt: f.UpdatedAt,
-			MimeType:  f.MimeType,
+			ID:           f.ID,
+			URL:          h.urls.GenerateDownloadURL(f.ID),
+			Name:         f.Name,
+			Size:         f.Size,
+			Tags:         tags,
+			CreatedAt:    f.CreatedAt,
+			ParentFileID: f.ParentFileID,
+			OcrText:      f.OcrText,
+			UpdatedAt:    f.UpdatedAt,
+			MimeType:     f.MimeType,
 		}
 	}
 

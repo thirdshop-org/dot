@@ -6,6 +6,11 @@ WHERE id = $1 LIMIT 1;
 SELECT * FROM files
 ORDER BY created_at DESC;
 
+-- name: ListFolders :many
+SELECT * FROM files
+WHERE is_folder = true
+ORDER BY created_at DESC;
+
 -- name: ListFilesByID :many
 SELECT * FROM files
 WHERE id = ANY($1::text[])
