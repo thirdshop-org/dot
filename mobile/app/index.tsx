@@ -55,7 +55,7 @@ function groupByTag(files: FileItem[]): GroupedFiles {
       groups['Sans tag'].push(file);
     } else {
       for (const tag of tags) {
-        const name = typeof tag === 'string' ? tag : tag.name;
+        const name = typeof tag === 'string' ? tag : tag.tag_name;
         if (!name) continue;
         if (!groups[name]) groups[name] = [];
         groups[name].push(file);
