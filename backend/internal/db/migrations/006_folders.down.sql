@@ -1,0 +1,1 @@
+ALTER TABLE files ADD COLUMN is_folder BOOLEAN NOT NULL DEFAULT false;
