@@ -4,11 +4,12 @@ WHERE id = $1 LIMIT 1;
 
 -- name: ListFiles :many
 SELECT * FROM files
+WHERE parent_file_id IS NULL
 ORDER BY created_at DESC;
 
 -- name: ListFolders :many
 SELECT * FROM files
-WHERE is_folder = true
+WHERE parent_file_id IS NOT NULL
 ORDER BY created_at DESC;
 
 -- name: ListFilesByID :many

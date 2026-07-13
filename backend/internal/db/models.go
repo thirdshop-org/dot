@@ -19,7 +19,6 @@ type File struct {
 	OcrText      string         `json:"ocr_text"`
 	CreatedAt    time.Time      `json:"created_at"`
 	UpdatedAt    time.Time      `json:"updated_at"`
-	IsFolder     bool           `json:"is_folder"`
 	ParentFileID sql.NullString `json:"parent_file_id"`
 }
 

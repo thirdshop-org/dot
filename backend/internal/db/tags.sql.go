@@ -64,7 +64,7 @@ func (q *Queries) DeleteTag(ctx context.Context, id string) error {
 }
 
 const getFilesByTagID = `-- name: GetFilesByTagID :many
-SELECT f.id, f.name, f.mime_type, f.size, f.storage_key, f.checksum, f.ocr_text, f.created_at, f.updated_at, f.is_folder, f.parent_file_id FROM files f
+SELECT f.id, f.name, f.mime_type, f.size, f.storage_key, f.checksum, f.ocr_text, f.created_at, f.updated_at, f.parent_file_id FROM files f
 JOIN file_tags ft ON f.id = ft.file_id
 WHERE ft.tag_id = $1
 ORDER BY f.created_at DESC
@@ -89,7 +89,6 @@ func (q *Queries) GetFilesByTagID(ctx context.Context, tagID sql.NullString) ([]
 			&i.OcrText,
 			&i.CreatedAt,
 			&i.UpdatedAt,
-			&i.IsFolder,
 			&i.ParentFileID,
 		); err != nil {
 			return nil, err
