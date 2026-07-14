@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,10 @@ import {
   ScrollView,
 } from 'react-native';
 import { RouteProp, useRoute } from '@react-navigation/native';
+import Pdf from 'react-native-pdf';
+import { downloadAsync, documentDirectory, getInfoAsync } from 'expo-file-system/legacy';
 import { useFile, useFileImage } from '../hooks/useFiles';
+import { apiClient } from '../api/client';
 import { TagChip } from '../components/TagChip';
 import { FileThumbnail } from '../components/FileThumbnail';
 
@@ -27,11 +30,59 @@ function DetailItem({ fileId }: { fileId: string }) {
   const { data: fileData } = useFile(fileId);
   const uri = imageData?.data?.url;
   const file = fileData as any;
+  const isPdf = file?.data?.mimeType === 'application/pdf';
+  const [localPdfUri, setLocalPdfUri] = useState<string | null>(null);
+  const [pdfLoading, setPdfLoading] = useState(false);
+
+  useEffect(() => {
+    if (!isPdf || !uri) return;
+    let cancelled = false;
+
+    async function downloadPdf() {
+      if (!uri) return;
+      setPdfLoading(true);
+      const localUri = `${documentDirectory}pdf_${fileId}.pdf`;
+      try {
+        const info = await getInfoAsync(localUri);
+        if (info.exists && info.size > 100) {
+          if (!cancelled) setLocalPdfUri(localUri);
+          return;
+        }
+        const headers: Record<string, string> = {};
+        const token = apiClient.getAccessToken();
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        await downloadAsync(uri, localUri, { headers });
+        if (!cancelled) setLocalPdfUri(localUri);
+      } catch (e) {
+        console.log('PDF download error:', e);
+      } finally {
+        if (!cancelled) setPdfLoading(false);
+      }
+    }
+
+    downloadPdf();
+    return () => { cancelled = true; };
+  }, [isPdf, uri, fileId]);
 
   return (
     <ScrollView style={styles.page} contentContainerStyle={styles.pageContent}>
       <View style={styles.imageContainer}>
-        {uri ? (
+        {isPdf ? (
+          pdfLoading || !localPdfUri ? (
+            <ActivityIndicator size="large" color="#fff" />
+          ) : (
+            <Pdf
+              source={{ uri: localPdfUri }}
+              style={styles.pdf}
+              onLoadComplete={(numberOfPages) => {
+                console.log(`PDF loaded: ${numberOfPages} pages`);
+              }}
+              onError={(error) => {
+                console.log('PDF error:', error);
+              }}
+            />
+          )
+        ) : uri ? (
           <Image source={{ uri }} style={styles.image} resizeMode="contain" />
         ) : file ? (
           <FileThumbnail
@@ -149,6 +200,11 @@ const styles = StyleSheet.create({
   image: {
     width: SCREEN_WIDTH,
     height: SCREEN_WIDTH,
+  },
+  pdf: {
+    width: SCREEN_WIDTH,
+    height: SCREEN_WIDTH,
+    backgroundColor: '#fff',
   },
   placeholder: {
     width: SCREEN_WIDTH,
