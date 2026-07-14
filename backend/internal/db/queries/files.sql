@@ -18,13 +18,13 @@ WHERE id = ANY($1::text[])
 ORDER BY created_at DESC;
 
 -- name: CreateFile :one
-INSERT INTO files (id, name, mime_type, size, storage_key, checksum, created_at, updated_at)
-VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+INSERT INTO files (name, mime_type, size, storage_key, checksum, created_at, updated_at)
+VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 RETURNING *;
 
 -- name: CreateFolder :one
-INSERT INTO files (id, name, is_folder, created_at, updated_at)
-VALUES ($1, $2, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+INSERT INTO files (name, is_folder, created_at, updated_at)
+VALUES ($1, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 RETURNING *;
 
 -- name: ListFilesByParentID :many

@@ -13,13 +13,12 @@ import (
 )
 
 const createFile = `-- name: CreateFile :one
-INSERT INTO files (id, name, mime_type, size, storage_key, checksum, created_at, updated_at)
-VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+INSERT INTO files (name, mime_type, size, storage_key, checksum, created_at, updated_at)
+VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 RETURNING id, name, mime_type, size, storage_key, checksum, ocr_text, created_at, updated_at, parent_file_id, is_folder
 `
 
 type CreateFileParams struct {
-	ID         string `json:"id"`
 	Name       string `json:"name"`
 	MimeType   string `json:"mime_type"`
 	Size       int64  `json:"size"`
@@ -29,7 +28,6 @@ type CreateFileParams struct {
 
 func (q *Queries) CreateFile(ctx context.Context, arg CreateFileParams) (File, error) {
 	row := q.db.QueryRowContext(ctx, createFile,
-		arg.ID,
 		arg.Name,
 		arg.MimeType,
 		arg.Size,
@@ -54,18 +52,13 @@ func (q *Queries) CreateFile(ctx context.Context, arg CreateFileParams) (File, e
 }
 
 const createFolder = `-- name: CreateFolder :one
-INSERT INTO files (id, name, is_folder, created_at, updated_at)
-VALUES ($1, $2, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+INSERT INTO files (name, is_folder, created_at, updated_at)
+VALUES ($1, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 RETURNING id, name, mime_type, size, storage_key, checksum, ocr_text, created_at, updated_at, parent_file_id, is_folder
 `
 
-type CreateFolderParams struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
-}
-
-func (q *Queries) CreateFolder(ctx context.Context, arg CreateFolderParams) (File, error) {
-	row := q.db.QueryRowContext(ctx, createFolder, arg.ID, arg.Name)
+func (q *Queries) CreateFolder(ctx context.Context, name string) (File, error) {
+	row := q.db.QueryRowContext(ctx, createFolder, name)
 	var i File
 	err := row.Scan(
 		&i.ID,

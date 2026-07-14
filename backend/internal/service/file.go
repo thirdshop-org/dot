@@ -45,11 +45,9 @@ func (s *FileService) Upload(file *multipart.FileHeader) (*model.UploadResult, e
 		return nil, fmt.Errorf("stat file: %w", err)
 	}
 
-	id := uuid.New().String()
 	checksum := hex.EncodeToString(CreateSHA256Hash(data))
 
 	dbFile, err := s.queries.CreateFile(context.Background(), db.CreateFileParams{
-		ID:         id,
 		Name:       file.Filename,
 		MimeType:   file.Header.Get("Content-Type"),
 		Size:       info.Size(),
@@ -127,7 +125,6 @@ func (s *FileService) AddTags(fileID string, tagNames []string, tagType string) 
 		tag, err := s.queries.GetTagByName(context.Background(), name)
 		if err == sql.ErrNoRows {
 			tag, err = s.queries.CreateTag(context.Background(), db.CreateTagParams{
-				ID:      uuid.New().String(),
 				TagName: name,
 				TagType: tagType,
 			})
@@ -139,7 +136,6 @@ func (s *FileService) AddTags(fileID string, tagNames []string, tagType string) 
 		}
 
 		err = s.queries.AddTagToFile(context.Background(), db.AddTagToFileParams{
-			ID:     uuid.New().String(),
 			TagID:  sql.NullString{String: tag.ID, Valid: true},
 			FileID: sql.NullString{String: fileID, Valid: true},
 		})
@@ -174,10 +170,7 @@ func (s *FileService) MoveFiles(fileIDs []string, parentFileID *string) error {
 }
 
 func (s *FileService) CreateFolder(name string) (*model.File, error) {
-	f, err := s.queries.CreateFolder(context.Background(), db.CreateFolderParams{
-		ID:   uuid.New().String(),
-		Name: name,
-	})
+	f, err := s.queries.CreateFolder(context.Background(), name)
 	if err != nil {
 		return nil, fmt.Errorf("create folder: %w", err)
 	}

@@ -11,36 +11,34 @@ import (
 )
 
 const addTagToFile = `-- name: AddTagToFile :exec
-INSERT INTO file_tags (id, tag_id, file_id)
-VALUES ($1, $2, $3)
+INSERT INTO file_tags (tag_id, file_id)
+VALUES ($1, $2)
 ON CONFLICT DO NOTHING
 `
 
 type AddTagToFileParams struct {
-	ID     string         `json:"id"`
 	TagID  sql.NullString `json:"tag_id"`
 	FileID sql.NullString `json:"file_id"`
 }
 
 func (q *Queries) AddTagToFile(ctx context.Context, arg AddTagToFileParams) error {
-	_, err := q.db.ExecContext(ctx, addTagToFile, arg.ID, arg.TagID, arg.FileID)
+	_, err := q.db.ExecContext(ctx, addTagToFile, arg.TagID, arg.FileID)
 	return err
 }
 
 const createTag = `-- name: CreateTag :one
-INSERT INTO tags (id, tag_name, tag_type)
-VALUES ($1, $2, $3)
+INSERT INTO tags (tag_name, tag_type)
+VALUES ($1, $2)
 RETURNING id, parent_tag_id, tag_name, tag_type, created_at, updated_at
 `
 
 type CreateTagParams struct {
-	ID      string `json:"id"`
 	TagName string `json:"tag_name"`
 	TagType string `json:"tag_type"`
 }
 
 func (q *Queries) CreateTag(ctx context.Context, arg CreateTagParams) (Tag, error) {
-	row := q.db.QueryRowContext(ctx, createTag, arg.ID, arg.TagName, arg.TagType)
+	row := q.db.QueryRowContext(ctx, createTag, arg.TagName, arg.TagType)
 	var i Tag
 	err := row.Scan(
 		&i.ID,

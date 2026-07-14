@@ -1,6 +1,6 @@
 -- name: CreateTag :one
-INSERT INTO tags (id, tag_name, tag_type)
-VALUES ($1, $2, $3)
+INSERT INTO tags (tag_name, tag_type)
+VALUES ($1, $2)
 RETURNING *;
 
 -- name: GetTag :one
@@ -20,8 +20,8 @@ DELETE FROM tags
 WHERE id = $1;
 
 -- name: AddTagToFile :exec
-INSERT INTO file_tags (id, tag_id, file_id)
-VALUES ($1, $2, $3)
+INSERT INTO file_tags (tag_id, file_id)
+VALUES ($1, $2)
 ON CONFLICT DO NOTHING;
 
 -- name: RemoveTagFromFile :exec
