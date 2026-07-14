@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { View, FlatList, StyleSheet, TouchableOpacity, Text, Dimensions, KeyboardAvoidingView, Platform, Keyboard, Alert, Modal, TextInput } from 'react-native';
+import { View, FlatList, StyleSheet, TouchableOpacity, Text, Dimensions, KeyboardAvoidingView, Platform, Keyboard, Alert, Modal, TextInput, ScrollView } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -345,43 +345,47 @@ export function HomeScreen() {
               <Text style={styles.selectAllText}>Tout</Text>
             </TouchableOpacity>
           </View>
-          <View style={styles.selectionActions}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.selectionActions}
+          >
             <TouchableOpacity
-              style={[styles.selectionActionBtn, styles.deleteActionBtn]}
+              style={[styles.selectionChip, styles.deleteChip]}
               onPress={handleDelete}
             >
-              <MaterialIcons name="delete" size={20} color="#F44336" />
-              <Text style={[styles.selectionActionText, { color: '#F44336' }]}>Supprimer</Text>
+              <MaterialIcons name="delete" size={18} color="#E53935" />
+              <Text style={[styles.chipText, { color: '#E53935' }]}>Supprimer</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.selectionActionBtn, styles.editActionBtn]}
+              style={[styles.selectionChip, styles.editChip]}
               onPress={handleEdit}
             >
-              <MaterialIcons name="edit" size={20} color="#1976D2" />
-              <Text style={[styles.selectionActionText, { color: '#1976D2' }]}>Éditer</Text>
+              <MaterialIcons name="edit" size={18} color="#1E88E5" />
+              <Text style={[styles.chipText, { color: '#1E88E5' }]}>Éditer</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.selectionActionBtn, styles.tagActionBtn]}
+              style={[styles.selectionChip, styles.tagChip]}
               onPress={() => openTagModal('tag')}
             >
-              <MaterialIcons name="label" size={20} color="#7B1FA2" />
-              <Text style={[styles.selectionActionText, { color: '#7B1FA2' }]}>Tags</Text>
+              <MaterialIcons name="label" size={18} color="#8E24AA" />
+              <Text style={[styles.chipText, { color: '#8E24AA' }]}>Tags</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.selectionActionBtn, styles.folderActionBtn]}
+              style={[styles.selectionChip, styles.folderChip]}
               onPress={() => openTagModal('folder')}
             >
-              <MaterialIcons name="create-new-folder" size={20} color="#F57C00" />
-              <Text style={[styles.selectionActionText, { color: '#F57C00' }]}>Folder</Text>
+              <MaterialIcons name="create-new-folder" size={18} color="#F57C00" />
+              <Text style={[styles.chipText, { color: '#F57C00' }]}>Folder</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.selectionActionBtn, styles.moveActionBtn]}
+              style={[styles.selectionChip, styles.moveChip]}
               onPress={() => setMoveModalVisible(true)}
             >
-              <MaterialIcons name="drive-file-move" size={20} color="#00897B" />
-              <Text style={[styles.selectionActionText, { color: '#00897B' }]}>Déplacer</Text>
+              <MaterialIcons name="drive-file-move" size={18} color="#00897B" />
+              <Text style={[styles.chipText, { color: '#00897B' }]}>Déplacer</Text>
             </TouchableOpacity>
-          </View>
+          </ScrollView>
         </View>
       ) : (
         <View style={styles.bottomNav}>
@@ -600,42 +604,26 @@ const styles = StyleSheet.create({
   },
   selectionActions: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 8,
+    paddingVertical: 4,
   },
-  selectionActionBtn: {
-    flex: 1,
+  selectionChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
     gap: 6,
-    borderWidth: 1.5,
   },
-  deleteActionBtn: {
-    borderColor: '#F44336',
-    backgroundColor: 'transparent',
-  },
-  editActionBtn: {
-    borderColor: '#1976D2',
-    backgroundColor: 'transparent',
-  },
-  selectionActionText: {
-    fontSize: 15,
+  chipText: {
+    fontSize: 13,
     fontWeight: '600',
   },
-  tagActionBtn: {
-    borderColor: '#7B1FA2',
-    backgroundColor: 'transparent',
-  },
-  folderActionBtn: {
-    borderColor: '#F57C00',
-    backgroundColor: 'transparent',
-  },
-  moveActionBtn: {
-    borderColor: '#00897B',
-    backgroundColor: 'transparent',
-  },
+  deleteChip: { backgroundColor: '#FFEBEE' },
+  editChip: { backgroundColor: '#E3F2FD' },
+  tagChip: { backgroundColor: '#F3E5F5' },
+  folderChip: { backgroundColor: '#FFF3E0' },
+  moveChip: { backgroundColor: '#E0F2F1' },
   folderOption: {
     flexDirection: 'row',
     alignItems: 'center',
