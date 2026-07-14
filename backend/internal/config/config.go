@@ -9,6 +9,7 @@ type Config struct {
 	UploadDir   string
 	HMACSecret  string
 	ServerHost  string
+	PASETOKey   string
 }
 
 func Load() *Config {
@@ -19,6 +20,7 @@ func Load() *Config {
 		UploadDir:   envOr("UPLOAD_DIR", "./uploads"),
 		HMACSecret:  envOr("HMAC_SECRET", "thisismyrandomstring"),
 		ServerHost:  envOr("SERVER_HOST", "http://192.168.1.17:8080"),
+		PASETOKey:   envOr("PASETO_KEY", "01234567890123456789012345678901234567890123456789012345678901234"),
 	}
 }
 

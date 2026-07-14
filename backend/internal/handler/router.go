@@ -1,25 +1,37 @@
 package handler
 
-import "github.com/gin-gonic/gin"
+import (
+	"github.com/gin-gonic/gin"
+	"github.com/vaultdrop/backend/internal/auth"
+)
 
-func SetupRoutes(r *gin.Engine, h *Handler) {
+func SetupRoutes(r *gin.Engine, h *Handler, authMiddleware *auth.AuthService) {
 	api := r.Group("/api/v1")
 
+	// Public
 	api.GET("/health", h.Health.Check)
+	api.POST("/auth/register", h.Auth.Register)
+	api.POST("/auth/login", h.Auth.Login)
+	api.POST("/auth/refresh", h.Auth.Refresh)
+	api.POST("/auth/logout", h.Auth.Logout)
 
-	api.GET("/files", h.File.List)
-	api.POST("/files/upload", h.File.Upload)
-	api.POST("/files/move", h.File.MoveFiles)
-	api.POST("/files/folders", h.File.CreateFolder)
-	api.GET("/files/folders", h.File.ListFolders)
-	api.GET("/files/folders/:id/files", h.File.ListFilesByParent)
-	api.GET("/files/download/:id", h.File.Download)
-	api.DELETE("/files/:id", h.File.Delete)
-	api.GET("/files/:id", h.File.Get)
+	// Protected
+	protected := api.Group("")
+	protected.Use(authMiddleware.RequireAuth())
 
-	api.POST("/files/:id/tags", h.File.AddTags)
-	api.GET("/files/:id/tags", h.File.GetTags)
+	protected.GET("/files", h.File.List)
+	protected.POST("/files/upload", h.File.Upload)
+	protected.POST("/files/move", h.File.MoveFiles)
+	protected.POST("/files/folders", h.File.CreateFolder)
+	protected.GET("/files/folders", h.File.ListFolders)
+	protected.GET("/files/folders/:id/files", h.File.ListFilesByParent)
+	protected.GET("/files/download/:id", h.File.Download)
+	protected.DELETE("/files/:id", h.File.Delete)
+	protected.GET("/files/:id", h.File.Get)
 
-	api.POST("/ocr/jobs", h.OCR.CreateJob)
-	api.GET("/ocr/jobs/:id", h.OCR.GetJobStatus)
+	protected.POST("/files/:id/tags", h.File.AddTags)
+	protected.GET("/files/:id/tags", h.File.GetTags)
+
+	protected.POST("/ocr/jobs", h.OCR.CreateJob)
+	protected.GET("/ocr/jobs/:id", h.OCR.GetJobStatus)
 }

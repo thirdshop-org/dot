@@ -29,6 +29,15 @@ type FileTag struct {
 	FileID sql.NullString `json:"file_id"`
 }
 
+type RefreshToken struct {
+	ID        string    `json:"id"`
+	UserID    string    `json:"user_id"`
+	TokenHash string    `json:"token_hash"`
+	ExpiresAt time.Time `json:"expires_at"`
+	Revoked   bool      `json:"revoked"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
 type Tag struct {
 	ID          string         `json:"id"`
 	ParentTagID sql.NullString `json:"parent_tag_id"`
@@ -36,4 +45,12 @@ type Tag struct {
 	TagType     string         `json:"tag_type"`
 	CreatedAt   time.Time      `json:"created_at"`
 	UpdatedAt   time.Time      `json:"updated_at"`
+}
+
+type User struct {
+	ID           string    `json:"id"`
+	Username     string    `json:"username"`
+	PasswordHash string    `json:"password_hash"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
 }

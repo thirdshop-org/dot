@@ -5,6 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
+	"github.com/vaultdrop/backend/internal/auth"
 	"github.com/vaultdrop/backend/internal/config"
 	"github.com/vaultdrop/backend/internal/db"
 	"github.com/vaultdrop/backend/internal/handler"
@@ -32,14 +33,18 @@ func main() {
 	fileSvc := service.NewFileService(queries, cfg)
 	ocrSvc := service.NewOCRService(cfg, fileSvc)
 	urlSvc := service.NewURLService(cfg.HMACSecret, cfg.ServerHost)
+	authSvc, err := auth.NewAuthService(queries, cfg)
+	if err != nil {
+		log.Fatalf("Failed to create auth service: %v", err)
+	}
 
 	ocrSvc.Start()
 	defer ocrSvc.Stop()
 
-	h := handler.New(fileSvc, ocrSvc, urlSvc)
+	h := handler.New(fileSvc, ocrSvc, urlSvc, auth.NewAuthHandler(authSvc))
 
 	r := gin.Default()
-	handler.SetupRoutes(r, h)
+	handler.SetupRoutes(r, h, authSvc)
 
 	log.Printf("Server starting on port %s", cfg.Port)
 	if err := r.Run(":" + cfg.Port); err != nil {

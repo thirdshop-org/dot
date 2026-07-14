@@ -9,4 +9,8 @@ export const ENDPOINTS = {
   FOLDERS: '/files/folders',
   OCR_JOBS: '/ocr/jobs',
   HEALTH: '/health',
+  AUTH_LOGIN: '/auth/login',
+  AUTH_REGISTER: '/auth/register',
+  AUTH_REFRESH: '/auth/refresh',
+  AUTH_LOGOUT: '/auth/logout',
 } as const;

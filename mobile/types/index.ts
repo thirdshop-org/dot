@@ -83,3 +83,24 @@ export type Batch = {
   photos: CapturedPhoto[];
   tags: string[];
 };
+
+export interface User {
+  id: string;
+  username: string;
+}
+
+export interface AuthTokens {
+  access_token: string;
+  refresh_token: string;
+}
+
+export interface AuthResponse {
+  user: User;
+  access_token: string;
+  refresh_token: string;
+}
+
+export interface RefreshResponse {
+  access_token: string;
+  refresh_token: string;
+}

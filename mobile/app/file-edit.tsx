@@ -30,9 +30,11 @@ type FileEditRouteParams = {
 
 interface FileEditItemProps {
   fileId: string;
+  selected: boolean;
+  onPress: () => void;
 }
 
-function FileEditItem({ fileId }: FileEditItemProps) {
+function FileEditItem({ fileId, selected, onPress }: FileEditItemProps) {
   const { data: fileData, isLoading: fileLoading } = useFile(fileId);
   const { data: imageData, isLoading: imageLoading } = useFileImage(fileId);
   const file = fileData as any;
@@ -41,14 +43,14 @@ function FileEditItem({ fileId }: FileEditItemProps) {
 
   if (isLoading) {
     return (
-      <View style={[styles.gridItem, styles.gridItemLoading]}>
+      <TouchableOpacity style={[styles.gridItem, styles.gridItemLoading]} onPress={onPress} activeOpacity={0.7}>
         <ActivityIndicator size="small" color="#1976D2" />
-      </View>
+      </TouchableOpacity>
     );
   }
 
   return (
-    <View style={styles.gridItem}>
+    <TouchableOpacity style={styles.gridItem} onPress={onPress} activeOpacity={0.7}>
       {uri && file?.mimeType?.startsWith('image/') ? (
         <Image source={{ uri }} style={styles.thumb} />
       ) : (
@@ -58,7 +60,14 @@ function FileEditItem({ fileId }: FileEditItemProps) {
           size={ITEM_SIZE}
         />
       )}
-    </View>
+      {selected && (
+        <View style={styles.selectedOverlay}>
+          <View style={styles.checkCircle}>
+            <MaterialIcons name="check" size={18} color="#fff" />
+          </View>
+        </View>
+      )}
+    </TouchableOpacity>
   );
 }
 
@@ -74,6 +83,26 @@ export function FileEditScreen() {
   const [tagInput, setTagInput] = useState('');
   const [pendingTags, setPendingTags] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  const hasSelection = selectedIds.size > 0;
+  const targetIds = hasSelection ? Array.from(selectedIds) : fileIds;
+
+  const toggleSelection = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const toggleSelectAll = useCallback(() => {
+    setSelectedIds((prev) => {
+      if (prev.size === fileIds.length) return new Set();
+      return new Set(fileIds);
+    });
+  }, [fileIds]);
 
   const handleAddTag = () => {
     const tag = tagInput.trim().toLowerCase();
@@ -88,21 +117,21 @@ export function FileEditScreen() {
 
   const handleApplyTags = useCallback(async () => {
     if (pendingTags.length === 0) return;
-    for (const fileId of fileIds) {
+    for (const fileId of targetIds) {
       await addTags.mutateAsync({ fileId, tags: pendingTags });
     }
     Alert.alert('Succès', `${pendingTags.length} tag${pendingTags.length > 1 ? 's' : ''} ajouté${pendingTags.length > 1 ? 's' : ''}`);
     setPendingTags([]);
-  }, [pendingTags, fileIds, addTags]);
+  }, [pendingTags, targetIds, addTags]);
 
   const handleGeneratePdf = useCallback(async () => {
-    if (fileIds.length === 0) return;
+    if (targetIds.length === 0) return;
 
     setUploading(true);
     try {
       const imageUris: { uri: string }[] = [];
 
-      for (const fileId of fileIds) {
+      for (const fileId of targetIds) {
         const response = await fetch(`${process.env.EXPO_PUBLIC_API_BASE_URL || 'http://192.168.1.17:8080/api/v1'}/files/${fileId}`);
         const data = await response.json();
         const url = data?.data?.url;
@@ -152,17 +181,26 @@ export function FileEditScreen() {
     } finally {
       setUploading(false);
     }
-  }, [fileIds, generatePdf, upload, navigation]);
+  }, [targetIds, generatePdf, upload, navigation]);
 
   const isLoading = generating || uploading;
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Édition</Text>
-        <Text style={styles.subtitle}>
-          {fileIds.length} fichier{fileIds.length > 1 ? 's' : ''} sélectionné{fileIds.length > 1 ? 's' : ''}
-        </Text>
+        <View style={styles.headerRow}>
+          <View>
+            <Text style={styles.title}>Édition</Text>
+            <Text style={styles.subtitle}>
+              {hasSelection
+                ? `${selectedIds.size} sélectionné${selectedIds.size > 1 ? 's' : ''} / ${fileIds.length}`
+                : `${fileIds.length} fichier${fileIds.length > 1 ? 's' : ''}`}
+            </Text>
+          </View>
+          <TouchableOpacity style={styles.selectAllBtn} onPress={toggleSelectAll}>
+            <Text style={styles.selectAllText}>{hasSelection && selectedIds.size === fileIds.length ? 'Tout' : 'Tout'}</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <FlatList
@@ -171,7 +209,13 @@ export function FileEditScreen() {
         keyExtractor={(item) => item}
         contentContainerStyle={styles.grid}
         columnWrapperStyle={styles.gridRow}
-        renderItem={({ item }) => <FileEditItem fileId={item} />}
+        renderItem={({ item }) => (
+          <FileEditItem
+            fileId={item}
+            selected={hasSelection ? selectedIds.has(item) : true}
+            onPress={() => toggleSelection(item)}
+          />
+        )}
       />
 
       <View style={styles.tagSection}>
@@ -243,6 +287,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#e0e0e0',
   },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
   title: {
     fontSize: 20,
     fontWeight: '700',
@@ -251,6 +300,17 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 14,
     color: '#666',
+  },
+  selectAllBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: '#E3F2FD',
+  },
+  selectAllText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#1976D2',
   },
   grid: {
     padding: 16,
@@ -267,6 +327,24 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   gridItemLoading: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  selectedOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'flex-start',
+    alignItems: 'flex-end',
+    padding: 4,
+  },
+  checkCircle: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#1976D2',
     justifyContent: 'center',
     alignItems: 'center',
   },
