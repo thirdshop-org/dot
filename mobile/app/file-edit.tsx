@@ -19,6 +19,8 @@ import { useUpload } from '../hooks/useUpload';
 import { TagChip } from '../components/TagChip';
 import { FileThumbnail } from '../components/FileThumbnail';
 import { FileItem } from '../types';
+import { apiClient } from '../api/client';
+import { ENDPOINTS } from '../constants/api';
 
 const NUM_COLUMNS = 3;
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -132,8 +134,7 @@ export function FileEditScreen() {
       const imageUris: { uri: string }[] = [];
 
       for (const fileId of targetIds) {
-        const response = await fetch(`${process.env.EXPO_PUBLIC_API_BASE_URL || 'http://192.168.1.17:8080/api/v1'}/files/${fileId}`);
-        const data = await response.json();
+        const data = await apiClient.get<{ data: { url: string } }>(`${ENDPOINTS.FILES}/${fileId}`);
         const url = data?.data?.url;
         if (url) {
           imageUris.push({ uri: url });

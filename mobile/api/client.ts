@@ -14,6 +14,10 @@ class ApiClient {
     this.accessToken = token;
   }
 
+  getAccessToken(): string | null {
+    return this.accessToken;
+  }
+
   private async request<T>(
     endpoint: string,
     options: RequestInit = {},

@@ -15,11 +15,17 @@ export function useUpload() {
       const results = await Promise.allSettled(
         files.map(async (file) => {
           const fsFile = new File(file.uri);
+          const headers: Record<string, string> = {};
+          const token = apiClient.getAccessToken();
+          if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+          }
           const result = await fsFile.upload(`${API_BASE_URL}${ENDPOINTS.UPLOAD}`, {
             httpMethod: 'POST',
             uploadType: UploadType.MULTIPART,
             fieldName: 'file',
             mimeType: file.type,
+            headers,
           });
 
           if (result.status >= 400) {
