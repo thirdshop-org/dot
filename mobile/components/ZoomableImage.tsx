@@ -17,13 +17,14 @@ interface ZoomableImageProps {
   width: number;
   height: number;
   onClose?: () => void;
+  onSwipeVertical?: (direction: 'up' | 'down') => void;
 }
 
 const MAX_SCALE = 4;
 const DOUBLE_TAP_SCALE = 2.5;
 const SPRING_CONFIG = { damping: 20, stiffness: 200, mass: 0.5 };
 
-export function ZoomableImage({ uri, width, height, onClose }: ZoomableImageProps) {
+export function ZoomableImage({ uri, width, height, onClose, onSwipeVertical }: ZoomableImageProps) {
   const scale = useSharedValue(1);
   const savedScale = useSharedValue(1);
   const translateX = useSharedValue(0);
@@ -34,6 +35,10 @@ export function ZoomableImage({ uri, width, height, onClose }: ZoomableImageProp
   const handleClose = useCallback(() => {
     onClose?.();
   }, [onClose]);
+
+  const handleSwipeVertical = useCallback((direction: 'up' | 'down') => {
+    onSwipeVertical?.(direction);
+  }, [onSwipeVertical]);
 
   const pinch = Gesture.Pinch()
     .onUpdate((e) => {
@@ -60,8 +65,13 @@ export function ZoomableImage({ uri, width, height, onClose }: ZoomableImageProp
         translateY.value = savedTranslateY.value + e.translationY;
       }
     })
-    .onEnd(() => {
+    .onEnd((e) => {
       if (savedScale.value <= 1) {
+        const absY = Math.abs(e.translationY);
+        const absX = Math.abs(e.translationX);
+        if (absY > 30 && absY > absX) {
+          runOnJS(handleSwipeVertical)(e.translationY > 0 ? 'down' : 'up');
+        }
         translateX.value = withSpring(0, SPRING_CONFIG);
         translateY.value = withSpring(0, SPRING_CONFIG);
       }

@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -23,13 +23,15 @@ const SCREEN_WIDTH = Dimensions.get('window').width;
 
 type SelectedImage = { uri: string; width: number; height: number };
 
+type ModalState = { images: SelectedImage[]; index: number } | null;
+
 type RootStackParamList = {
   FileDetail: { fileIds: string[]; initialIndex: number };
 };
 
 type FileDetailRouteProp = RouteProp<RootStackParamList, 'FileDetail'>;
 
-function DetailItem({ fileId, onSelectImage }: { fileId: string; onSelectImage?: (img: SelectedImage) => void }) {
+function DetailItem({ fileId, onSelectImage }: { fileId: string; onSelectImage?: (state: ModalState) => void }) {
   const { data: imageData, isLoading: imageLoading } = useFileImage(fileId);
   const { data: fileData } = useFile(fileId);
   const uri = imageData?.data?.url;
@@ -44,28 +46,31 @@ function DetailItem({ fileId, onSelectImage }: { fileId: string; onSelectImage?:
   return (
     <ScrollView style={styles.page} contentContainerStyle={styles.pageContent}>
       {hasPages ? (
-        fullThumbnails.map((thumb) => (
-          <Pressable
-            key={thumb.id}
-            style={styles.pageImageContainer}
-            onPress={() => onSelectImage?.({
-              uri: thumb.url,
-              width: SCREEN_WIDTH,
-              height: thumb.height * (SCREEN_WIDTH / thumb.width),
-            })}
-          >
-            <Image
-              source={{ uri: thumb.url }}
-              style={[styles.pageImage, { height: thumb.height * (SCREEN_WIDTH / thumb.width) }]}
-              resizeMode="contain"
-            />
-          </Pressable>
-        ))
+        fullThumbnails.map((thumb, thumbIndex) => {
+          const allImages: SelectedImage[] = fullThumbnails.map((t) => ({
+            uri: t.url,
+            width: SCREEN_WIDTH,
+            height: t.height * (SCREEN_WIDTH / t.width),
+          }));
+          return (
+            <Pressable
+              key={thumb.id}
+              style={styles.pageImageContainer}
+              onPress={() => onSelectImage?.({ images: allImages, index: thumbIndex })}
+            >
+              <Image
+                source={{ uri: thumb.url }}
+                style={[styles.pageImage, { height: thumb.height * (SCREEN_WIDTH / thumb.width) }]}
+                resizeMode="contain"
+              />
+            </Pressable>
+          );
+        })
       ) : (
         <View style={styles.imageContainer}>
           {uri ? (
             <Pressable
-              onPress={() => onSelectImage?.({ uri, width: SCREEN_WIDTH, height: SCREEN_WIDTH })}
+              onPress={() => onSelectImage?.({ images: [{ uri, width: SCREEN_WIDTH, height: SCREEN_WIDTH }], index: 0 })}
             >
               <Image source={{ uri }} style={styles.image} resizeMode="contain" />
             </Pressable>
@@ -128,7 +133,18 @@ export function FileDetailScreen() {
 
   const flatListRef = useRef<FlatList>(null);
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
-  const [selectedImage, setSelectedImage] = useState<SelectedImage | null>(null);
+  const [modalState, setModalState] = useState<ModalState>(null);
+
+  const handleSwipeVertical = useCallback((direction: 'up' | 'down') => {
+    setModalState((prev) => {
+      if (!prev) return prev;
+      const next = direction === 'up'
+        ? Math.min(prev.index + 1, prev.images.length - 1)
+        : Math.max(prev.index - 1, 0);
+      if (next === prev.index) return prev;
+      return { ...prev, index: next };
+    });
+  }, []);
 
   return (
     <View style={styles.container}>
@@ -153,7 +169,7 @@ export function FileDetailScreen() {
         }}
         renderItem={({ item }) => (
           <View style={styles.pageWrapper}>
-            <DetailItem fileId={item} onSelectImage={setSelectedImage} />
+            <DetailItem fileId={item} onSelectImage={setModalState} />
           </View>
         )}
       />
@@ -165,20 +181,29 @@ export function FileDetailScreen() {
       </View>
 
       <Modal
-        visible={selectedImage !== null}
+        visible={modalState !== null}
         transparent
         animationType="fade"
         statusBarTranslucent
-        onRequestClose={() => setSelectedImage(null)}
+        onRequestClose={() => setModalState(null)}
       >
-        {selectedImage && (
+        {modalState && (
           <GestureHandlerRootView style={{ flex: 1 }}>
             <ZoomableImage
-              uri={selectedImage.uri}
-              width={selectedImage.width}
-              height={selectedImage.height}
-              onClose={() => setSelectedImage(null)}
+              key={modalState.images[modalState.index].uri}
+              uri={modalState.images[modalState.index].uri}
+              width={modalState.images[modalState.index].width}
+              height={modalState.images[modalState.index].height}
+              onClose={() => setModalState(null)}
+              onSwipeVertical={handleSwipeVertical}
             />
+            {modalState.images.length > 1 && (
+              <View style={styles.modalPagination}>
+                <Text style={styles.modalPaginationText}>
+                  {modalState.index + 1} / {modalState.images.length}
+                </Text>
+              </View>
+            )}
           </GestureHandlerRootView>
         )}
       </Modal>
@@ -270,6 +295,19 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   paginationText: {
+    color: '#fff',
+    fontSize: 13,
+  },
+  modalPagination: {
+    position: 'absolute',
+    bottom: 40,
+    alignSelf: 'center',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+  },
+  modalPaginationText: {
     color: '#fff',
     fontSize: 13,
   },
