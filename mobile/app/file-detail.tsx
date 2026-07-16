@@ -1,10 +1,9 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   FlatList,
-  Image,
   Dimensions,
   ActivityIndicator,
   ScrollView,
@@ -13,6 +12,7 @@ import { RouteProp, useRoute } from '@react-navigation/native';
 import { useFile, useFileImage } from '../hooks/useFiles';
 import { TagChip } from '../components/TagChip';
 import { FileThumbnail } from '../components/FileThumbnail';
+import { ZoomableImage } from '../components/ZoomableImage';
 import type { Thumbnail } from '../types';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -23,7 +23,7 @@ type RootStackParamList = {
 
 type FileDetailRouteProp = RouteProp<RootStackParamList, 'FileDetail'>;
 
-function DetailItem({ fileId }: { fileId: string }) {
+function DetailItem({ fileId, onScaleChange }: { fileId: string; onScaleChange?: (scale: number) => void }) {
   const { data: imageData, isLoading: imageLoading } = useFileImage(fileId);
   const { data: fileData } = useFile(fileId);
   const uri = imageData?.data?.url;
@@ -40,17 +40,23 @@ function DetailItem({ fileId }: { fileId: string }) {
       {hasPages ? (
         fullThumbnails.map((thumb) => (
           <View key={thumb.id} style={styles.pageImageContainer}>
-            <Image
-              source={{ uri: thumb.url }}
-              style={[styles.pageImage, { height: thumb.height * (SCREEN_WIDTH / thumb.width) }]}
-              resizeMode="contain"
+            <ZoomableImage
+              uri={thumb.url}
+              width={SCREEN_WIDTH}
+              height={thumb.height * (SCREEN_WIDTH / thumb.width)}
+              onScaleChange={onScaleChange}
             />
           </View>
         ))
       ) : (
         <View style={styles.imageContainer}>
           {uri ? (
-            <Image source={{ uri }} style={styles.image} resizeMode="contain" />
+            <ZoomableImage
+              uri={uri}
+              width={SCREEN_WIDTH}
+              height={SCREEN_WIDTH}
+              onScaleChange={onScaleChange}
+            />
           ) : file ? (
             <FileThumbnail
               thumbnailUrl={file.data?.thumbnailUrl}
@@ -110,6 +116,11 @@ export function FileDetailScreen() {
 
   const flatListRef = useRef<FlatList>(null);
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
+  const [scrollEnabled, setScrollEnabled] = useState(true);
+
+  const handleScaleChange = useCallback((scale: number) => {
+    setScrollEnabled(scale <= 1);
+  }, []);
 
   return (
     <View style={styles.container}>
@@ -118,9 +129,12 @@ export function FileDetailScreen() {
         data={fileIds}
         keyExtractor={(item) => item}
         horizontal
-        pagingEnabled
+        snapToInterval={SCREEN_WIDTH}
+        decelerationRate="fast"
+        disableIntervalMomentum
         showsHorizontalScrollIndicator={false}
         initialScrollIndex={initialIndex}
+        scrollEnabled={scrollEnabled}
         getItemLayout={(_, index) => ({
           length: SCREEN_WIDTH,
           offset: SCREEN_WIDTH * index,
@@ -132,7 +146,7 @@ export function FileDetailScreen() {
         }}
         renderItem={({ item }) => (
           <View style={styles.pageWrapper}>
-            <DetailItem fileId={item} />
+            <DetailItem fileId={item} onScaleChange={handleScaleChange} />
           </View>
         )}
       />
@@ -166,17 +180,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#000',
   },
-  image: {
-    width: SCREEN_WIDTH,
-    height: SCREEN_WIDTH,
-  },
   pageImageContainer: {
     alignItems: 'center',
     backgroundColor: '#000',
     paddingVertical: 4,
-  },
-  pageImage: {
-    width: SCREEN_WIDTH,
   },
   details: {
     backgroundColor: '#fff',
