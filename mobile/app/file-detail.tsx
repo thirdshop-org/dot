@@ -1,21 +1,27 @@
-import React, { useRef, useState, useCallback } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   FlatList,
+  Image,
   Dimensions,
   ActivityIndicator,
   ScrollView,
+  Modal,
+  Pressable,
 } from 'react-native';
 import { RouteProp, useRoute } from '@react-navigation/native';
 import { useFile, useFileImage } from '../hooks/useFiles';
 import { TagChip } from '../components/TagChip';
 import { FileThumbnail } from '../components/FileThumbnail';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { ZoomableImage } from '../components/ZoomableImage';
 import type { Thumbnail } from '../types';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
+
+type SelectedImage = { uri: string; width: number; height: number };
 
 type RootStackParamList = {
   FileDetail: { fileIds: string[]; initialIndex: number };
@@ -23,7 +29,7 @@ type RootStackParamList = {
 
 type FileDetailRouteProp = RouteProp<RootStackParamList, 'FileDetail'>;
 
-function DetailItem({ fileId, onScaleChange }: { fileId: string; onScaleChange?: (scale: number) => void }) {
+function DetailItem({ fileId, onSelectImage }: { fileId: string; onSelectImage?: (img: SelectedImage) => void }) {
   const { data: imageData, isLoading: imageLoading } = useFileImage(fileId);
   const { data: fileData } = useFile(fileId);
   const uri = imageData?.data?.url;
@@ -39,24 +45,30 @@ function DetailItem({ fileId, onScaleChange }: { fileId: string; onScaleChange?:
     <ScrollView style={styles.page} contentContainerStyle={styles.pageContent}>
       {hasPages ? (
         fullThumbnails.map((thumb) => (
-          <View key={thumb.id} style={styles.pageImageContainer}>
-            <ZoomableImage
-              uri={thumb.url}
-              width={SCREEN_WIDTH}
-              height={thumb.height * (SCREEN_WIDTH / thumb.width)}
-              onScaleChange={onScaleChange}
+          <Pressable
+            key={thumb.id}
+            style={styles.pageImageContainer}
+            onPress={() => onSelectImage?.({
+              uri: thumb.url,
+              width: SCREEN_WIDTH,
+              height: thumb.height * (SCREEN_WIDTH / thumb.width),
+            })}
+          >
+            <Image
+              source={{ uri: thumb.url }}
+              style={[styles.pageImage, { height: thumb.height * (SCREEN_WIDTH / thumb.width) }]}
+              resizeMode="contain"
             />
-          </View>
+          </Pressable>
         ))
       ) : (
         <View style={styles.imageContainer}>
           {uri ? (
-            <ZoomableImage
-              uri={uri}
-              width={SCREEN_WIDTH}
-              height={SCREEN_WIDTH}
-              onScaleChange={onScaleChange}
-            />
+            <Pressable
+              onPress={() => onSelectImage?.({ uri, width: SCREEN_WIDTH, height: SCREEN_WIDTH })}
+            >
+              <Image source={{ uri }} style={styles.image} resizeMode="contain" />
+            </Pressable>
           ) : file ? (
             <FileThumbnail
               thumbnailUrl={file.data?.thumbnailUrl}
@@ -116,11 +128,7 @@ export function FileDetailScreen() {
 
   const flatListRef = useRef<FlatList>(null);
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
-  const [scrollEnabled, setScrollEnabled] = useState(true);
-
-  const handleScaleChange = useCallback((scale: number) => {
-    setScrollEnabled(scale <= 1);
-  }, []);
+  const [selectedImage, setSelectedImage] = useState<SelectedImage | null>(null);
 
   return (
     <View style={styles.container}>
@@ -134,7 +142,6 @@ export function FileDetailScreen() {
         disableIntervalMomentum
         showsHorizontalScrollIndicator={false}
         initialScrollIndex={initialIndex}
-        scrollEnabled={scrollEnabled}
         getItemLayout={(_, index) => ({
           length: SCREEN_WIDTH,
           offset: SCREEN_WIDTH * index,
@@ -146,7 +153,7 @@ export function FileDetailScreen() {
         }}
         renderItem={({ item }) => (
           <View style={styles.pageWrapper}>
-            <DetailItem fileId={item} onScaleChange={handleScaleChange} />
+            <DetailItem fileId={item} onSelectImage={setSelectedImage} />
           </View>
         )}
       />
@@ -156,6 +163,25 @@ export function FileDetailScreen() {
           {currentIndex + 1} / {fileIds.length}
         </Text>
       </View>
+
+      <Modal
+        visible={selectedImage !== null}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setSelectedImage(null)}
+      >
+        {selectedImage && (
+          <GestureHandlerRootView style={{ flex: 1 }}>
+            <ZoomableImage
+              uri={selectedImage.uri}
+              width={selectedImage.width}
+              height={selectedImage.height}
+              onClose={() => setSelectedImage(null)}
+            />
+          </GestureHandlerRootView>
+        )}
+      </Modal>
     </View>
   );
 }
@@ -180,10 +206,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#000',
   },
+  image: {
+    width: SCREEN_WIDTH,
+    height: SCREEN_WIDTH,
+  },
   pageImageContainer: {
     alignItems: 'center',
     backgroundColor: '#000',
     paddingVertical: 4,
+  },
+  pageImage: {
+    width: SCREEN_WIDTH,
   },
   details: {
     backgroundColor: '#fff',
