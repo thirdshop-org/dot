@@ -40,6 +40,7 @@ function FolderGridItem({ file, onPress, onLongPress, selected, onFolderPress }:
     >
       <FileThumbnail
         uri={data?.data?.url}
+        thumbnailUrl={file.thumbnailUrl}
         mimeType={file.mimeType}
         fileName={file.name}
         size={ITEM_SIZE}

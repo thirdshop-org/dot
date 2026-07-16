@@ -8,7 +8,7 @@ export function useFiles(page: number = 1, limit: number = 20) {
     queryKey: ['files', page, limit],
     queryFn: () =>
       apiClient.get<PaginatedResponse<FileItem>>(
-        `${ENDPOINTS.FILES}?page=${page}&limit=${limit}`
+        `${ENDPOINTS.FILES}?page=${page}&limit=${limit}&thumbnail=thumbnail`
       ),
   });
 }
@@ -16,7 +16,7 @@ export function useFiles(page: number = 1, limit: number = 20) {
 export function useFile(id: string) {
   return useQuery({
     queryKey: ['files', id],
-    queryFn: () => apiClient.get<FileItem>(`${ENDPOINTS.FILES}/${id}`),
+    queryFn: () => apiClient.get<FileItem>(`${ENDPOINTS.FILES}/${id}?thumbnail=thumbnail`),
     enabled: !!id,
   });
 }
@@ -75,7 +75,7 @@ export function useFilesByParent(parentId: string) {
   return useQuery({
     queryKey: ['files', 'parent', parentId],
     queryFn: () =>
-      apiClient.get<{ data: FileItem[] }>(`${ENDPOINTS.FOLDERS}/${parentId}/files`),
+      apiClient.get<{ data: FileItem[] }>(`${ENDPOINTS.FOLDERS}/${parentId}/files?thumbnail=thumbnail`),
     enabled: !!parentId,
   });
 }

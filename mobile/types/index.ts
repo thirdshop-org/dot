@@ -1,3 +1,13 @@
+export interface Thumbnail {
+  id: string;
+  pageNumber: number;
+  resolutionLabel: string;
+  width: number;
+  height: number;
+  url: string;
+  mimeType: string;
+}
+
 export interface FileItem {
   id: string;
   name: string;
@@ -10,6 +20,8 @@ export interface FileItem {
   isFolder: boolean;
   parentFileId?: string;
   url?: string;
+  thumbnailUrl?: string;
+  thumbnails?: Thumbnail[];
 }
 
 export function isFolder(file: FileItem): boolean {

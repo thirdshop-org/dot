@@ -30,13 +30,14 @@ function getExtension(fileName: string): string {
 
 interface FileThumbnailProps {
   uri?: string;
+  thumbnailUrl?: string;
   mimeType: string;
   fileName: string;
   size: number;
   isLoading?: boolean;
 }
 
-export function FileThumbnail({ uri, mimeType, fileName, size, isLoading }: FileThumbnailProps) {
+export function FileThumbnail({ uri, thumbnailUrl, mimeType, fileName, size, isLoading }: FileThumbnailProps) {
   const info = getFileInfo(mimeType, fileName);
   const ext = getExtension(fileName);
 
@@ -48,8 +49,10 @@ export function FileThumbnail({ uri, mimeType, fileName, size, isLoading }: File
     );
   }
 
-  if (uri && mimeType.startsWith('image/')) {
-    return <Image source={{ uri }} style={[styles.image, { width: size, height: size }]} />;
+  const imageUri = thumbnailUrl || (uri && mimeType.startsWith('image/') ? uri : undefined);
+
+  if (imageUri) {
+    return <Image source={{ uri: imageUri }} style={[styles.image, { width: size, height: size }]} />;
   }
 
   return (

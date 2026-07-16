@@ -79,6 +79,7 @@ class ApiClient {
 
       const data = await response.json();
       this.accessToken = data.access_token;
+      await tokenStorage.setAccessToken(data.access_token);
       await tokenStorage.setRefreshToken(data.refresh_token);
       return true;
     } catch {
@@ -89,6 +90,7 @@ class ApiClient {
 
   private async clearAuth() {
     this.accessToken = null;
+    await tokenStorage.deleteAccessToken();
     await tokenStorage.deleteRefreshToken();
     await tokenStorage.deleteUser();
   }

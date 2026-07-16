@@ -28,6 +28,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (stored) {
         const userData = JSON.parse(stored) as User;
         setUser(userData);
+
+        const accessToken = await tokenStorage.getAccessToken();
+        if (accessToken) {
+          apiClient.setAccessToken(accessToken);
+        }
       }
     } catch {
       await tokenStorage.deleteUser();
@@ -43,6 +48,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     apiClient.setAccessToken(response.access_token);
+    await tokenStorage.setAccessToken(response.access_token);
     await tokenStorage.setRefreshToken(response.refresh_token);
     await tokenStorage.setUser(JSON.stringify(response.user));
     setUser(response.user);
@@ -55,6 +61,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     apiClient.setAccessToken(response.access_token);
+    await tokenStorage.setAccessToken(response.access_token);
     await tokenStorage.setRefreshToken(response.refresh_token);
     await tokenStorage.setUser(JSON.stringify(response.user));
     setUser(response.user);
@@ -69,6 +76,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch {}
 
     apiClient.setAccessToken(null);
+    await tokenStorage.deleteAccessToken();
     await tokenStorage.deleteRefreshToken();
     await tokenStorage.deleteUser();
     setUser(null);

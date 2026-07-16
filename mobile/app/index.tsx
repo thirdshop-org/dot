@@ -89,6 +89,7 @@ function FileGridItem({ file, onPress, onLongPress, selected }: { file: FileItem
     >
       <FileThumbnail
         uri={data?.data?.url}
+        thumbnailUrl={file.thumbnailUrl}
         mimeType={file.mimeType}
         fileName={file.name}
         size={ITEM_SIZE}

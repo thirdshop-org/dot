@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -10,12 +10,10 @@ import {
   ScrollView,
 } from 'react-native';
 import { RouteProp, useRoute } from '@react-navigation/native';
-import Pdf from 'react-native-pdf';
-import { downloadAsync, documentDirectory, getInfoAsync } from 'expo-file-system/legacy';
 import { useFile, useFileImage } from '../hooks/useFiles';
-import { apiClient } from '../api/client';
 import { TagChip } from '../components/TagChip';
 import { FileThumbnail } from '../components/FileThumbnail';
+import type { Thumbnail } from '../types';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
@@ -30,71 +28,42 @@ function DetailItem({ fileId }: { fileId: string }) {
   const { data: fileData } = useFile(fileId);
   const uri = imageData?.data?.url;
   const file = fileData as any;
-  const isPdf = file?.data?.mimeType === 'application/pdf';
-  const [localPdfUri, setLocalPdfUri] = useState<string | null>(null);
-  const [pdfLoading, setPdfLoading] = useState(false);
 
-  useEffect(() => {
-    if (!isPdf || !uri) return;
-    let cancelled = false;
+  const fullThumbnails: Thumbnail[] = (file?.data?.thumbnails ?? [])
+    .filter((t: Thumbnail) => t.resolutionLabel === 'full')
+    .sort((a: Thumbnail, b: Thumbnail) => a.pageNumber - b.pageNumber);
 
-    async function downloadPdf() {
-      if (!uri) return;
-      setPdfLoading(true);
-      const localUri = `${documentDirectory}pdf_${fileId}.pdf`;
-      try {
-        const info = await getInfoAsync(localUri);
-        if (info.exists && info.size > 100) {
-          if (!cancelled) setLocalPdfUri(localUri);
-          return;
-        }
-        const headers: Record<string, string> = {};
-        const token = apiClient.getAccessToken();
-        if (token) headers['Authorization'] = `Bearer ${token}`;
-        await downloadAsync(uri, localUri, { headers });
-        if (!cancelled) setLocalPdfUri(localUri);
-      } catch (e) {
-        console.log('PDF download error:', e);
-      } finally {
-        if (!cancelled) setPdfLoading(false);
-      }
-    }
-
-    downloadPdf();
-    return () => { cancelled = true; };
-  }, [isPdf, uri, fileId]);
+  const hasPages = fullThumbnails.length > 0;
 
   return (
     <ScrollView style={styles.page} contentContainerStyle={styles.pageContent}>
-      <View style={styles.imageContainer}>
-        {isPdf ? (
-          pdfLoading || !localPdfUri ? (
-            <ActivityIndicator size="large" color="#fff" />
-          ) : (
-            <Pdf
-              source={{ uri: localPdfUri }}
-              style={styles.pdf}
-              onLoadComplete={(numberOfPages) => {
-                console.log(`PDF loaded: ${numberOfPages} pages`);
-              }}
-              onError={(error) => {
-                console.log('PDF error:', error);
-              }}
+      {hasPages ? (
+        fullThumbnails.map((thumb) => (
+          <View key={thumb.id} style={styles.pageImageContainer}>
+            <Image
+              source={{ uri: thumb.url }}
+              style={[styles.pageImage, { height: thumb.height * (SCREEN_WIDTH / thumb.width) }]}
+              resizeMode="contain"
             />
-          )
-        ) : uri ? (
-          <Image source={{ uri }} style={styles.image} resizeMode="contain" />
-        ) : file ? (
-          <FileThumbnail
-            mimeType={file.mimeType ?? 'application/pdf'}
-            fileName={file.name ?? fileId}
-            size={SCREEN_WIDTH * 0.6}
-            isLoading={imageLoading}
-          />
-        ) : (
-          <ActivityIndicator size="large" color="#1976D2" />
-        )}
-      </View>
+          </View>
+        ))
+      ) : (
+        <View style={styles.imageContainer}>
+          {uri ? (
+            <Image source={{ uri }} style={styles.image} resizeMode="contain" />
+          ) : file ? (
+            <FileThumbnail
+              thumbnailUrl={file.data?.thumbnailUrl}
+              mimeType={file.mimeType ?? 'application/pdf'}
+              fileName={file.name ?? fileId}
+              size={SCREEN_WIDTH * 0.6}
+              isLoading={imageLoading}
+            />
+          ) : (
+            <ActivityIndicator size="large" color="#1976D2" />
+          )}
+        </View>
+      )}
 
       <View style={styles.details}>
         <Text style={styles.fileName}>{imageData?.data?.name ?? file?.name ?? fileId}</Text>
@@ -201,22 +170,13 @@ const styles = StyleSheet.create({
     width: SCREEN_WIDTH,
     height: SCREEN_WIDTH,
   },
-  pdf: {
-    width: SCREEN_WIDTH,
-    height: SCREEN_WIDTH,
-    backgroundColor: '#fff',
-  },
-  placeholder: {
-    width: SCREEN_WIDTH,
-    height: SCREEN_WIDTH,
-    justifyContent: 'center',
+  pageImageContainer: {
     alignItems: 'center',
-    backgroundColor: '#1a1a2e',
+    backgroundColor: '#000',
+    paddingVertical: 4,
   },
-  placeholderText: {
-    fontSize: 48,
-    color: '#1976D2',
-    fontWeight: '700',
+  pageImage: {
+    width: SCREEN_WIDTH,
   },
   details: {
     backgroundColor: '#fff',

@@ -57,6 +57,7 @@ function FileEditItem({ fileId, selected, onPress }: FileEditItemProps) {
         <Image source={{ uri }} style={styles.thumb} />
       ) : (
         <FileThumbnail
+          thumbnailUrl={file?.data?.thumbnailUrl}
           mimeType={file?.mimeType ?? 'application/octet-stream'}
           fileName={file?.name ?? fileId}
           size={ITEM_SIZE}
