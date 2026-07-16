@@ -12,9 +12,10 @@ import (
 )
 
 type FileHandler struct {
-	files *service.FileService
-	urls  *service.URLService
-	ocr   *service.OCRService
+	files      *service.FileService
+	urls       *service.URLService
+	ocr        *service.OCRService
+	conversion *service.ConversionService
 }
 
 func (h *FileHandler) Upload(c *gin.Context) {
@@ -39,6 +40,10 @@ func (h *FileHandler) Upload(c *gin.Context) {
 		}
 
 		h.ocr.Enqueue(result.ID, result.Path)
+
+		if service.IsConvertible(result.MimeType) {
+			h.conversion.Enqueue(result.ID, result.Path, result.MimeType)
+		}
 
 		results = append(results, gin.H{
 			"id":   result.ID,
@@ -251,4 +256,57 @@ func (h *FileHandler) ListFilesByParent(c *gin.Context) {
 		return
 	}
 	api.Success(c, files)
+}
+
+func (h *FileHandler) GetThumbnails(c *gin.Context) {
+	id := c.Param("id")
+	thumbnails, err := h.files.GetThumbnailsByFileID(id)
+	if err != nil {
+		api.Error(c, http.StatusInternalServerError, "DB_ERROR", "Failed to fetch thumbnails")
+		return
+	}
+
+	type thumbnailResponse struct {
+		ID              string `json:"id"`
+		PageNumber      int    `json:"pageNumber"`
+		ResolutionLabel string `json:"resolutionLabel"`
+		Width           int    `json:"width"`
+		Height          int    `json:"height"`
+		URL             string `json:"url"`
+		MimeType        string `json:"mimeType"`
+	}
+
+	resp := make([]thumbnailResponse, len(thumbnails))
+	for i, t := range thumbnails {
+		resp[i] = thumbnailResponse{
+			ID:              t.ID,
+			PageNumber:      t.PageNumber,
+			ResolutionLabel: t.ResolutionLabel,
+			Width:           t.Width,
+			Height:          t.Height,
+			URL:             h.urls.GenerateThumbnailURL(t.ID),
+			MimeType:        t.MimeType,
+		}
+	}
+
+	api.Success(c, resp)
+}
+
+func (h *FileHandler) ServeThumbnail(c *gin.Context) {
+	id := c.Param("id")
+	exp, _ := strconv.ParseInt(c.Query("expires"), 10, 64)
+	sig := c.Query("sig")
+
+	if !h.urls.Validate(id, sig, exp) {
+		api.Error(c, http.StatusForbidden, "FORBIDDEN", "Invalid or expired link")
+		return
+	}
+
+	storagePath, err := h.files.GetThumbnailStoragePath(id)
+	if err != nil {
+		api.Error(c, http.StatusNotFound, "THUMBNAIL_NOT_FOUND", "Thumbnail not found")
+		return
+	}
+
+	c.File(path.Clean(storagePath))
 }

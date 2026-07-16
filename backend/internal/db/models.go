@@ -47,6 +47,18 @@ type Tag struct {
 	UpdatedAt   time.Time      `json:"updated_at"`
 }
 
+type Thumbnail struct {
+	ID              string    `json:"id"`
+	FileID          string    `json:"file_id"`
+	PageNumber      int32     `json:"page_number"`
+	ResolutionLabel string    `json:"resolution_label"`
+	Width           int32     `json:"width"`
+	Height          int32     `json:"height"`
+	StorageKey      string    `json:"storage_key"`
+	MimeType        string    `json:"mime_type"`
+	CreatedAt       time.Time `json:"created_at"`
+}
+
 type User struct {
 	ID           string    `json:"id"`
 	Username     string    `json:"username"`

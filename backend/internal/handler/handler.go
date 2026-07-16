@@ -12,9 +12,9 @@ type Handler struct {
 	Auth   *auth.AuthHandler
 }
 
-func New(fileSvc *service.FileService, ocrSvc *service.OCRService, urlSvc *service.URLService, authHandler *auth.AuthHandler) *Handler {
+func New(fileSvc *service.FileService, ocrSvc *service.OCRService, urlSvc *service.URLService, authHandler *auth.AuthHandler, conversionSvc *service.ConversionService) *Handler {
 	return &Handler{
-		File:   &FileHandler{files: fileSvc, urls: urlSvc, ocr: ocrSvc},
+		File:   &FileHandler{files: fileSvc, urls: urlSvc, ocr: ocrSvc, conversion: conversionSvc},
 		OCR:    &OCRHandler{ocr: ocrSvc, files: fileSvc},
 		Health: &HealthHandler{ocr: ocrSvc},
 		Auth:   authHandler,

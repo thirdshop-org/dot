@@ -37,6 +37,19 @@ func (s *URLService) GenerateDownloadURL(fileUUID string) string {
 	)
 }
 
+func (s *URLService) GenerateThumbnailURL(thumbUUID string) string {
+	expires := time.Now().Add(10 * time.Minute).Unix()
+	sig := s.sign(thumbUUID, expires)
+
+	return fmt.Sprintf(
+		"%s/api/v1/thumbnails/%s?expires=%d&sig=%s",
+		s.serverHost,
+		thumbUUID,
+		expires,
+		sig,
+	)
+}
+
 func (s *URLService) Validate(fileID, sig string, expires int64) bool {
 	if time.Now().Unix() > expires {
 		return false

@@ -32,6 +32,7 @@ func main() {
 
 	fileSvc := service.NewFileService(queries, cfg)
 	ocrSvc := service.NewOCRService(cfg, fileSvc)
+	conversionSvc := service.NewConversionService(queries, cfg)
 	urlSvc := service.NewURLService(cfg.HMACSecret, cfg.ServerHost)
 	authSvc, err := auth.NewAuthService(queries, cfg)
 	if err != nil {
@@ -41,7 +42,10 @@ func main() {
 	ocrSvc.Start()
 	defer ocrSvc.Stop()
 
-	h := handler.New(fileSvc, ocrSvc, urlSvc, auth.NewAuthHandler(authSvc))
+	conversionSvc.Start()
+	defer conversionSvc.Stop()
+
+	h := handler.New(fileSvc, ocrSvc, urlSvc, auth.NewAuthHandler(authSvc), conversionSvc)
 
 	r := gin.Default()
 	handler.SetupRoutes(r, h, authSvc)

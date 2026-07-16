@@ -59,9 +59,10 @@ func (s *FileService) Upload(file *multipart.FileHeader) (*model.UploadResult, e
 	}
 
 	return &model.UploadResult{
-		ID:   dbFile.ID,
-		Name: dbFile.Name,
-		Path: dst,
+		ID:       dbFile.ID,
+		Name:     dbFile.Name,
+		Path:     dst,
+		MimeType: dbFile.MimeType,
 	}, nil
 }
 
@@ -204,6 +205,37 @@ func (s *FileService) ListFilesByParentID(parentID string) ([]model.File, error)
 		files[i] = dbToModel(f, tags)
 	}
 	return files, nil
+}
+
+func (s *FileService) GetThumbnailsByFileID(fileID string) ([]model.Thumbnail, error) {
+	dbThumbnails, err := s.queries.GetThumbnailsByFileID(context.Background(), fileID)
+	if err != nil {
+		return nil, fmt.Errorf("get thumbnails: %w", err)
+	}
+
+	thumbnails := make([]model.Thumbnail, len(dbThumbnails))
+	for i, t := range dbThumbnails {
+		thumbnails[i] = model.Thumbnail{
+			ID:              t.ID,
+			FileID:          t.FileID,
+			PageNumber:      int(t.PageNumber),
+			ResolutionLabel: t.ResolutionLabel,
+			Width:           int(t.Width),
+			Height:          int(t.Height),
+			StorageKey:      t.StorageKey,
+			MimeType:        t.MimeType,
+			CreatedAt:       t.CreatedAt.String(),
+		}
+	}
+	return thumbnails, nil
+}
+
+func (s *FileService) GetThumbnailStoragePath(id string) (string, error) {
+	t, err := s.queries.GetThumbnailByID(context.Background(), id)
+	if err != nil {
+		return "", fmt.Errorf("get thumbnail: %w", err)
+	}
+	return t.StorageKey, nil
 }
 
 func dbToModel(f db.File, dbTags []db.Tag) model.File {

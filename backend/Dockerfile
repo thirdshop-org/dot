@@ -11,14 +11,14 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o /bin/server ./cmd/server
 
 FROM alpine:3.21
 
-RUN apk add --no-cache ca-certificates curl
+RUN apk add --no-cache ca-certificates curl libreoffice-core poppler-utils
 
 WORKDIR /app
 
 COPY --from=builder /bin/server .
 COPY internal/db/migrations ./internal/db/migrations
 
-RUN mkdir -p /app/uploads /data
+RUN mkdir -p /app/uploads /app/uploads/thumbnails /data
 
 EXPOSE 8080
 
