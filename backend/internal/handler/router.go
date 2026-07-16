@@ -14,6 +14,8 @@ func SetupRoutes(r *gin.Engine, h *Handler, authMiddleware *auth.AuthService) {
 	api.POST("/auth/login", h.Auth.Login)
 	api.POST("/auth/refresh", h.Auth.Refresh)
 	api.POST("/auth/logout", h.Auth.Logout)
+	api.GET("/files/download/:id", h.File.Download)
+	api.GET("/thumbnails/:id", h.File.ServeThumbnail)
 
 	// Protected
 	protected := api.Group("")
@@ -25,7 +27,6 @@ func SetupRoutes(r *gin.Engine, h *Handler, authMiddleware *auth.AuthService) {
 	protected.POST("/files/folders", h.File.CreateFolder)
 	protected.GET("/files/folders", h.File.ListFolders)
 	protected.GET("/files/folders/:id/files", h.File.ListFilesByParent)
-	protected.GET("/files/download/:id", h.File.Download)
 	protected.DELETE("/files/:id", h.File.Delete)
 	protected.GET("/files/:id", h.File.Get)
 
@@ -36,6 +37,4 @@ func SetupRoutes(r *gin.Engine, h *Handler, authMiddleware *auth.AuthService) {
 	protected.GET("/ocr/jobs/:id", h.OCR.GetJobStatus)
 
 	protected.GET("/files/:id/thumbnails", h.File.GetThumbnails)
-
-	api.GET("/thumbnails/:id", h.File.ServeThumbnail)
 }

@@ -238,6 +238,48 @@ func (s *FileService) GetThumbnailStoragePath(id string) (string, error) {
 	return t.StorageKey, nil
 }
 
+func (s *FileService) GetBestThumbnail(fileID, preferredLabel string) *model.Thumbnail {
+	dbThumbnails, err := s.queries.GetThumbnailsByFileID(context.Background(), fileID)
+	if err != nil || len(dbThumbnails) == 0 {
+		return nil
+	}
+
+	var fallback *model.Thumbnail
+	for _, t := range dbThumbnails {
+		if t.PageNumber != 1 {
+			continue
+		}
+		if t.ResolutionLabel == preferredLabel {
+			return &model.Thumbnail{
+				ID:              t.ID,
+				FileID:          t.FileID,
+				PageNumber:      int(t.PageNumber),
+				ResolutionLabel: t.ResolutionLabel,
+				Width:           int(t.Width),
+				Height:          int(t.Height),
+				StorageKey:      t.StorageKey,
+				MimeType:        t.MimeType,
+				CreatedAt:       t.CreatedAt.String(),
+			}
+		}
+		if fallback == nil {
+			fallback = &model.Thumbnail{
+				ID:              t.ID,
+				FileID:          t.FileID,
+				PageNumber:      int(t.PageNumber),
+				ResolutionLabel: t.ResolutionLabel,
+				Width:           int(t.Width),
+				Height:          int(t.Height),
+				StorageKey:      t.StorageKey,
+				MimeType:        t.MimeType,
+				CreatedAt:       t.CreatedAt.String(),
+			}
+		}
+	}
+
+	return fallback
+}
+
 func dbToModel(f db.File, dbTags []db.Tag) model.File {
 	tags := make([]model.Tag, len(dbTags))
 	for i, t := range dbTags {

@@ -55,6 +55,8 @@ func (h *FileHandler) Upload(c *gin.Context) {
 }
 
 func (h *FileHandler) List(c *gin.Context) {
+	thumbnailQuality := c.Query("thumbnail")
+
 	files, err := h.files.List()
 	if err != nil {
 		log.Printf("ERROR List files: %v", err)
@@ -71,6 +73,7 @@ func (h *FileHandler) List(c *gin.Context) {
 	type fileResponse struct {
 		ID           string        `json:"id"`
 		URL          string        `json:"url"`
+		ThumbnailURL string        `json:"thumbnailUrl,omitempty"`
 		Name         string        `json:"name"`
 		Size         int64         `json:"size"`
 		Tags         []tagResponse `json:"tags"`
@@ -84,21 +87,27 @@ func (h *FileHandler) List(c *gin.Context) {
 
 	resp := make([]fileResponse, len(files))
 	for i, f := range files {
-
 		tags := []tagResponse{}
-
 		for _, tag := range f.Tags {
-
 			tags = append(tags, tagResponse{
 				ID:      tag.ID,
 				TagName: tag.Name,
 				TagType: tag.TagType,
 			})
-
 		}
+
+		downloadURL := h.urls.GenerateDownloadURL(f.ID)
+		thumbURL := downloadURL
+		if thumbnailQuality != "" {
+			if best := h.files.GetBestThumbnail(f.ID, thumbnailQuality); best != nil {
+				thumbURL = h.urls.GenerateThumbnailURL(best.ID)
+			}
+		}
+
 		resp[i] = fileResponse{
 			ID:           f.ID,
-			URL:          h.urls.GenerateDownloadURL(f.ID),
+			URL:          downloadURL,
+			ThumbnailURL: thumbURL,
 			Name:         f.Name,
 			Size:         f.Size,
 			Tags:         tags,
@@ -135,21 +144,75 @@ func (h *FileHandler) Download(c *gin.Context) {
 
 func (h *FileHandler) Get(c *gin.Context) {
 	id := c.Param("id")
+	thumbnailQuality := c.Query("thumbnail")
+
 	file, err := h.files.Get(id)
 	if err != nil {
 		api.Error(c, http.StatusNotFound, "FILE_NOT_FOUND", "File not found")
 		return
 	}
 
+	type tagResponse struct {
+		ID      string `json:"id"`
+		TagName string `json:"tag_name"`
+		TagType string `json:"tag_type"`
+	}
+
+	type thumbnailResponse struct {
+		ID              string `json:"id"`
+		PageNumber      int    `json:"pageNumber"`
+		ResolutionLabel string `json:"resolutionLabel"`
+		Width           int    `json:"width"`
+		Height          int    `json:"height"`
+		URL             string `json:"url"`
+		MimeType        string `json:"mimeType"`
+	}
+
+	tags := []tagResponse{}
+	for _, tag := range file.Tags {
+		tags = append(tags, tagResponse{
+			ID:      tag.ID,
+			TagName: tag.Name,
+			TagType: tag.TagType,
+		})
+	}
+
+	downloadURL := h.urls.GenerateDownloadURL(file.ID)
+	thumbURL := downloadURL
+	if thumbnailQuality != "" {
+		if best := h.files.GetBestThumbnail(file.ID, thumbnailQuality); best != nil {
+			thumbURL = h.urls.GenerateThumbnailURL(best.ID)
+		}
+	}
+
+	dbThumbnails, _ := h.files.GetThumbnailsByFileID(file.ID)
+	thumbnails := make([]thumbnailResponse, len(dbThumbnails))
+	for i, t := range dbThumbnails {
+		thumbnails[i] = thumbnailResponse{
+			ID:              t.ID,
+			PageNumber:      t.PageNumber,
+			ResolutionLabel: t.ResolutionLabel,
+			Width:           t.Width,
+			Height:          t.Height,
+			URL:             h.urls.GenerateThumbnailURL(t.ID),
+			MimeType:        t.MimeType,
+		}
+	}
+
 	api.Success(c, gin.H{
-		"id":        file.ID,
-		"name":      file.Name,
-		"url":       h.urls.GenerateDownloadURL(file.ID),
-		"size":      file.Size,
-		"mimeType":  file.MimeType,
-		"createdAt": file.CreatedAt,
-		"updatedAt": file.UpdatedAt,
-		"ocrText":   file.OcrText,
+		"id":           file.ID,
+		"name":         file.Name,
+		"url":          downloadURL,
+		"thumbnailUrl": thumbURL,
+		"size":         file.Size,
+		"mimeType":     file.MimeType,
+		"tags":         tags,
+		"createdAt":    file.CreatedAt,
+		"updatedAt":    file.UpdatedAt,
+		"ocrText":      file.OcrText,
+		"isFolder":     file.IsFolder,
+		"parentFileID": file.ParentFileID,
+		"thumbnails":   thumbnails,
 	})
 }
 
@@ -250,12 +313,71 @@ func (h *FileHandler) CreateFolder(c *gin.Context) {
 
 func (h *FileHandler) ListFilesByParent(c *gin.Context) {
 	parentID := c.Param("id")
+	thumbnailQuality := c.Query("thumbnail")
+
 	files, err := h.files.ListFilesByParentID(parentID)
 	if err != nil {
 		api.Error(c, http.StatusInternalServerError, "DB_ERROR", "Failed to list files in folder")
 		return
 	}
-	api.Success(c, files)
+
+	type tagResponse struct {
+		ID      string `json:"id"`
+		TagName string `json:"tag_name"`
+		TagType string `json:"tag_type"`
+	}
+
+	type fileResponse struct {
+		ID           string        `json:"id"`
+		URL          string        `json:"url"`
+		ThumbnailURL string        `json:"thumbnailUrl,omitempty"`
+		Name         string        `json:"name"`
+		Size         int64         `json:"size"`
+		Tags         []tagResponse `json:"tags"`
+		CreatedAt    string        `json:"createdAt"`
+		MimeType     string        `json:"mimeType"`
+		OcrText      string        `json:"ocrText,omitempty"`
+		ParentFileID string        `json:"parentFileID,omitempty"`
+		IsFolder     bool          `json:"isFolder"`
+		UpdatedAt    string        `json:"updatedAt"`
+	}
+
+	resp := make([]fileResponse, len(files))
+	for i, f := range files {
+		tags := []tagResponse{}
+		for _, tag := range f.Tags {
+			tags = append(tags, tagResponse{
+				ID:      tag.ID,
+				TagName: tag.Name,
+				TagType: tag.TagType,
+			})
+		}
+
+		downloadURL := h.urls.GenerateDownloadURL(f.ID)
+		thumbURL := downloadURL
+		if thumbnailQuality != "" {
+			if best := h.files.GetBestThumbnail(f.ID, thumbnailQuality); best != nil {
+				thumbURL = h.urls.GenerateThumbnailURL(best.ID)
+			}
+		}
+
+		resp[i] = fileResponse{
+			ID:           f.ID,
+			URL:          downloadURL,
+			ThumbnailURL: thumbURL,
+			Name:         f.Name,
+			Size:         f.Size,
+			Tags:         tags,
+			CreatedAt:    f.CreatedAt,
+			ParentFileID: f.ParentFileID,
+			OcrText:      f.OcrText,
+			IsFolder:     f.IsFolder,
+			UpdatedAt:    f.UpdatedAt,
+			MimeType:     f.MimeType,
+		}
+	}
+
+	api.Success(c, resp)
 }
 
 func (h *FileHandler) GetThumbnails(c *gin.Context) {
