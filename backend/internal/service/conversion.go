@@ -195,8 +195,10 @@ func (s *ConversionService) convertPDFToImages(pdfPath, outputDir string, dpi in
 		if !strings.HasPrefix(name, fmt.Sprintf("tmp_%d_", dpi)) || !strings.HasSuffix(name, ".jpg") {
 			continue
 		}
+		raw := strings.TrimPrefix(name, fmt.Sprintf("tmp_%d_", dpi))
+		raw = strings.TrimPrefix(raw, "-")
 		var num int
-		if _, err := fmt.Sscanf(strings.TrimPrefix(name, fmt.Sprintf("tmp_%d_", dpi)), "%d", &num); err != nil {
+		if _, err := fmt.Sscanf(raw, "%d", &num); err != nil {
 			continue
 		}
 		pages = append(pages, imagePage{
