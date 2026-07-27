@@ -30,25 +30,35 @@ type SelectedImage = { uri: string; width: number; height: number };
 
 type ModalState = { images: SelectedImage[]; index: number } | null;
 
+export type DeviceFileParam = {
+  localUri: string;
+  name: string;
+  mimeType: string;
+  createdAt: string;
+};
+
 type RootStackParamList = {
-  FileDetail: { fileIds: string[]; initialIndex: number };
+  FileDetail: { fileIds: string[]; initialIndex: number; deviceFiles?: Record<string, DeviceFileParam> };
 };
 
 type FileDetailRouteProp = RouteProp<RootStackParamList, 'FileDetail'>;
 
-function DetailItem({ fileId, onSelectImage }: { fileId: string; onSelectImage?: (state: ModalState) => void }) {
-  const { data: imageData, isLoading: imageLoading } = useFileImage(fileId);
-  const { data: fileData } = useFile(fileId);
+function DetailItem({ fileId, deviceFile, onSelectImage }: { fileId: string; deviceFile?: DeviceFileParam; onSelectImage?: (state: ModalState) => void }) {
+  const isDevice = !!deviceFile;
+  const { data: imageData, isLoading: imageLoading } = useFileImage(isDevice ? '' : fileId);
+  const { data: fileData } = useFile(isDevice ? '' : fileId);
   const downloadFile = useDownloadFile();
   const [downloading, setDownloading] = useState(false);
 
-  const uri = imageData?.data?.url;
+  const uri = isDevice ? deviceFile.localUri : (imageData?.data?.url);
   const file = fileData as any;
 
   const localEntry = localFileRegistry.getByBackendId(fileId);
-  const syncStatus: SyncStatus = localEntry
-    ? (localEntry.syncStatus === 'cloud' ? 'cloud' : 'synced')
-    : (uri ? 'synced' : 'cloud');
+  const syncStatus: SyncStatus = isDevice
+    ? 'local'
+    : localEntry
+      ? (localEntry.syncStatus === 'cloud' ? 'cloud' : 'synced')
+      : (uri ? 'synced' : 'cloud');
 
   const fullThumbnails: Thumbnail[] = (file?.data?.thumbnails ?? [])
     .filter((t: Thumbnail) => t.resolutionLabel === 'full')
@@ -141,19 +151,19 @@ function DetailItem({ fileId, onSelectImage }: { fileId: string; onSelectImage?:
 
       <View style={styles.details}>
         <View style={styles.detailHeader}>
-          <Text style={styles.fileName}>{imageData?.data?.name ?? file?.name ?? fileId}</Text>
+          <Text style={styles.fileName}>{deviceFile?.name ?? imageData?.data?.name ?? file?.name ?? fileId}</Text>
           <SyncStatusBadge status={syncStatus} size={20} />
         </View>
 
-        {imageData?.data?.size != null && (
+        {(deviceFile || imageData?.data?.size != null) && (
           <Text style={styles.meta}>
-            Taille : {(imageData.data.size / 1024).toFixed(1)} Ko
+            Taille : {((deviceFile ? 0 : imageData?.data?.size) ?? 0 / 1024).toFixed(1)} Ko
           </Text>
         )}
 
-        {file?.createdAt && (
+        {(deviceFile?.createdAt || file?.createdAt) && (
           <Text style={styles.meta}>
-            Ajouté le {new Date(file.createdAt).toLocaleDateString('fr-FR', {
+            Ajouté le {new Date(deviceFile?.createdAt ?? file?.createdAt).toLocaleDateString('fr-FR', {
               day: 'numeric', month: 'long', year: 'numeric',
             })}
           </Text>
@@ -183,7 +193,7 @@ function DetailItem({ fileId, onSelectImage }: { fileId: string; onSelectImage?:
 
 export function FileDetailScreen() {
   const route = useRoute<FileDetailRouteProp>();
-  const { fileIds, initialIndex } = route.params;
+  const { fileIds, initialIndex, deviceFiles } = route.params;
 
   const flatListRef = useRef<FlatList>(null);
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
@@ -223,7 +233,7 @@ export function FileDetailScreen() {
         }}
         renderItem={({ item }) => (
           <View style={styles.pageWrapper}>
-            <DetailItem fileId={item} onSelectImage={setModalState} />
+            <DetailItem fileId={item} deviceFile={deviceFiles?.[item]} onSelectImage={setModalState} />
           </View>
         )}
       />

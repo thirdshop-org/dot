@@ -10,6 +10,7 @@ import { UnifiedFileItem } from '../hooks/useUnifiedFiles';
 import { FileItem, isFolder } from '../types';
 import { SearchBar, SearchFilters } from '../components/SearchBar';
 import { FileThumbnail } from '../components/FileThumbnail';
+import { safDirectory, StoredFolder } from '../services/safDirectory';
 
 const NUM_COLUMNS = 3;
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -19,7 +20,7 @@ type RootStackParamList = {
   Home: undefined;
   Upload: undefined;
   Scan: undefined;
-  FileDetail: { fileIds: string[]; initialIndex: number };
+  FileDetail: { fileIds: string[]; initialIndex: number; deviceFiles?: Record<string, { localUri: string; name: string; mimeType: string; createdAt: string }> };
   FileEdit: { fileIds: string[] };
   Folder: { folderId: string; folderName: string };
 };
@@ -133,7 +134,7 @@ function matchesQuery(file: UnifiedFileItem, query: string, filters: SearchFilte
 export function HomeScreen() {
   const navigation = useNavigation<NavigationProp>();
   const insets = useSafeAreaInsets();
-  const { data, isLoading, error, hasPermission, requestPermission } = useUnifiedFiles();
+  const { data, isLoading, error, hasPermission, requestPermission, pickDirectory, folders, refreshFolders } = useUnifiedFiles();
   const deleteFile = useDeleteFile();
   const freeLocalSpace = useFreeLocalSpace();
   const [searchQuery, setSearchQuery] = useState('');
@@ -148,12 +149,23 @@ export function HomeScreen() {
   const moveFiles = useMoveFiles();
   const { data: foldersData } = useFolders();
   const [moveModalVisible, setMoveModalVisible] = useState(false);
+  const [folderSheetVisible, setFolderSheetVisible] = useState(false);
 
   useEffect(() => {
     const show = Keyboard.addListener('keyboardDidShow', () => setKeyboardOpen(true));
     const hide = Keyboard.addListener('keyboardDidHide', () => setKeyboardOpen(false));
     return () => { show.remove(); hide.remove(); };
   }, []);
+
+  useEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <TouchableOpacity onPress={() => setFolderSheetVisible(true)} style={{ marginRight: 4, padding: 8 }}>
+          <MaterialIcons name="settings" size={22} color="#666" />
+        </TouchableOpacity>
+      ),
+    });
+  }, [navigation]);
 
   const selectionMode = selectedIds.size > 0;
 
@@ -269,15 +281,50 @@ export function HomeScreen() {
     setSelectedIds(new Set());
   }, [selectedIds, moveFiles]);
 
+  const handleToggleFolderVisibility = useCallback((folderId: string) => {
+    safDirectory.toggleVisibility(folderId);
+    refreshFolders();
+  }, [refreshFolders]);
+
+  const handleRemoveFolder = useCallback((folderId: string) => {
+    Alert.alert(
+      'Supprimer le dossier',
+      'Le dossier sera retiré de la liste. Les fichiers resteront sur votre appareil.',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Supprimer',
+          style: 'destructive',
+          onPress: () => {
+            safDirectory.removeFolder(folderId);
+            refreshFolders();
+          },
+        },
+      ]
+    );
+  }, [refreshFolders]);
+
+  const handleAddFolder = useCallback(async () => {
+    setFolderSheetVisible(false);
+    await pickDirectory();
+  }, [pickDirectory]);
+
   const handleItemPress = useCallback((file: UnifiedFileItem) => {
     if (selectionMode) {
       toggleSelection(file.id);
     } else if (isFolder(file)) {
       navigation.navigate('Folder', { folderId: file.id, folderName: file.name });
     } else {
+      const deviceFilesMap: Record<string, { localUri: string; name: string; mimeType: string; createdAt: string }> = {};
+      for (const f of filteredFiles) {
+        if (f.isDeviceFile && f.localUri) {
+          deviceFilesMap[f.id] = { localUri: f.localUri, name: f.name, mimeType: f.mimeType, createdAt: f.createdAt };
+        }
+      }
       navigation.navigate('FileDetail', {
         fileIds: filteredFiles.map((f) => f.id),
         initialIndex: fileIdToIndex.get(file.id) ?? 0,
+        deviceFiles: Object.keys(deviceFilesMap).length > 0 ? deviceFilesMap : undefined,
       });
     }
   }, [selectionMode, toggleSelection, navigation, filteredFiles, fileIdToIndex]);
@@ -332,6 +379,14 @@ export function HomeScreen() {
             <Text style={styles.permissionBtnText}>Autoriser</Text>
           </TouchableOpacity>
         </View>
+      )}
+      {files.length === 0 && !searchQuery && (
+        <TouchableOpacity style={styles.folderScanBanner} onPress={pickDirectory}>
+          <MaterialIcons name="folder-open" size={24} color="#F57C00" />
+          <Text style={styles.folderScanText}>
+            {folders.length > 0 ? 'Aucun fichier trouvé — re-sélectionner' : 'Scanner un dossier de votre appareil'}
+          </Text>
+        </TouchableOpacity>
       )}
       <FlatList
         data={groupKeys}
@@ -528,6 +583,45 @@ export function HomeScreen() {
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
+
+      <Modal visible={folderSheetVisible} transparent animationType="slide" onRequestClose={() => setFolderSheetVisible(false)}>
+        <TouchableOpacity style={styles.bottomSheetOverlay} activeOpacity={1} onPress={() => setFolderSheetVisible(false)}>
+          <TouchableOpacity activeOpacity={1} style={styles.bottomSheet} onPress={() => {}}>
+            <View style={styles.bottomSheetHandle} />
+            <Text style={styles.bottomSheetTitle}>Mes dossiers</Text>
+            {folders.length === 0 ? (
+              <Text style={styles.emptyFoldersText}>Aucun dossier configuré</Text>
+            ) : (
+              folders.map((folder) => (
+                <View key={folder.id} style={styles.folderRow}>
+                  <MaterialIcons name="folder" size={20} color="#F57C00" />
+                  <Text style={styles.folderRowName} numberOfLines={1}>{folder.name}</Text>
+                  <TouchableOpacity
+                    onPress={() => handleToggleFolderVisibility(folder.id)}
+                    style={styles.folderRowAction}
+                  >
+                    <MaterialIcons
+                      name={folder.visible ? 'visibility' : 'visibility-off'}
+                      size={20}
+                      color={folder.visible ? '#1976D2' : '#999'}
+                    />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => handleRemoveFolder(folder.id)}
+                    style={styles.folderRowAction}
+                  >
+                    <MaterialIcons name="delete-outline" size={20} color="#E53935" />
+                  </TouchableOpacity>
+                </View>
+              ))
+            )}
+            <TouchableOpacity style={styles.addFolderBtn} onPress={handleAddFolder}>
+              <MaterialIcons name="add" size={20} color="#fff" />
+              <Text style={styles.addFolderBtnText}>Ajouter un dossier</Text>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -560,6 +654,19 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#fff',
     fontWeight: '600',
+  },
+  folderScanBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF3E0',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    gap: 10,
+  },
+  folderScanText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#333',
   },
   center: {
     flex: 1,
@@ -776,5 +883,70 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#fff',
     fontWeight: '600',
+  },
+  emptyFoldersText: {
+    fontSize: 14,
+    color: '#999',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  folderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    gap: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  folderRowName: {
+    flex: 1,
+    fontSize: 15,
+    color: '#333',
+  },
+  folderRowAction: {
+    padding: 6,
+  },
+  addFolderBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F57C00',
+    borderRadius: 10,
+    paddingVertical: 12,
+    marginTop: 16,
+    gap: 8,
+  },
+  addFolderBtnText: {
+    fontSize: 15,
+    color: '#fff',
+    fontWeight: '600',
+  },
+  bottomSheetOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  bottomSheet: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 32,
+    maxHeight: '70%',
+  },
+  bottomSheetHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#ddd',
+    alignSelf: 'center',
+    marginBottom: 16,
+  },
+  bottomSheetTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#333',
+    marginBottom: 16,
   },
 });

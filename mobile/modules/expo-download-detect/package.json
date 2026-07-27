@@ -1,0 +1,12 @@
+{
+  "name": "expo-download-detect",
+  "version": "0.1.0",
+  "description": "Detect new files via DownloadManager and MediaStore ContentObserver",
+  "main": "index.ts",
+  "android": {
+    "sourceDir": "android"
+  },
+  "peerDependencies": {
+    "expo": ">=57.0.0"
+  }
+}

@@ -17,6 +17,8 @@ import { PendingReviewScreen } from './app/pending-review';
 import { FileDetailScreen } from './app/file-detail';
 import { FileEditScreen } from './app/file-edit';
 import { FolderScreen } from './app/folder';
+import { OnboardingScreen } from './app/onboarding';
+import { onboardingStorage } from './services/onboardingStorage';
 
 const Stack = createNativeStackNavigator();
 const queryClient = new QueryClient();
@@ -32,11 +34,18 @@ function AppNavigator() {
     );
   }
 
+  const needsOnboarding = user && onboardingStorage.needsOnboarding();
+
   return (
     <NavigationContainer>
-      <Stack.Navigator initialRouteName={user ? 'Home' : 'Login'}>
+      <Stack.Navigator initialRouteName={needsOnboarding ? 'Onboarding' : user ? 'Home' : 'Login'}>
         {user ? (
           <>
+            <Stack.Screen
+              name="Onboarding"
+              component={OnboardingScreen}
+              options={{ headerShown: false }}
+            />
             <Stack.Screen
               name="Home"
               component={HomeScreen}

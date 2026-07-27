@@ -43,7 +43,7 @@ function getExtension(name: string): string {
 
 export function useUnifiedFiles(page: number = 1, limit: number = 50) {
   const { data: backendData, isLoading: backendLoading, error: backendError } = useFiles(page, limit);
-  const { localFiles, isLoading: localLoading, hasPermission, requestPermission } = useLocalFiles();
+  const { localFiles, isLoading: localLoading, hasPermission, requestPermission, pickDirectory, folders, refreshFolders } = useLocalFiles();
 
   const unifiedFiles = useMemo(() => {
     const backendFiles = backendData?.data ?? [];
@@ -110,6 +110,9 @@ export function useUnifiedFiles(page: number = 1, limit: number = 50) {
     error: backendError,
     hasPermission,
     requestPermission,
+    pickDirectory,
+    folders,
+    refreshFolders,
   };
 }
 

@@ -4,7 +4,7 @@ import { localFileRegistry } from '../services/localFileRegistry';
 import { LocalFileEntry } from '../types';
 
 export function useLocalFiles() {
-  const { files: deviceFiles, isLoading: deviceLoading, hasPermission, requestPermission, rescan } = useDeviceFiles();
+  const { files: deviceFiles, isLoading: deviceLoading, hasPermission, requestPermission, rescan, pickDirectory, folders, refreshFolders } = useDeviceFiles();
 
   const registryEntries = useMemo(() => localFileRegistry.getAll(), []);
 
@@ -40,5 +40,8 @@ export function useLocalFiles() {
     hasPermission,
     requestPermission,
     rescan,
+    pickDirectory,
+    folders,
+    refreshFolders,
   };
 }
