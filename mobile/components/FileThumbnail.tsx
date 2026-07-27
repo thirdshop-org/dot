@@ -2,6 +2,8 @@ import React from 'react';
 import { View, Text, Image, ActivityIndicator, StyleSheet } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import type { ComponentProps } from 'react';
+import { SyncStatusBadge } from './SyncStatusBadge';
+import type { SyncStatus } from '../types';
 
 type IconName = ComponentProps<typeof MaterialIcons>['name'];
 
@@ -35,9 +37,10 @@ interface FileThumbnailProps {
   fileName: string;
   size: number;
   isLoading?: boolean;
+  syncStatus?: SyncStatus;
 }
 
-export function FileThumbnail({ uri, thumbnailUrl, mimeType, fileName, size, isLoading }: FileThumbnailProps) {
+export function FileThumbnail({ uri, thumbnailUrl, mimeType, fileName, size, isLoading, syncStatus }: FileThumbnailProps) {
   const info = getFileInfo(mimeType, fileName);
   const ext = getExtension(fileName);
 
@@ -52,7 +55,12 @@ export function FileThumbnail({ uri, thumbnailUrl, mimeType, fileName, size, isL
   const imageUri = thumbnailUrl || (uri && mimeType.startsWith('image/') ? uri : undefined);
 
   if (imageUri) {
-    return <Image source={{ uri: imageUri }} style={[styles.image, { width: size, height: size }]} />;
+    return (
+      <View style={{ width: size, height: size }}>
+        <Image source={{ uri: imageUri }} style={[styles.image, { width: size, height: size }]} />
+        {syncStatus && <SyncStatusBadge status={syncStatus} />}
+      </View>
+    );
   }
 
   return (
@@ -61,6 +69,7 @@ export function FileThumbnail({ uri, thumbnailUrl, mimeType, fileName, size, isL
       {ext.length <= 4 && (
         <Text style={[styles.ext, { color: info.color }]}>{ext}</Text>
       )}
+      {syncStatus && <SyncStatusBadge status={syncStatus} />}
     </View>
   );
 }

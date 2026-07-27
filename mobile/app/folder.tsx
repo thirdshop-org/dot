@@ -3,8 +3,10 @@ import { View, FlatList, StyleSheet, TouchableOpacity, Text, Dimensions, Alert }
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useFilesByParent, useFileImage, useDeleteFile } from '../hooks/useFiles';
-import { FileItem, isFolder } from '../types';
+import { useDeleteFile, useFileImage } from '../hooks/useFiles';
+import { useUnifiedFilesByParent } from '../hooks/useUnifiedFiles';
+import { UnifiedFileItem } from '../hooks/useUnifiedFiles';
+import { isFolder } from '../types';
 import { FileThumbnail } from '../components/FileThumbnail';
 
 const NUM_COLUMNS = 3;
@@ -21,7 +23,7 @@ type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type FolderRouteProp = RouteProp<RootStackParamList, 'Folder'>;
 
 function FolderGridItem({ file, onPress, onLongPress, selected, onFolderPress }: {
-  file: FileItem;
+  file: UnifiedFileItem;
   onPress?: () => void;
   onLongPress?: () => void;
   selected?: boolean;
@@ -39,12 +41,13 @@ function FolderGridItem({ file, onPress, onLongPress, selected, onFolderPress }:
       activeOpacity={0.7}
     >
       <FileThumbnail
-        uri={data?.data?.url}
+        uri={data?.data?.url ?? file.localUri}
         thumbnailUrl={file.thumbnailUrl}
         mimeType={file.mimeType}
         fileName={file.name}
         size={ITEM_SIZE}
         isLoading={isLoading}
+        syncStatus={file.syncStatus}
       />
       {selected && (
         <View style={styles.selectedOverlay}>
@@ -62,7 +65,7 @@ export function FolderScreen() {
   const route = useRoute<FolderRouteProp>();
   const navigation = useNavigation<NavigationProp>();
   const { folderId, folderName } = route.params;
-  const { data, isLoading, error } = useFilesByParent(folderId);
+  const { data, isLoading } = useUnifiedFilesByParent(folderId);
   const deleteFile = useDeleteFile();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
@@ -73,7 +76,7 @@ export function FolderScreen() {
   }, [navigation, folderName]);
 
   const files = useMemo(() => {
-    return data?.data ?? [];
+    return data ?? [];
   }, [data]);
 
   const fileIdToIndex = useMemo(() => {
@@ -117,7 +120,7 @@ export function FolderScreen() {
     );
   }, [selectedIds, deleteFile]);
 
-  const handleItemPress = useCallback((file: FileItem) => {
+  const handleItemPress = useCallback((file: UnifiedFileItem) => {
     if (selectionMode) {
       toggleSelection(file.id);
     } else if (isFolder(file)) {
@@ -130,7 +133,7 @@ export function FolderScreen() {
     }
   }, [selectionMode, toggleSelection, navigation, files, fileIdToIndex]);
 
-  const handleItemLongPress = useCallback((file: FileItem) => {
+  const handleItemLongPress = useCallback((file: UnifiedFileItem) => {
     if (!selectionMode) toggleSelection(file.id);
   }, [selectionMode, toggleSelection]);
 
@@ -138,14 +141,6 @@ export function FolderScreen() {
     return (
       <View style={styles.center}>
         <Text style={styles.infoText}>Chargement...</Text>
-      </View>
-    );
-  }
-
-  if (error) {
-    return (
-      <View style={styles.center}>
-        <Text style={styles.infoText}>Erreur de chargement</Text>
       </View>
     );
   }

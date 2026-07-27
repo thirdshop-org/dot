@@ -24,7 +24,7 @@ export interface FileItem {
   thumbnails?: Thumbnail[];
 }
 
-export function isFolder(file: FileItem): boolean {
+export function isFolder(file: FileItem | { isFolder: boolean }): boolean {
   return file.isFolder;
 }
 
@@ -115,4 +115,18 @@ export interface AuthResponse {
 export interface RefreshResponse {
   access_token: string;
   refresh_token: string;
+}
+
+export type SyncStatus = 'local' | 'synced' | 'cloud';
+
+export interface LocalFileEntry {
+  id: string;
+  backendFileId?: string;
+  localUri: string;
+  name: string;
+  mimeType: string;
+  size: number;
+  syncStatus: SyncStatus;
+  createdAt: string;
+  tags?: Tag[];
 }

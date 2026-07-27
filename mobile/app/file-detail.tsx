@@ -10,14 +10,19 @@ import {
   ScrollView,
   Modal,
   Pressable,
+  TouchableOpacity,
 } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
 import { RouteProp, useRoute } from '@react-navigation/native';
 import { useFile, useFileImage } from '../hooks/useFiles';
+import { useDownloadFile } from '../hooks/useUnifiedFiles';
+import { localFileRegistry } from '../services/localFileRegistry';
 import { TagChip } from '../components/TagChip';
 import { FileThumbnail } from '../components/FileThumbnail';
+import { SyncStatusBadge } from '../components/SyncStatusBadge';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { ZoomableImage } from '../components/ZoomableImage';
-import type { Thumbnail } from '../types';
+import type { Thumbnail, SyncStatus } from '../types';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
@@ -34,14 +39,42 @@ type FileDetailRouteProp = RouteProp<RootStackParamList, 'FileDetail'>;
 function DetailItem({ fileId, onSelectImage }: { fileId: string; onSelectImage?: (state: ModalState) => void }) {
   const { data: imageData, isLoading: imageLoading } = useFileImage(fileId);
   const { data: fileData } = useFile(fileId);
+  const downloadFile = useDownloadFile();
+  const [downloading, setDownloading] = useState(false);
+
   const uri = imageData?.data?.url;
   const file = fileData as any;
+
+  const localEntry = localFileRegistry.getByBackendId(fileId);
+  const syncStatus: SyncStatus = localEntry
+    ? (localEntry.syncStatus === 'cloud' ? 'cloud' : 'synced')
+    : (uri ? 'synced' : 'cloud');
 
   const fullThumbnails: Thumbnail[] = (file?.data?.thumbnails ?? [])
     .filter((t: Thumbnail) => t.resolutionLabel === 'full')
     .sort((a: Thumbnail, b: Thumbnail) => a.pageNumber - b.pageNumber);
 
   const hasPages = fullThumbnails.length > 0;
+
+  const handleDownload = useCallback(async () => {
+    if (!file) return;
+    setDownloading(true);
+    try {
+      await downloadFile.mutateAsync({
+        id: fileId,
+        backendFileId: fileId,
+        name: file.data?.name ?? fileId,
+        mimeType: file.mimeType ?? 'application/octet-stream',
+        size: file.data?.size ?? 0,
+        createdAt: file.createdAt ?? new Date().toISOString(),
+        syncStatus: 'cloud',
+        tags: file.data?.tags ?? [],
+        isFolder: false,
+      });
+    } catch {} finally {
+      setDownloading(false);
+    }
+  }, [file, fileId, downloadFile]);
 
   return (
     <ScrollView style={styles.page} contentContainerStyle={styles.pageContent}>
@@ -75,13 +108,31 @@ function DetailItem({ fileId, onSelectImage }: { fileId: string; onSelectImage?:
               <Image source={{ uri }} style={styles.image} resizeMode="contain" />
             </Pressable>
           ) : file ? (
-            <FileThumbnail
-              thumbnailUrl={file.data?.thumbnailUrl}
-              mimeType={file.mimeType ?? 'application/pdf'}
-              fileName={file.name ?? fileId}
-              size={SCREEN_WIDTH * 0.6}
-              isLoading={imageLoading}
-            />
+            <View style={styles.cloudOnlyContainer}>
+              <FileThumbnail
+                thumbnailUrl={file.data?.thumbnailUrl}
+                mimeType={file.mimeType ?? 'application/pdf'}
+                fileName={file.name ?? fileId}
+                size={SCREEN_WIDTH * 0.6}
+                isLoading={imageLoading}
+              />
+              {syncStatus === 'cloud' && (
+                <TouchableOpacity
+                  style={styles.downloadBtn}
+                  onPress={handleDownload}
+                  disabled={downloading}
+                >
+                  {downloading ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <MaterialIcons name="cloud-download" size={20} color="#fff" />
+                  )}
+                  <Text style={styles.downloadBtnText}>
+                    {downloading ? 'Téléchargement...' : 'Télécharger'}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
           ) : (
             <ActivityIndicator size="large" color="#1976D2" />
           )}
@@ -89,7 +140,10 @@ function DetailItem({ fileId, onSelectImage }: { fileId: string; onSelectImage?:
       )}
 
       <View style={styles.details}>
-        <Text style={styles.fileName}>{imageData?.data?.name ?? file?.name ?? fileId}</Text>
+        <View style={styles.detailHeader}>
+          <Text style={styles.fileName}>{imageData?.data?.name ?? file?.name ?? fileId}</Text>
+          <SyncStatusBadge status={syncStatus} size={20} />
+        </View>
 
         {imageData?.data?.size != null && (
           <Text style={styles.meta}>
@@ -250,11 +304,36 @@ const styles = StyleSheet.create({
     marginTop: -16,
     padding: 20,
   },
+  detailHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
   fileName: {
     fontSize: 18,
     fontWeight: '700',
     color: '#333',
-    marginBottom: 8,
+    flex: 1,
+    marginRight: 8,
+  },
+  cloudOnlyContainer: {
+    alignItems: 'center',
+    gap: 16,
+  },
+  downloadBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1976D2',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 8,
+    gap: 8,
+  },
+  downloadBtnText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '600',
   },
   meta: {
     fontSize: 14,

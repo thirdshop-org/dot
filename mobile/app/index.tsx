@@ -4,7 +4,9 @@ import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useFiles, useFileImage, useDeleteFile, useAddTags, useMoveFiles, useFolders } from '../hooks/useFiles';
+import { useDeleteFile, useAddTags, useMoveFiles, useFolders, useFileImage } from '../hooks/useFiles';
+import { useUnifiedFiles, useFreeLocalSpace } from '../hooks/useUnifiedFiles';
+import { UnifiedFileItem } from '../hooks/useUnifiedFiles';
 import { FileItem, isFolder } from '../types';
 import { SearchBar, SearchFilters } from '../components/SearchBar';
 import { FileThumbnail } from '../components/FileThumbnail';
@@ -24,7 +26,7 @@ type RootStackParamList = {
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
-type GroupedFiles = Record<string, FileItem[]>;
+type GroupedFiles = Record<string, UnifiedFileItem[]>;
 
 function parseBackendDate(dateStr: string): Date | null {
   if (!dateStr) return null;
@@ -33,7 +35,7 @@ function parseBackendDate(dateStr: string): Date | null {
   return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]), Number(match[4]), Number(match[5]), Number(match[6]));
 }
 
-function groupByDate(files: FileItem[]): GroupedFiles {
+function groupByDate(files: UnifiedFileItem[]): GroupedFiles {
   const groups: GroupedFiles = {};
   for (const file of files) {
     const d = parseBackendDate(file.createdAt);
@@ -47,7 +49,7 @@ function groupByDate(files: FileItem[]): GroupedFiles {
   return groups;
 }
 
-function groupByTag(files: FileItem[]): GroupedFiles {
+function groupByTag(files: UnifiedFileItem[]): GroupedFiles {
   const groups: GroupedFiles = {};
   for (const file of files) {
     const tags = file.tags ?? [];
@@ -76,7 +78,7 @@ function formatDateLabel(key: string): string {
   return key.charAt(0).toUpperCase() + key.slice(1);
 }
 
-function FileGridItem({ file, onPress, onLongPress, selected }: { file: FileItem; onPress?: () => void; onLongPress?: () => void; selected?: boolean }) {
+function FileGridItem({ file, onPress, onLongPress, selected }: { file: UnifiedFileItem; onPress?: () => void; onLongPress?: () => void; selected?: boolean }) {
   const { data, isLoading } = useFileImage(file.id);
 
   return (
@@ -88,12 +90,13 @@ function FileGridItem({ file, onPress, onLongPress, selected }: { file: FileItem
       activeOpacity={0.7}
     >
       <FileThumbnail
-        uri={data?.data?.url}
+        uri={data?.data?.url ?? file.localUri}
         thumbnailUrl={file.thumbnailUrl}
         mimeType={file.mimeType}
         fileName={file.name}
         size={ITEM_SIZE}
         isLoading={isLoading}
+        syncStatus={file.syncStatus}
       />
       {selected && (
         <View style={styles.selectedOverlay}>
@@ -107,7 +110,7 @@ function FileGridItem({ file, onPress, onLongPress, selected }: { file: FileItem
   );
 }
 
-function matchesQuery(file: FileItem, query: string, filters: SearchFilters): boolean {
+function matchesQuery(file: UnifiedFileItem, query: string, filters: SearchFilters): boolean {
   if (!query) return true;
   const q = query.toLowerCase();
   if (filters.name && file.name.toLowerCase().includes(q)) return true;
@@ -130,8 +133,9 @@ function matchesQuery(file: FileItem, query: string, filters: SearchFilters): bo
 export function HomeScreen() {
   const navigation = useNavigation<NavigationProp>();
   const insets = useSafeAreaInsets();
-  const { data, isLoading, error } = useFiles();
+  const { data, isLoading, error, hasPermission, requestPermission } = useUnifiedFiles();
   const deleteFile = useDeleteFile();
+  const freeLocalSpace = useFreeLocalSpace();
   const [searchQuery, setSearchQuery] = useState('');
   const [filters, setFilters] = useState<SearchFilters>({ name: true, ocrText: true, tags: true });
   const [keyboardOpen, setKeyboardOpen] = useState(false);
@@ -153,14 +157,12 @@ export function HomeScreen() {
 
   const selectionMode = selectedIds.size > 0;
 
-  const files = data?.data ?? [];
+  const files = data ?? [];
 
   const filteredFiles = useMemo(
     () => searchQuery.trim() ? files.filter((f) => matchesQuery(f, searchQuery, filters)) : files,
     [files, searchQuery, filters]
   );
-
-  console.log(filteredFiles.map(f => f.tags))
 
   const groups = groupByTags ? groupByTag(filteredFiles) : groupByDate(filteredFiles);
   const groupKeys = Object.keys(groups);
@@ -208,6 +210,33 @@ export function HomeScreen() {
     );
   }, [selectedIds, deleteFile]);
 
+  const handleFreeSpace = useCallback(() => {
+    const ids = Array.from(selectedIds);
+    const syncedIds = ids.filter((id) => {
+      const f = files.find((fi) => fi.id === id);
+      return f?.syncStatus === 'synced';
+    });
+    if (syncedIds.length === 0) {
+      Alert.alert('Info', 'Aucun fichier avec copie locale sélectionné.');
+      return;
+    }
+    const label = syncedIds.length === 1 ? 'ce fichier' : `ces ${syncedIds.length} fichiers`;
+    Alert.alert(
+      'Libérer l\'espace',
+      `${label} sera supprimé de votre appareil mais restera disponible sur le serveur. Vous pourrez le re-télécharger ultérieurement.`,
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Libérer',
+          onPress: async () => {
+            await freeLocalSpace.mutateAsync(syncedIds);
+            setSelectedIds(new Set());
+          },
+        },
+      ]
+    );
+  }, [selectedIds, files, freeLocalSpace]);
+
   const handleEdit = useCallback(() => {
     const ids = Array.from(selectedIds);
     if (ids.length === 0) return;
@@ -240,7 +269,7 @@ export function HomeScreen() {
     setSelectedIds(new Set());
   }, [selectedIds, moveFiles]);
 
-  const handleItemPress = useCallback((file: FileItem) => {
+  const handleItemPress = useCallback((file: UnifiedFileItem) => {
     if (selectionMode) {
       toggleSelection(file.id);
     } else if (isFolder(file)) {
@@ -253,7 +282,7 @@ export function HomeScreen() {
     }
   }, [selectionMode, toggleSelection, navigation, filteredFiles, fileIdToIndex]);
 
-  const handleItemLongPress = useCallback((file: FileItem) => {
+  const handleItemLongPress = useCallback((file: UnifiedFileItem) => {
     if (!selectionMode) {
       toggleSelection(file.id);
     }
@@ -262,7 +291,19 @@ export function HomeScreen() {
   if (isLoading) {
     return (
       <View style={styles.center}>
-        <Text style={styles.infoText}>Chargement...</Text>
+        {!hasPermission ? (
+          <View style={styles.permissionBanner}>
+            <MaterialIcons name="photo-library" size={28} color="#1976D2" />
+            <Text style={styles.permissionText}>
+              Autorisez l'accès à vos photos pour les afficher ici
+            </Text>
+            <TouchableOpacity style={styles.permissionBtn} onPress={requestPermission}>
+              <Text style={styles.permissionBtnText}>Autoriser</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <Text style={styles.infoText}>Chargement...</Text>
+        )}
       </View>
     );
   }
@@ -281,6 +322,17 @@ export function HomeScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 96 : 0}
     >
+      {!hasPermission && (
+        <View style={styles.permissionBanner}>
+          <MaterialIcons name="photo-library" size={28} color="#1976D2" />
+          <Text style={styles.permissionText}>
+            Autorisez l'accès à vos photos pour les afficher ici
+          </Text>
+          <TouchableOpacity style={styles.permissionBtn} onPress={requestPermission}>
+            <Text style={styles.permissionBtnText}>Autoriser</Text>
+          </TouchableOpacity>
+        </View>
+      )}
       <FlatList
         data={groupKeys}
         keyExtractor={(item) => item}
@@ -386,6 +438,13 @@ export function HomeScreen() {
               <MaterialIcons name="drive-file-move" size={18} color="#00897B" />
               <Text style={[styles.chipText, { color: '#00897B' }]}>Déplacer</Text>
             </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.selectionChip, styles.freeSpaceChip]}
+              onPress={handleFreeSpace}
+            >
+              <MaterialIcons name="free-cancellation" size={18} color="#FF8F00" />
+              <Text style={[styles.chipText, { color: '#FF8F00' }]}>Libérer</Text>
+            </TouchableOpacity>
           </ScrollView>
         </View>
       ) : (
@@ -477,6 +536,30 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f5f5f5',
+  },
+  permissionBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E3F2FD',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    gap: 10,
+  },
+  permissionText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#333',
+  },
+  permissionBtn: {
+    backgroundColor: '#1976D2',
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  permissionBtnText: {
+    fontSize: 14,
+    color: '#fff',
+    fontWeight: '600',
   },
   center: {
     flex: 1,
@@ -625,6 +708,7 @@ const styles = StyleSheet.create({
   tagChip: { backgroundColor: '#F3E5F5' },
   folderChip: { backgroundColor: '#FFF3E0' },
   moveChip: { backgroundColor: '#E0F2F1' },
+  freeSpaceChip: { backgroundColor: '#FFF8E1' },
   folderOption: {
     flexDirection: 'row',
     alignItems: 'center',
