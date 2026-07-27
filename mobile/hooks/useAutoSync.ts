@@ -9,13 +9,6 @@ import { API_BASE_URL, ENDPOINTS } from '../constants/api';
 import { ApiError } from '../types';
 import { setIsSyncing } from './useSyncQueue';
 
-function canSyncFolder(folder: StoredFolder, netInfo: NetInfoState): boolean {
-  if (folder.syncMode !== 'auto') return false;
-  if (!netInfo.isConnected) return false;
-  if (!folder.syncCellular && netInfo.type !== 'wifi') return false;
-  return true;
-}
-
 interface UploadResult {
   name: string;
   id: string;
@@ -53,38 +46,52 @@ async function uploadFile(file: { uri: string; type: string; name: string }): Pr
   return item as UploadResult;
 }
 
+function canSyncBasedOnNetwork(netInfo: NetInfoState, cellularAllowed: boolean): boolean {
+  if (!netInfo.isConnected) return false;
+  if (!cellularAllowed && netInfo.type !== 'wifi') return false;
+  return true;
+}
+
 export function useAutoSync() {
   const queryClient = useQueryClient();
   const isRunning = useRef(false);
 
   const checkAndSync = useCallback(async () => {
     if (isRunning.current) return;
+
+    const globalMode = safDirectory.getGlobalSyncMode();
+    if (globalMode === 'off') return;
+
     isRunning.current = true;
 
     try {
-      const folders = safDirectory.getAll();
-      const autoFolders = folders.filter((f) => f.syncMode === 'auto');
-      if (autoFolders.length === 0) return;
-
+      const globalCellular = safDirectory.getGlobalSyncCellular();
       const netInfo = await NetInfo.fetch();
-      const eligible = autoFolders.filter((f) => canSyncFolder(f, netInfo));
-      if (eligible.length === 0) return;
 
-      const eligibleIds = new Set(eligible.map((f) => f.id));
+      if (!canSyncBasedOnNetwork(netInfo, globalCellular)) return;
+
       const registry = localFileRegistry.getAll();
-
-      const pendingFiles = registry.filter(
-        (entry) =>
-          !entry.backendFileId &&
-          entry.syncStatus === 'local' &&
-          entry.folderId &&
-          eligibleIds.has(entry.folderId) &&
-          entry.localUri
+      let pendingFiles = registry.filter(
+        (entry) => !entry.backendFileId && entry.syncStatus === 'local' && entry.localUri
       );
+
+      if (globalMode === 'auto') {
+        // Mode auto global : tous les fichiers locaux sans backendFileId
+        // (pas de filtre par dossier)
+      } else {
+        // Mode manuel : uniquement les fichiers des dossiers en mode auto
+        const allFolders = safDirectory.getAll();
+        const autoFolderIds = new Set(
+          allFolders.filter((f) => f.syncMode === 'auto').map((f) => f.id)
+        );
+        pendingFiles = pendingFiles.filter(
+          (entry) => entry.folderId && autoFolderIds.has(entry.folderId)
+        );
+      }
 
       if (pendingFiles.length === 0) return;
 
-      console.log(`[useAutoSync] upload de ${pendingFiles.length} fichier(s)`);
+      console.log(`[useAutoSync] mode=${globalMode}, upload de ${pendingFiles.length} fichier(s)`);
       setIsSyncing(true);
 
       for (const entry of pendingFiles) {

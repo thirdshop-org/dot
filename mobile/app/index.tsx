@@ -14,7 +14,7 @@ import { SettingsModal } from '../components/SettingsModal';
 import { SyncStatusIcon } from '../components/SyncStatusIcon';
 import { useSyncQueue } from '../hooks/useSyncQueue';
 import { useAutoSync } from '../hooks/useAutoSync';
-import { safDirectory, StoredFolder, SyncMode } from '../services/safDirectory';
+import { safDirectory, StoredFolder, SyncMode, SyncGlobalMode } from '../services/safDirectory';
 
 const NUM_COLUMNS = 3;
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -155,6 +155,8 @@ export function HomeScreen() {
   const { data: foldersData } = useFolders();
   const [moveModalVisible, setMoveModalVisible] = useState(false);
   const [settingsModalVisible, setSettingsModalVisible] = useState(false);
+  const [globalSyncMode, setGlobalSyncMode] = useState<SyncGlobalMode>(() => safDirectory.getGlobalSyncMode());
+  const [globalSyncCellular, setGlobalSyncCellular] = useState(() => safDirectory.getGlobalSyncCellular());
   const { pendingCount, isSyncing } = useSyncQueue();
   useAutoSync();
 
@@ -332,6 +334,16 @@ export function HomeScreen() {
     safDirectory.updateSyncCellular(folderId, enabled);
     refreshFolders();
   }, [refreshFolders]);
+
+  const handleSetGlobalSyncMode = useCallback((mode: SyncGlobalMode) => {
+    safDirectory.setGlobalSyncMode(mode);
+    setGlobalSyncMode(mode);
+  }, []);
+
+  const handleSetGlobalSyncCellular = useCallback((enabled: boolean) => {
+    safDirectory.setGlobalSyncCellular(enabled);
+    setGlobalSyncCellular(enabled);
+  }, []);
 
   const handleItemPress = useCallback((file: UnifiedFileItem) => {
     if (selectionMode) {
@@ -617,6 +629,10 @@ export function HomeScreen() {
         onAddFolder={handleAddFolder}
         onUpdateSyncMode={handleUpdateSyncMode}
         onUpdateSyncCellular={handleUpdateSyncCellular}
+        globalSyncMode={globalSyncMode}
+        onSetGlobalSyncMode={handleSetGlobalSyncMode}
+        globalSyncCellular={globalSyncCellular}
+        onSetGlobalSyncCellular={handleSetGlobalSyncCellular}
       />
     </KeyboardAvoidingView>
   );

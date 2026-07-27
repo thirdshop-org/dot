@@ -20,12 +20,9 @@ export function useSyncQueue() {
   const { folders } = useDeviceFiles();
 
   const refresh = useCallback(() => {
-    const allFolders = safDirectory.getAll();
-    const syncFolderIds = new Set(
-      allFolders.filter((f) => f.syncMode !== 'none').map((f) => f.id)
-    );
+    const globalMode = safDirectory.getGlobalSyncMode();
 
-    if (syncFolderIds.size === 0) {
+    if (globalMode === 'off') {
       setPendingCount(0);
       setIsSyncingState(getIsSyncing());
       return;
@@ -33,11 +30,21 @@ export function useSyncQueue() {
 
     const registry = localFileRegistry.getAll();
     let count = 0;
+
     for (const entry of registry) {
       if (entry.backendFileId) continue;
       if (entry.syncStatus !== 'local') continue;
-      if (entry.folderId && !syncFolderIds.has(entry.folderId)) continue;
-      count++;
+
+      if (globalMode === 'auto') {
+        count++;
+      } else {
+        // mode manuel : uniquement les fichiers des dossiers en mode auto
+        if (!entry.folderId) continue;
+        const folder = safDirectory.getAll().find((f) => f.id === entry.folderId);
+        if (folder && folder.syncMode === 'auto') {
+          count++;
+        }
+      }
     }
 
     setPendingCount(count);

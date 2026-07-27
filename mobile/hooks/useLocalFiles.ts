@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useEffect, useRef } from 'react';
 import { useDeviceFiles } from './useDeviceFiles';
 import { localFileRegistry } from '../services/localFileRegistry';
 import { LocalFileEntry } from '../types';
@@ -7,6 +7,23 @@ export function useLocalFiles() {
   const { files: deviceFiles, isLoading: deviceLoading, hasPermission, requestPermission, rescan, pickDirectory, folders, refreshFolders } = useDeviceFiles();
 
   const registryEntries = useMemo(() => localFileRegistry.getAll(), []);
+
+  useEffect(() => {
+    for (const df of deviceFiles) {
+      if (localFileRegistry.get(df.id)) continue;
+      const entry: LocalFileEntry = {
+        id: df.id,
+        localUri: df.uri,
+        name: df.name,
+        mimeType: df.mimeType,
+        size: df.size,
+        syncStatus: 'local',
+        createdAt: df.createdAt,
+        folderId: df.folderId,
+      };
+      localFileRegistry.register(entry);
+    }
+  }, [deviceFiles]);
 
   const localFiles = useMemo(() => {
     const merged = new Map<string, LocalFileEntry>();

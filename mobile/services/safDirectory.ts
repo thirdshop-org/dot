@@ -1,6 +1,7 @@
 import { createMMKV } from 'react-native-mmkv';
 
 export type SyncMode = 'none' | 'manual' | 'auto';
+export type SyncGlobalMode = 'off' | 'auto' | 'manual';
 
 export type StoredFolder = {
   id: string;
@@ -14,6 +15,8 @@ export type StoredFolder = {
 const storage = createMMKV({ id: 'vaultdrop-saf' });
 
 const FOLDERS_KEY = 'saf_folders';
+const SYNC_GLOBAL_MODE_KEY = 'sync_global_mode';
+const SYNC_GLOBAL_CELLULAR_KEY = 'sync_global_cellular';
 
 function generateId(): string {
   return `folder_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -86,6 +89,24 @@ export const safDirectory = {
       f.id === id ? { ...f, syncCellular } : f
     );
     saveAll(folders);
+  },
+
+  getGlobalSyncMode(): SyncGlobalMode {
+    const raw = storage.getString(SYNC_GLOBAL_MODE_KEY);
+    if (raw === 'auto' || raw === 'manual') return raw;
+    return 'off';
+  },
+
+  setGlobalSyncMode(mode: SyncGlobalMode) {
+    storage.set(SYNC_GLOBAL_MODE_KEY, mode);
+  },
+
+  getGlobalSyncCellular(): boolean {
+    return storage.getString(SYNC_GLOBAL_CELLULAR_KEY) === 'true';
+  },
+
+  setGlobalSyncCellular(enabled: boolean) {
+    storage.set(SYNC_GLOBAL_CELLULAR_KEY, enabled ? 'true' : 'false');
   },
 
   clear() {

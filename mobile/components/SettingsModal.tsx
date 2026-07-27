@@ -9,7 +9,7 @@ import {
   Alert,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { StoredFolder, SyncMode } from '../services/safDirectory';
+import { StoredFolder, SyncMode, SyncGlobalMode } from '../services/safDirectory';
 
 type SettingsView = 'menu' | 'folders' | 'sync';
 
@@ -22,12 +22,22 @@ interface SettingsModalProps {
   onAddFolder: () => void;
   onUpdateSyncMode: (folderId: string, mode: SyncMode) => void;
   onUpdateSyncCellular: (folderId: string, enabled: boolean) => void;
+  globalSyncMode: SyncGlobalMode;
+  onSetGlobalSyncMode: (mode: SyncGlobalMode) => void;
+  globalSyncCellular: boolean;
+  onSetGlobalSyncCellular: (enabled: boolean) => void;
 }
 
 const SYNC_MODES: { value: SyncMode; label: string; icon: string; color: string }[] = [
   { value: 'none', label: 'Aucun', icon: 'sync-disabled', color: '#999' },
   { value: 'manual', label: 'Manuel', icon: 'sync', color: '#1976D2' },
   { value: 'auto', label: 'Auto', icon: 'sync-problem', color: '#43A047' },
+];
+
+const GLOBAL_MODES: { value: SyncGlobalMode; label: string; description: string; icon: string; color: string }[] = [
+  { value: 'off', label: 'Désactivé', description: 'Aucun upload automatique', icon: 'sync-disabled', color: '#999' },
+  { value: 'auto', label: 'Automatique', description: 'Tout synchroniser automatiquement', icon: 'sync-problem', color: '#43A047' },
+  { value: 'manual', label: 'Par dossier', description: 'Choisir dossier par dossier', icon: 'tune', color: '#1976D2' },
 ];
 
 export function SettingsModal({
@@ -39,6 +49,10 @@ export function SettingsModal({
   onAddFolder,
   onUpdateSyncMode,
   onUpdateSyncCellular,
+  globalSyncMode,
+  onSetGlobalSyncMode,
+  globalSyncCellular,
+  onSetGlobalSyncCellular,
 }: SettingsModalProps) {
   const [view, setView] = useState<SettingsView>('menu');
 
@@ -103,6 +117,10 @@ export function SettingsModal({
               onBack={() => setView('menu')}
               onUpdateSyncMode={onUpdateSyncMode}
               onUpdateSyncCellular={onUpdateSyncCellular}
+              globalSyncMode={globalSyncMode}
+              onSetGlobalSyncMode={onSetGlobalSyncMode}
+              globalSyncCellular={globalSyncCellular}
+              onSetGlobalSyncCellular={onSetGlobalSyncCellular}
             />
           )}
         </TouchableOpacity>
@@ -209,11 +227,19 @@ function SyncView({
   onBack,
   onUpdateSyncMode,
   onUpdateSyncCellular,
+  globalSyncMode,
+  onSetGlobalSyncMode,
+  globalSyncCellular,
+  onSetGlobalSyncCellular,
 }: {
   folders: StoredFolder[];
   onBack: () => void;
   onUpdateSyncMode: (id: string, mode: SyncMode) => void;
   onUpdateSyncCellular: (id: string, enabled: boolean) => void;
+  globalSyncMode: SyncGlobalMode;
+  onSetGlobalSyncMode: (mode: SyncGlobalMode) => void;
+  globalSyncCellular: boolean;
+  onSetGlobalSyncCellular: (enabled: boolean) => void;
 }) {
   return (
     <ScrollView style={styles.viewContainer} showsVerticalScrollIndicator={false}>
@@ -225,74 +251,143 @@ function SyncView({
       </View>
 
       <Text style={styles.syncInfo}>
-        Configurez comment les fichiers de chaque dossier sont envoyés au serveur.
+        Choisissez comment vos fichiers sont envoyés au serveur.
       </Text>
 
-      {folders.length === 0 ? (
-        <Text style={styles.emptyText}>Aucun dossier configuré</Text>
-      ) : (
-        folders.map((folder) => (
-          <View key={folder.id} style={styles.syncFolderCard}>
-            <View style={styles.syncFolderHeader}>
-              <MaterialIcons name="folder" size={18} color="#F57C00" />
-              <Text style={styles.syncFolderName} numberOfLines={1}>
-                {folder.name}
+      <View style={styles.globalModeCard}>
+        <Text style={styles.sectionLabel}>Mode de synchronisation</Text>
+        {GLOBAL_MODES.map((mode) => (
+          <TouchableOpacity
+            key={mode.value}
+            style={[
+              styles.globalModeRow,
+              globalSyncMode === mode.value && styles.globalModeRowActive,
+            ]}
+            onPress={() => onSetGlobalSyncMode(mode.value)}
+          >
+            <MaterialIcons
+              name={globalSyncMode === mode.value ? 'radio-button-checked' : 'radio-button-unchecked'}
+              size={20}
+              color={globalSyncMode === mode.value ? mode.color : '#999'}
+            />
+            <View style={styles.globalModeTextContainer}>
+              <Text
+                style={[
+                  styles.globalModeLabel,
+                  globalSyncMode === mode.value && { color: mode.color },
+                ]}
+              >
+                {mode.label}
               </Text>
+              <Text style={styles.globalModeDescription}>{mode.description}</Text>
             </View>
+            <MaterialIcons
+              name={mode.icon as any}
+              size={20}
+              color={globalSyncMode === mode.value ? mode.color : '#ccc'}
+            />
+          </TouchableOpacity>
+        ))}
+      </View>
 
-            <View style={styles.radioGroup}>
-              {SYNC_MODES.map((mode) => (
-                <TouchableOpacity
-                  key={mode.value}
-                  style={[
-                    styles.radioBtn,
-                    folder.syncMode === mode.value && styles.radioBtnActive,
-                  ]}
-                  onPress={() => onUpdateSyncMode(folder.id, mode.value)}
-                >
-                  <MaterialIcons
-                    name={
-                      folder.syncMode === mode.value
-                        ? 'radio-button-checked'
-                        : 'radio-button-unchecked'
-                    }
-                    size={18}
-                    color={folder.syncMode === mode.value ? mode.color : '#999'}
-                  />
-                  <Text
-                    style={[
-                      styles.radioLabel,
-                      folder.syncMode === mode.value && { color: mode.color },
-                    ]}
-                  >
-                    {mode.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            {folder.syncMode !== 'none' && (
-              <View style={styles.cellularRow}>
-                <MaterialIcons name="cell-tower" size={18} color="#666" />
-                <Text style={styles.cellularLabel}>Réseau cellulaire</Text>
-                <TouchableOpacity
-                  style={[
-                    styles.toggleBtn,
-                    folder.syncCellular && styles.toggleBtnActive,
-                  ]}
-                  onPress={() => onUpdateSyncCellular(folder.id, !folder.syncCellular)}
-                >
-                  <View
-                    style={[
-                      styles.toggleDot,
-                      folder.syncCellular && styles.toggleDotActive,
-                    ]}
-                  />
-                </TouchableOpacity>
-              </View>
-            )}
+      {globalSyncMode === 'auto' && (
+        <View style={styles.cellularCard}>
+          <View style={styles.cellularRow}>
+            <MaterialIcons name="cell-tower" size={20} color="#666" />
+            <Text style={styles.cellularLabel}>Autoriser le réseau cellulaire</Text>
+            <TouchableOpacity
+              style={[
+                styles.toggleBtn,
+                globalSyncCellular && styles.toggleBtnActive,
+              ]}
+              onPress={() => onSetGlobalSyncCellular(!globalSyncCellular)}
+            >
+              <View
+                style={[
+                  styles.toggleDot,
+                  globalSyncCellular && styles.toggleDotActive,
+                ]}
+              />
+            </TouchableOpacity>
           </View>
-        ))
+          <Text style={styles.cellularHint}>
+            {globalSyncCellular
+              ? 'Upload via WiFi et données mobiles'
+              : 'Upload uniquement en WiFi'}
+          </Text>
+        </View>
+      )}
+
+      {globalSyncMode === 'manual' && (
+        <View style={styles.perFolderSection}>
+          <Text style={styles.sectionLabel}>Configuration par dossier</Text>
+          {folders.length === 0 ? (
+            <Text style={styles.emptyText}>Aucun dossier configuré</Text>
+          ) : (
+            folders.map((folder) => (
+              <View key={folder.id} style={styles.syncFolderCard}>
+                <View style={styles.syncFolderHeader}>
+                  <MaterialIcons name="folder" size={18} color="#F57C00" />
+                  <Text style={styles.syncFolderName} numberOfLines={1}>
+                    {folder.name}
+                  </Text>
+                </View>
+
+                <View style={styles.radioGroup}>
+                  {SYNC_MODES.map((mode) => (
+                    <TouchableOpacity
+                      key={mode.value}
+                      style={[
+                        styles.radioBtn,
+                        folder.syncMode === mode.value && styles.radioBtnActive,
+                      ]}
+                      onPress={() => onUpdateSyncMode(folder.id, mode.value)}
+                    >
+                      <MaterialIcons
+                        name={
+                          folder.syncMode === mode.value
+                            ? 'radio-button-checked'
+                            : 'radio-button-unchecked'
+                        }
+                        size={18}
+                        color={folder.syncMode === mode.value ? mode.color : '#999'}
+                      />
+                      <Text
+                        style={[
+                          styles.radioLabel,
+                          folder.syncMode === mode.value && { color: mode.color },
+                        ]}
+                      >
+                        {mode.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                {folder.syncMode !== 'none' && (
+                  <View style={styles.cellularRow}>
+                    <MaterialIcons name="cell-tower" size={18} color="#666" />
+                    <Text style={styles.cellularLabel}>Réseau cellulaire</Text>
+                    <TouchableOpacity
+                      style={[
+                        styles.toggleBtn,
+                        folder.syncCellular && styles.toggleBtnActive,
+                      ]}
+                      onPress={() => onUpdateSyncCellular(folder.id, !folder.syncCellular)}
+                    >
+                      <View
+                        style={[
+                          styles.toggleDot,
+                          folder.syncCellular && styles.toggleDotActive,
+                        ]}
+                      />
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+            ))
+          )}
+        </View>
       )}
     </ScrollView>
   );
@@ -420,6 +515,72 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     lineHeight: 18,
   },
+  globalModeCard: {
+    backgroundColor: '#fafafa',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 12,
+  },
+  sectionLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#666',
+    marginBottom: 10,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  globalModeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    gap: 10,
+    borderRadius: 8,
+    marginBottom: 4,
+  },
+  globalModeRowActive: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  globalModeTextContainer: {
+    flex: 1,
+  },
+  globalModeLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#333',
+  },
+  globalModeDescription: {
+    fontSize: 12,
+    color: '#999',
+    marginTop: 2,
+  },
+  cellularCard: {
+    backgroundColor: '#fafafa',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 12,
+  },
+  cellularRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  cellularLabel: {
+    flex: 1,
+    fontSize: 14,
+    color: '#333',
+  },
+  cellularHint: {
+    fontSize: 12,
+    color: '#999',
+    marginTop: 6,
+    marginLeft: 28,
+  },
+  perFolderSection: {
+    marginTop: 4,
+  },
   syncFolderCard: {
     backgroundColor: '#fafafa',
     borderRadius: 10,
@@ -463,19 +624,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: '#999',
-  },
-  cellularRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingTop: 6,
-    borderTopWidth: 1,
-    borderTopColor: '#e8e8e8',
-  },
-  cellularLabel: {
-    flex: 1,
-    fontSize: 13,
-    color: '#666',
   },
   toggleBtn: {
     width: 44,
