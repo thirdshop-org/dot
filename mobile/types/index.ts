@@ -8,13 +8,17 @@ export interface Thumbnail {
   mimeType: string;
 }
 
-export interface FileItem {
+export interface UnifiedFileItem {
   id: string;
+  backendFileId?: string;
   name: string;
   mimeType: string;
   size: number;
   createdAt: string;
-  updatedAt: string;
+  updatedAt?: string;
+  source: 'cloud' | 'local' | 'synced';
+  syncStatus: SyncStatus;
+  localUri?: string;
   ocrText?: string;
   tags: Tag[];
   isFolder: boolean;
@@ -22,9 +26,12 @@ export interface FileItem {
   url?: string;
   thumbnailUrl?: string;
   thumbnails?: Thumbnail[];
+  isDeviceFile?: boolean;
 }
 
-export function isFolder(file: FileItem | { isFolder: boolean }): boolean {
+export type FileItem = UnifiedFileItem;
+
+export function isFolder(file: UnifiedFileItem | { isFolder: boolean }): boolean {
   return file.isFolder;
 }
 
@@ -118,16 +125,3 @@ export interface RefreshResponse {
 }
 
 export type SyncStatus = 'local' | 'syncing' | 'synced' | 'cloud' | 'conflict';
-
-export interface LocalFileEntry {
-  id: string;
-  backendFileId?: string;
-  localUri: string;
-  name: string;
-  mimeType: string;
-  size: number;
-  syncStatus: SyncStatus;
-  createdAt: string;
-  tags?: Tag[];
-  folderId?: string;
-}

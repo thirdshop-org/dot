@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { File, UploadType } from 'expo-file-system';
 import NetInfo, { NetInfoState } from '@react-native-community/netinfo';
 import { safDirectory, StoredFolder } from '../services/safDirectory';
-import { localFileRegistry } from '../services/localFileRegistry';
+import { fileStore } from '../services/fileStore';
 import { apiClient } from '../api/client';
 import { API_BASE_URL, ENDPOINTS } from '../constants/api';
 import { ApiError } from '../types';
@@ -70,13 +70,13 @@ export function useAutoSync() {
 
       if (!canSyncBasedOnNetwork(netInfo, globalCellular)) return;
 
-      const registry = localFileRegistry.getAll();
+      const registry = fileStore.getAllLocal();
       let pendingFiles = registry.filter(
-        (entry) => !entry.backendFileId && entry.syncStatus === 'local' && entry.localUri
+        (entry) => !entry.backendId && entry.syncStatus === 'local' && entry.localUri
       );
 
       if (globalMode === 'auto') {
-        // Mode auto global : tous les fichiers locaux sans backendFileId
+        // Mode auto global : tous les fichiers locaux sans backendId
         // (pas de filtre par dossier)
       } else {
         // Mode manuel : uniquement les fichiers des dossiers en mode auto
@@ -85,7 +85,7 @@ export function useAutoSync() {
           allFolders.filter((f) => f.syncMode === 'auto').map((f) => f.id)
         );
         pendingFiles = pendingFiles.filter(
-          (entry) => entry.folderId && autoFolderIds.has(entry.folderId)
+          (entry) => entry.parentFileId && autoFolderIds.has(entry.parentFileId)
         );
       }
 
@@ -96,15 +96,15 @@ export function useAutoSync() {
       for (const entry of pendingFiles) {
         try {
           const uploaded = await uploadFile({
-            uri: entry.localUri,
+            uri: entry.localUri!,
             type: entry.mimeType,
             name: entry.name,
           });
 
-          localFileRegistry.register({
-            ...entry,
-            backendFileId: uploaded.id,
+          fileStore.updatePartial(entry.id, {
+            backendId: uploaded.id,
             syncStatus: 'synced',
+            source: 'synced',
           });
         } catch (err) {
           // upload failed, will retry on next cycle

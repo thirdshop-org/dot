@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { ActivityIndicator, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { LoginScreen } from './app/login';
 import { RegisterScreen } from './app/register';
@@ -20,9 +21,22 @@ import { FolderScreen } from './app/folder';
 import { OnboardingScreen } from './app/onboarding';
 import { SyncDetailScreen } from './app/sync-detail';
 import { onboardingStorage } from './services/onboardingStorage';
+import { initDB } from './services/fileStore';
+import { migrateFromLegacy } from './services/fileStore/migrate';
+import { createMMKVPersister } from './services/mmkvPersister';
+
+initDB();
+migrateFromLegacy();
 
 const Stack = createNativeStackNavigator();
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      gcTime: 1000 * 60 * 60 * 24, // 24h
+    },
+  },
+});
+const persister = createMMKVPersister();
 
 function AppNavigator() {
   const { user, isLoading } = useAuth();
@@ -83,12 +97,18 @@ function AppNavigator() {
 export default function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <QueryClientProvider client={queryClient}>
+      <PersistQueryClientProvider
+        client={queryClient}
+        persistOptions={{
+          persister,
+          maxAge: 1000 * 60 * 60 * 24, // 24h
+        }}
+      >
         <AuthProvider>
           <AppNavigator />
           <StatusBar style="auto" />
         </AuthProvider>
-      </QueryClientProvider>
+      </PersistQueryClientProvider>
     </GestureHandlerRootView>
   );
 }

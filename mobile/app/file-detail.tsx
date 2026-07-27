@@ -14,9 +14,8 @@ import {
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { RouteProp, useRoute } from '@react-navigation/native';
-import { useFile, useFileImage } from '../hooks/useFiles';
-import { useDownloadFile } from '../hooks/useUnifiedFiles';
-import { localFileRegistry } from '../services/localFileRegistry';
+import { useFile, useFileImage, useDownloadFile } from '../hooks/useFiles';
+import { fileStore } from '../services/fileStore';
 import { TagChip } from '../components/TagChip';
 import { FileThumbnail } from '../components/FileThumbnail';
 import { SyncStatusBadge } from '../components/SyncStatusBadge';
@@ -53,7 +52,7 @@ function DetailItem({ fileId, deviceFile, onSelectImage }: { fileId: string; dev
   const uri = isDevice ? deviceFile.localUri : (imageData?.data?.url);
   const file = fileData as any;
 
-  const localEntry = localFileRegistry.getByBackendId(fileId);
+  const localEntry = fileStore.getByBackendId(fileId);
   const syncStatus: SyncStatus = isDevice
     ? 'local'
     : localEntry
@@ -77,6 +76,7 @@ function DetailItem({ fileId, deviceFile, onSelectImage }: { fileId: string; dev
         mimeType: file.mimeType ?? 'application/octet-stream',
         size: file.data?.size ?? 0,
         createdAt: file.createdAt ?? new Date().toISOString(),
+        source: 'cloud',
         syncStatus: 'cloud',
         tags: file.data?.tags ?? [],
         isFolder: false,

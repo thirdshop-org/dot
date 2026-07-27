@@ -3,11 +3,16 @@ import { View, FlatList, StyleSheet, TouchableOpacity, Text, Dimensions, Alert }
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useDeleteFile, useFileImage } from '../hooks/useFiles';
-import { useUnifiedFilesByParent } from '../hooks/useUnifiedFiles';
-import { UnifiedFileItem } from '../hooks/useUnifiedFiles';
+import { useDeleteFile, useFileImage, useFiles, useFreeLocalSpace } from '../hooks/useFiles';
+import { UnifiedFileItem } from '../types';
 import { isFolder } from '../types';
 import { FileThumbnail } from '../components/FileThumbnail';
+import { fileStore } from '../services/fileStore';
+import { downloadRegistry } from '../services/downloadRegistry';
+import { apiClient } from '../api/client';
+import { ENDPOINTS } from '../constants/api';
+import { useQueryClient } from '@tanstack/react-query';
+import { deleteAsync } from 'expo-file-system/legacy';
 
 const NUM_COLUMNS = 3;
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -65,8 +70,10 @@ export function FolderScreen() {
   const route = useRoute<FolderRouteProp>();
   const navigation = useNavigation<NavigationProp>();
   const { folderId, folderName } = route.params;
-  const { data, isLoading } = useUnifiedFilesByParent(folderId);
+  const { data, isLoading } = useFiles(folderId);
   const deleteFile = useDeleteFile();
+  const freeLocalSpace = useFreeLocalSpace();
+  const queryClient = useQueryClient();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const selectionMode = selectedIds.size > 0;
@@ -76,7 +83,7 @@ export function FolderScreen() {
   }, [navigation, folderName]);
 
   const files = useMemo(() => {
-    return data ?? [];
+    return data?.data ?? [];
   }, [data]);
 
   const fileIdToIndex = useMemo(() => {
@@ -99,26 +106,54 @@ export function FolderScreen() {
   }, []);
 
   const handleDelete = useCallback(() => {
-    const count = selectedIds.size;
-    if (count === 0) return;
-    Alert.alert(
-      'Supprimer',
-      `Supprimer ${count === 1 ? 'ce fichier' : `ces ${count} fichiers`} ?`,
-      [
-        { text: 'Annuler', style: 'cancel' },
-        {
-          text: 'Supprimer',
-          style: 'destructive',
-          onPress: async () => {
-            for (const id of selectedIds) {
-              await deleteFile.mutateAsync(id);
-            }
-            setSelectedIds(new Set());
-          },
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    const hasSynced = ids.some((id) => {
+      const f = files.find((fi) => fi.id === id);
+      return f?.syncStatus === 'synced';
+    });
+    const label = ids.length === 1 ? 'ce fichier' : `ces ${ids.length} fichiers`;
+    const options: Array<{ text: string; style?: 'default' | 'cancel' | 'destructive'; onPress?: () => void }> = [
+      { text: 'Annuler', style: 'cancel' },
+    ];
+    if (hasSynced) {
+      options.push({
+        text: 'Du device uniquement',
+        onPress: async () => {
+          const syncedIds = ids.filter((id) => {
+            const f = files.find((fi) => fi.id === id);
+            return f?.syncStatus === 'synced';
+          });
+          if (syncedIds.length > 0) {
+            await freeLocalSpace.mutateAsync(syncedIds);
+          }
+          setSelectedIds(new Set());
         },
-      ]
-    );
-  }, [selectedIds, deleteFile]);
+      });
+    }
+    options.push({
+      text: 'Du device + serveur',
+      style: 'destructive',
+      onPress: async () => {
+        for (const id of ids) {
+          const f = files.find((fi) => fi.id === id);
+          if (f?.backendFileId) {
+            await apiClient.delete(`${ENDPOINTS.FILES}/${f.backendFileId}`);
+            fileStore.deleteByBackendId(f.backendFileId);
+          } else {
+            fileStore.deleteById(id);
+          }
+          if (f?.localUri) {
+            try { await deleteAsync(f.localUri, { idempotent: true }); } catch {}
+          }
+          downloadRegistry.remove(id);
+        }
+        await queryClient.invalidateQueries({ queryKey: ['files'] });
+        setSelectedIds(new Set());
+      },
+    });
+    Alert.alert('Supprimer', `Supprimer ${label} ?`, options);
+  }, [selectedIds, files, deleteFile, freeLocalSpace, queryClient]);
 
   const handleItemPress = useCallback((file: UnifiedFileItem) => {
     if (selectionMode) {

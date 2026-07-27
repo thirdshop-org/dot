@@ -4,10 +4,8 @@ import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useDeleteFile, useAddTags, useMoveFiles, useFolders } from '../hooks/useFiles';
-import { useUnifiedFiles, useFreeLocalSpace } from '../hooks/useUnifiedFiles';
-import { UnifiedFileItem } from '../hooks/useUnifiedFiles';
-import { FileItem, isFolder } from '../types';
+import { useDeleteFile, useAddTags, useMoveFiles, useFolders, useFiles, useFreeLocalSpace } from '../hooks/useFiles';
+import { UnifiedFileItem, isFolder } from '../types';
 import { SearchBar, SearchFilters } from '../components/SearchBar';
 import { FileThumbnail } from '../components/FileThumbnail';
 import { SettingsModal } from '../components/SettingsModal';
@@ -15,6 +13,13 @@ import { SyncStatusIcon } from '../components/SyncStatusIcon';
 import { useSyncQueue } from '../hooks/useSyncQueue';
 import { useAutoSync } from '../hooks/useAutoSync';
 import { safDirectory, StoredFolder, SyncMode, SyncGlobalMode } from '../services/safDirectory';
+import { fileStore } from '../services/fileStore';
+import { downloadRegistry } from '../services/downloadRegistry';
+import { useQueryClient } from '@tanstack/react-query';
+import { apiClient } from '../api/client';
+import { ENDPOINTS } from '../constants/api';
+import { useLocalFiles } from '../hooks/useLocalFiles';
+import { deleteAsync } from 'expo-file-system/legacy';
 
 const NUM_COLUMNS = 3;
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -157,9 +162,11 @@ function matchesQuery(file: UnifiedFileItem, query: string, filters: SearchFilte
 export function HomeScreen() {
   const navigation = useNavigation<NavigationProp>();
   const insets = useSafeAreaInsets();
-  const { data, isLoading, error, hasPermission, requestPermission, pickDirectory, folders, refreshFolders } = useUnifiedFiles();
+  const { data, isLoading, error } = useFiles();
+  const { hasPermission, requestPermission, pickDirectory, folders, refreshFolders } = useLocalFiles();
   const deleteFile = useDeleteFile();
   const freeLocalSpace = useFreeLocalSpace();
+  const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
   const [filters, setFilters] = useState<SearchFilters>({ name: true, ocrText: true, tags: true });
   const [keyboardOpen, setKeyboardOpen] = useState(false);
@@ -203,7 +210,7 @@ export function HomeScreen() {
 
   const selectionMode = selectedIds.size > 0;
 
-  const files = data ?? [];
+  const files = data?.data ?? [];
 
   const filteredFiles = useMemo(
     () => searchQuery.trim() ? files.filter((f) => matchesQuery(f, searchQuery, filters)) : files,
@@ -233,55 +240,54 @@ export function HomeScreen() {
   }, []);
 
   const handleDelete = useCallback(() => {
-    const count = selectedIds.size;
-    if (count === 0) return;
-    const label = count === 1 ? 'ce fichier' : `ces ${count} fichiers`;
-    Alert.alert(
-      'Supprimer',
-      `Supprimer ${label} ?`,
-      [
-        { text: 'Annuler', style: 'cancel' },
-        {
-          text: 'Supprimer',
-          style: 'destructive',
-          onPress: async () => {
-            const ids = Array.from(selectedIds);
-            for (const id of ids) {
-              await deleteFile.mutateAsync(id);
-            }
-            setSelectedIds(new Set());
-          },
-        },
-      ]
-    );
-  }, [selectedIds, deleteFile]);
-
-  const handleFreeSpace = useCallback(() => {
     const ids = Array.from(selectedIds);
-    const syncedIds = ids.filter((id) => {
+    if (ids.length === 0) return;
+    const hasSynced = ids.some((id) => {
       const f = files.find((fi) => fi.id === id);
       return f?.syncStatus === 'synced';
     });
-    if (syncedIds.length === 0) {
-      Alert.alert('Info', 'Aucun fichier avec copie locale sélectionné.');
-      return;
-    }
-    const label = syncedIds.length === 1 ? 'ce fichier' : `ces ${syncedIds.length} fichiers`;
-    Alert.alert(
-      'Libérer l\'espace',
-      `${label} sera supprimé de votre appareil mais restera disponible sur le serveur. Vous pourrez le re-télécharger ultérieurement.`,
-      [
-        { text: 'Annuler', style: 'cancel' },
-        {
-          text: 'Libérer',
-          onPress: async () => {
+    const label = ids.length === 1 ? 'ce fichier' : `ces ${ids.length} fichiers`;
+    const options: Array<{ text: string; style?: 'default' | 'cancel' | 'destructive'; onPress?: () => void }> = [
+      { text: 'Annuler', style: 'cancel' },
+    ];
+    if (hasSynced) {
+      options.push({
+        text: 'Du device uniquement',
+        onPress: async () => {
+          const syncedIds = ids.filter((id) => {
+            const f = files.find((fi) => fi.id === id);
+            return f?.syncStatus === 'synced';
+          });
+          if (syncedIds.length > 0) {
             await freeLocalSpace.mutateAsync(syncedIds);
-            setSelectedIds(new Set());
-          },
+          }
+          setSelectedIds(new Set());
         },
-      ]
-    );
-  }, [selectedIds, files, freeLocalSpace]);
+      });
+    }
+    options.push({
+      text: 'Du device + serveur',
+      style: 'destructive',
+      onPress: async () => {
+        for (const id of ids) {
+          const f = files.find((fi) => fi.id === id);
+          if (f?.backendFileId) {
+            await apiClient.delete(`${ENDPOINTS.FILES}/${f.backendFileId}`);
+            fileStore.deleteByBackendId(f.backendFileId);
+          } else {
+            fileStore.deleteById(id);
+          }
+          if (f?.localUri) {
+            try { await deleteAsync(f.localUri, { idempotent: true }); } catch {}
+          }
+          downloadRegistry.remove(id);
+        }
+        await queryClient.invalidateQueries({ queryKey: ['files'] });
+        setSelectedIds(new Set());
+      },
+    });
+    Alert.alert('Supprimer', `Supprimer ${label} ?`, options);
+  }, [selectedIds, files, deleteFile, freeLocalSpace, queryClient]);
 
   const handleEdit = useCallback(() => {
     const ids = Array.from(selectedIds);
@@ -542,13 +548,6 @@ export function HomeScreen() {
               <MaterialIcons name="drive-file-move" size={18} color="#00897B" />
               <Text style={[styles.chipText, { color: '#00897B' }]}>Déplacer</Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.selectionChip, styles.freeSpaceChip]}
-              onPress={handleFreeSpace}
-            >
-              <MaterialIcons name="free-cancellation" size={18} color="#FF8F00" />
-              <Text style={[styles.chipText, { color: '#FF8F00' }]}>Libérer</Text>
-            </TouchableOpacity>
           </ScrollView>
         </View>
       ) : (
@@ -619,7 +618,7 @@ export function HomeScreen() {
               <MaterialIcons name="home" size={20} color="#666" />
               <Text style={styles.folderOptionText}>Racine</Text>
             </TouchableOpacity>
-            {(foldersData?.data ?? []).map((folder) => (
+            {(foldersData ?? []).map((folder) => (
               <TouchableOpacity
                 key={folder.id}
                 style={styles.folderOption}
@@ -840,7 +839,6 @@ const styles = StyleSheet.create({
   tagChip: { backgroundColor: '#F3E5F5' },
   folderChip: { backgroundColor: '#FFF3E0' },
   moveChip: { backgroundColor: '#E0F2F1' },
-  freeSpaceChip: { backgroundColor: '#FFF8E1' },
   folderOption: {
     flexDirection: 'row',
     alignItems: 'center',

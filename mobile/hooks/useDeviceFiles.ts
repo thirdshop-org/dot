@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import * as MediaLibrary from 'expo-media-library/legacy';
 import * as FileSystem from 'expo-file-system/legacy';
-import { LocalFileEntry } from '../types';
 import { safDirectory, type StoredFolder } from '../services/safDirectory';
 import { downloadRegistry } from '../services/downloadRegistry';
 import { useFileWatcher } from './useFileWatcher';
@@ -238,14 +237,3 @@ export function useDeviceFiles() {
   return { files, isLoading, hasPermission, requestPermission, rescan, pickDirectory, folders, refreshFolders };
 }
 
-export function deviceFileToLocalEntry(deviceFile: DeviceFile): LocalFileEntry {
-  return {
-    id: deviceFile.id,
-    localUri: deviceFile.uri,
-    name: deviceFile.name,
-    mimeType: deviceFile.mimeType,
-    size: deviceFile.size,
-    syncStatus: 'local',
-    createdAt: deviceFile.createdAt,
-  };
-}

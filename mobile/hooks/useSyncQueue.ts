@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { createMMKV } from 'react-native-mmkv';
-import { localFileRegistry } from '../services/localFileRegistry';
+import { fileStore } from '../services/fileStore';
 import { safDirectory } from '../services/safDirectory';
 import { useDeviceFiles } from './useDeviceFiles';
 
@@ -28,19 +28,16 @@ export function useSyncQueue() {
       return;
     }
 
-    const registry = localFileRegistry.getAll();
+    const registry = fileStore.getPendingSync();
     let count = 0;
 
     for (const entry of registry) {
-      if (entry.backendFileId) continue;
-      if (entry.syncStatus !== 'local') continue;
-
       if (globalMode === 'auto') {
         count++;
       } else {
         // mode manuel : uniquement les fichiers des dossiers en mode auto
-        if (!entry.folderId) continue;
-        const folder = safDirectory.getAll().find((f) => f.id === entry.folderId);
+        if (!entry.parentFileId) continue;
+        const folder = safDirectory.getAll().find((f) => f.id === entry.parentFileId);
         if (folder && folder.syncMode === 'auto') {
           count++;
         }

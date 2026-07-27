@@ -9,10 +9,9 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import { localFileRegistry } from '../services/localFileRegistry';
+import { fileStore, FileRecord } from '../services/fileStore';
 import { safDirectory } from '../services/safDirectory';
 import { useSyncQueue } from '../hooks/useSyncQueue';
-import { LocalFileEntry } from '../types';
 
 function formatSize(bytes: number): string {
   if (bytes === 0) return '';
@@ -26,9 +25,7 @@ export function SyncDetailScreen() {
   const { pendingCount, isSyncing, refresh } = useSyncQueue();
 
   const pendingFiles = useMemo(() => {
-    return localFileRegistry.getAll().filter(
-      (entry) => !entry.backendFileId && entry.syncStatus === 'local'
-    );
+    return fileStore.getPendingSync();
   }, []);
 
   const handleSyncAll = useCallback(() => {
@@ -36,7 +33,7 @@ export function SyncDetailScreen() {
     console.log(`[SyncDetail] sync demandé pour ${pendingFiles.length} fichiers`);
   }, [pendingFiles.length]);
 
-  const renderItem = useCallback(({ item }: { item: LocalFileEntry }) => (
+  const renderItem = useCallback(({ item }: { item: FileRecord }) => (
     <View style={styles.fileRow}>
       <MaterialIcons name="insert-drive-file" size={20} color="#999" />
       <View style={styles.fileInfo}>

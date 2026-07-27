@@ -1,7 +1,7 @@
 import { useMemo, useEffect, useRef } from 'react';
 import { useDeviceFiles } from './useDeviceFiles';
-import { localFileRegistry } from '../services/localFileRegistry';
-import { LocalFileEntry } from '../types';
+import { fileStore } from '../services/fileStore';
+import { UnifiedFileItem } from '../types';
 
 export function useLocalFiles() {
   const { files: deviceFiles, isLoading: deviceLoading, hasPermission, requestPermission, rescan, pickDirectory, folders, refreshFolders } = useDeviceFiles();
@@ -12,44 +12,56 @@ export function useLocalFiles() {
     if (deviceFiles.length === lastDeviceCount.current) return;
     lastDeviceCount.current = deviceFiles.length;
 
-    const newEntries: LocalFileEntry[] = [];
-    for (const df of deviceFiles) {
-      if (localFileRegistry.get(df.id)) continue;
-      newEntries.push({
+    fileStore.mergeFromDevice(
+      deviceFiles.map((df) => ({
         id: df.id,
-        localUri: df.uri,
+        uri: df.uri,
         name: df.name,
         mimeType: df.mimeType,
         size: df.size,
-        syncStatus: 'local',
         createdAt: df.createdAt,
         folderId: df.folderId,
-      });
-    }
-    if (newEntries.length > 0) {
-      localFileRegistry.registerBatch(newEntries);
-    }
+      })),
+    );
   }, [deviceFiles]);
 
   const localFiles = useMemo(() => {
-    const registryEntries = localFileRegistry.getAll();
-    const merged = new Map<string, LocalFileEntry>();
+    const registryEntries = fileStore.getAllLocal();
+    const merged = new Map<string, UnifiedFileItem>();
 
     for (const entry of registryEntries) {
-      merged.set(entry.id, entry);
+      merged.set(entry.id, {
+        id: entry.id,
+        backendFileId: entry.backendId ?? undefined,
+        name: entry.name,
+        mimeType: entry.mimeType,
+        size: entry.size,
+        createdAt: entry.createdAt,
+        source: entry.source as UnifiedFileItem['source'],
+        syncStatus: entry.syncStatus as UnifiedFileItem['syncStatus'],
+        localUri: entry.localUri ?? undefined,
+        tags: entry.tags ?? [],
+        isFolder: entry.isFolder === 1,
+        parentFileId: entry.parentFileId ?? undefined,
+        isDeviceFile: entry.source === 'local' && !entry.backendId,
+      });
     }
 
     for (const df of deviceFiles) {
-      if (!merged.has(df.id)) {
+      if (!merged.has(df.id) && !fileStore.isDeleted(df.id)) {
         merged.set(df.id, {
           id: df.id,
-          localUri: df.uri,
           name: df.name,
           mimeType: df.mimeType,
           size: df.size,
-          syncStatus: 'local',
           createdAt: df.createdAt,
-          folderId: df.folderId,
+          source: 'local',
+          syncStatus: 'local',
+          localUri: df.uri,
+          tags: [],
+          isFolder: false,
+          isDeviceFile: true,
+          parentFileId: df.folderId,
         });
       }
     }

@@ -1,10 +1,8 @@
 import { useCallback, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { downloadAsync, documentDirectory, makeDirectoryAsync } from 'expo-file-system/legacy';
-import { useFiles } from './useFiles';
-import { localFileRegistry } from '../services/localFileRegistry';
+import { fileStore } from '../services/fileStore';
 import { apiClient } from '../api/client';
-import { LocalFileEntry } from '../types';
 import { setIsSyncing } from './useSyncQueue';
 
 const SYNC_DIR = `${documentDirectory}synced-files/`;
@@ -30,9 +28,9 @@ export function usePullSync() {
       }> }>('/files?page=1&limit=100&thumbnail=thumbnail');
 
       const backendFiles = res.data ?? [];
-      const registry = localFileRegistry.getAll();
+      const registry = fileStore.getAllSynced();
       const existingBackendIds = new Set(
-        registry.filter((e) => e.backendFileId).map((e) => e.backendFileId)
+        registry.filter((e) => e.backendId).map((e) => e.backendId)
       );
 
       let pulled = 0;
@@ -51,17 +49,23 @@ export function usePullSync() {
 
           const result = await downloadAsync(downloadUrl, fileUri);
 
-          const entry: LocalFileEntry = {
-            id: `pull_${bf.id}`,
-            backendFileId: bf.id,
-            localUri: result.uri,
+          fileStore.upsert({
+            id: bf.id,
+            backendId: bf.id,
             name: bf.name,
             mimeType: bf.mimeType,
             size: bf.size,
+            source: 'synced',
+            localUri: result.uri,
             syncStatus: 'synced',
+            parentFileId: null,
+            isFolder: 0,
+            ocrText: null,
+            thumbnailUrl: null,
             createdAt: bf.createdAt,
-          };
-          localFileRegistry.register(entry);
+            updatedAt: bf.createdAt,
+            lastSyncedAt: new Date().toISOString(),
+          });
           pulled++;
         } catch {
           // skip individual file failures
