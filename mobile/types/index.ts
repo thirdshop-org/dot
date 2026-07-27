@@ -129,4 +129,5 @@ export interface LocalFileEntry {
   syncStatus: SyncStatus;
   createdAt: string;
   tags?: Tag[];
+  folderId?: string;
 }

@@ -25,6 +25,7 @@ export function useLocalFiles() {
           size: df.size,
           syncStatus: 'local',
           createdAt: df.createdAt,
+          folderId: df.folderId,
         });
       }
     }

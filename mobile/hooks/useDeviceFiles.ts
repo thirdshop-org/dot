@@ -180,7 +180,7 @@ export function useDeviceFiles() {
       safDirectory.addFolder(dirUri, dirName);
       setFolders(safDirectory.getAll());
 
-      const folderFiles = await scanSafFolder({ id: 'new', uri: dirUri, name: dirName, visible: true });
+      const folderFiles = await scanSafFolder({ id: 'new', uri: dirUri, name: dirName, visible: true, syncMode: 'none', syncCellular: false });
       setFiles((prev) => {
         const existing = new Set(prev.map((f) => f.id));
         const merged = [...prev];

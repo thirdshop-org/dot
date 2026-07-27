@@ -28,7 +28,7 @@ export function OnboardingScreen() {
 
   const complete = useCallback(() => {
     onboardingStorage.setCompletedVersion(CURRENT_ONBOARDING_VERSION);
-    navigation.navigate('Home' as never);
+    navigation.reset({ index: 0, routes: [{ name: 'Home' as never }] });
   }, [navigation]);
 
   const handlePickDirectory = useCallback(async () => {

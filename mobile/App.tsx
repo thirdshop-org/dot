@@ -18,6 +18,7 @@ import { FileDetailScreen } from './app/file-detail';
 import { FileEditScreen } from './app/file-edit';
 import { FolderScreen } from './app/folder';
 import { OnboardingScreen } from './app/onboarding';
+import { SyncDetailScreen } from './app/sync-detail';
 import { onboardingStorage } from './services/onboardingStorage';
 
 const Stack = createNativeStackNavigator();
@@ -66,6 +67,7 @@ function AppNavigator() {
             />
             <Stack.Screen name="FileEdit" component={FileEditScreen} options={{ title: 'Édition' }} />
             <Stack.Screen name="Folder" component={FolderScreen} options={{ title: 'Dossier' }} />
+            <Stack.Screen name="SyncDetail" component={SyncDetailScreen} options={{ title: 'Synchronisation' }} />
           </>
         ) : (
           <>
