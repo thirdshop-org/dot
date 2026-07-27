@@ -44,7 +44,8 @@
           "photosPermission": "VaultDrop a besoin d'accéder à vos photos pour les afficher et les organiser.",
           "videosPermission": "VaultDrop a besoin d'accéder à vos vidéos pour les afficher et les organiser."
         }
-      ]
+      ],
+      "expo-image"
     ]
   }
 }

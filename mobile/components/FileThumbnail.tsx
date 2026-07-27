@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, Image, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
+import { Image } from 'expo-image';
 import { MaterialIcons } from '@expo/vector-icons';
 import type { ComponentProps } from 'react';
 import { SyncStatusBadge } from './SyncStatusBadge';
@@ -40,7 +41,7 @@ interface FileThumbnailProps {
   syncStatus?: SyncStatus;
 }
 
-export function FileThumbnail({ uri, thumbnailUrl, mimeType, fileName, size, isLoading, syncStatus }: FileThumbnailProps) {
+export const FileThumbnail = React.memo(function FileThumbnail({ uri, thumbnailUrl, mimeType, fileName, size, isLoading, syncStatus }: FileThumbnailProps) {
   const info = getFileInfo(mimeType, fileName);
   const ext = getExtension(fileName);
 
@@ -57,7 +58,13 @@ export function FileThumbnail({ uri, thumbnailUrl, mimeType, fileName, size, isL
   if (imageUri) {
     return (
       <View style={{ width: size, height: size }}>
-        <Image source={{ uri: imageUri }} style={[styles.image, { width: size, height: size }]} />
+        <Image
+          source={imageUri}
+          style={[styles.image, { width: size, height: size }]}
+          contentFit="cover"
+          transition={200}
+          cachePolicy="memory-disk"
+        />
         {syncStatus && <SyncStatusBadge status={syncStatus} />}
       </View>
     );
@@ -72,7 +79,7 @@ export function FileThumbnail({ uri, thumbnailUrl, mimeType, fileName, size, isL
       {syncStatus && <SyncStatusBadge status={syncStatus} />}
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: {

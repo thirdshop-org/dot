@@ -74,10 +74,9 @@ async function scanSafFolder(folder: StoredFolder): Promise<DeviceFile[]> {
       });
     }
     return files;
-  } catch (err) {
-    console.error(`[useDeviceFiles] SAF scan error for folder "${folder.name}":`, err);
-    return [];
-  }
+    } catch (err) {
+      return [];
+    }
 }
 
 export function useDeviceFiles() {
@@ -121,7 +120,6 @@ export function useDeviceFiles() {
 
       setFiles(deviceFiles);
     } catch (err) {
-      console.error('[useDeviceFiles] scan error:', err);
       setFiles([]);
     } finally {
       setIsLoading(false);
@@ -132,11 +130,8 @@ export function useDeviceFiles() {
     const visibleFolders = safDirectory.getVisibleFolders();
     if (visibleFolders.length === 0) return;
 
-    const safFiles: DeviceFile[] = [];
-    for (const folder of visibleFolders) {
-      const folderFiles = await scanSafFolder(folder);
-      safFiles.push(...folderFiles);
-    }
+    const results = await Promise.all(visibleFolders.map((folder) => scanSafFolder(folder)));
+    const safFiles = results.flat();
 
     setFiles((prev) => {
       const existing = new Set(prev.filter((f) => !f.folderId).map((f) => f.id));
@@ -191,7 +186,6 @@ export function useDeviceFiles() {
       });
       return true;
     } catch (err) {
-      console.error('[useDeviceFiles] pickDirectory error:', err);
       return false;
     }
   }, []);

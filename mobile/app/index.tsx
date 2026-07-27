@@ -4,7 +4,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useDeleteFile, useAddTags, useMoveFiles, useFolders, useFileImage } from '../hooks/useFiles';
+import { useDeleteFile, useAddTags, useMoveFiles, useFolders } from '../hooks/useFiles';
 import { useUnifiedFiles, useFreeLocalSpace } from '../hooks/useUnifiedFiles';
 import { UnifiedFileItem } from '../hooks/useUnifiedFiles';
 import { FileItem, isFolder } from '../types';
@@ -84,9 +84,7 @@ function formatDateLabel(key: string): string {
   return key.charAt(0).toUpperCase() + key.slice(1);
 }
 
-function FileGridItem({ file, onPress, onLongPress, selected }: { file: UnifiedFileItem; onPress?: () => void; onLongPress?: () => void; selected?: boolean }) {
-  const { data, isLoading } = useFileImage(file.id);
-
+const FileGridItem = React.memo(function FileGridItem({ file, onPress, onLongPress, selected }: { file: UnifiedFileItem; onPress?: () => void; onLongPress?: () => void; selected?: boolean }) {
   return (
     <TouchableOpacity
       style={[styles.gridItem, selected && styles.gridItemSelected]}
@@ -96,12 +94,11 @@ function FileGridItem({ file, onPress, onLongPress, selected }: { file: UnifiedF
       activeOpacity={0.7}
     >
       <FileThumbnail
-        uri={data?.data?.url ?? file.localUri}
+        uri={file.url ?? file.localUri}
         thumbnailUrl={file.thumbnailUrl}
         mimeType={file.mimeType}
         fileName={file.name}
         size={ITEM_SIZE}
-        isLoading={isLoading}
         syncStatus={file.syncStatus}
       />
       {selected && (
@@ -114,7 +111,28 @@ function FileGridItem({ file, onPress, onLongPress, selected }: { file: UnifiedF
       <Text style={styles.fileName} numberOfLines={1}>{file.name}</Text>
     </TouchableOpacity>
   );
-}
+});
+
+const FileGroup = React.memo(function FileGroup({ groupFiles, selectedIds, onItemPress, onItemLongPress }: {
+  groupFiles: UnifiedFileItem[];
+  selectedIds: Set<string>;
+  onItemPress: (file: UnifiedFileItem) => void;
+  onItemLongPress: (file: UnifiedFileItem) => void;
+}) {
+  return (
+    <View style={styles.grid}>
+      {groupFiles.map((file) => (
+        <FileGridItem
+          key={file.id}
+          file={file}
+          selected={selectedIds.has(file.id)}
+          onPress={() => onItemPress(file)}
+          onLongPress={() => onItemLongPress(file)}
+        />
+      ))}
+    </View>
+  );
+});
 
 function matchesQuery(file: UnifiedFileItem, query: string, filters: SearchFilters): boolean {
   if (!query) return true;
@@ -447,17 +465,12 @@ export function HomeScreen() {
                 <Text style={styles.sectionTitle}>{label}</Text>
                 <Text style={styles.sectionCount}>{groupFiles.length}</Text>
               </View>
-              <View style={styles.grid}>
-                {groupFiles.map((file) => (
-                  <FileGridItem
-                    key={file.id}
-                    file={file}
-                    selected={selectedIds.has(file.id)}
-                    onPress={() => handleItemPress(file)}
-                    onLongPress={() => handleItemLongPress(file)}
-                  />
-                ))}
-              </View>
+              <FileGroup
+                groupFiles={groupFiles}
+                selectedIds={selectedIds}
+                onItemPress={handleItemPress}
+                onItemLongPress={handleItemLongPress}
+              />
             </View>
           );
         }}

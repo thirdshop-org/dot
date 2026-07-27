@@ -4,6 +4,7 @@ import { downloadAsync, documentDirectory, makeDirectoryAsync, deleteAsync } fro
 import { useFiles } from './useFiles';
 import { useLocalFiles } from './useLocalFiles';
 import { localFileRegistry } from '../services/localFileRegistry';
+import { thumbnailCache } from '../services/thumbnailCache';
 import { apiClient } from '../api/client';
 import { FileItem, LocalFileEntry, SyncStatus, Tag } from '../types';
 
@@ -24,6 +25,7 @@ export interface UnifiedFileItem {
   url?: string;
   thumbnailUrl?: string;
   isDeviceFile?: boolean;
+  duplicateOf?: string;
 }
 
 const DOWNLOAD_DIR = `${documentDirectory}synced-files/`;
@@ -39,6 +41,15 @@ function getCacheKey(name: string): string {
 function getExtension(name: string): string {
   const dot = name.lastIndexOf('.');
   return dot >= 0 ? name.slice(dot) : '';
+}
+
+function parseExpiresFromUrl(url: string): number {
+  try {
+    const u = new URL(url);
+    const expires = u.searchParams.get('expires');
+    if (expires) return Number(expires) * 1000;
+  } catch {}
+  return Date.now() + 50 * 60 * 1000;
 }
 
 export function useUnifiedFiles(page: number = 1, limit: number = 50) {
@@ -57,8 +68,25 @@ export function useUnifiedFiles(page: number = 1, limit: number = 50) {
       }
     }
 
+    const nameSizeIndex = new Map<string, string>();
+    for (const bf of backendFiles) {
+      if (!bf.isFolder && bf.size > 0) {
+        nameSizeIndex.set(`${bf.name}::${bf.size}`, bf.id);
+      }
+    }
+
     for (const bf of backendFiles) {
       const localEntry = backendIdToLocal.get(bf.id);
+
+      let thumbUrl = bf.thumbnailUrl;
+      if (thumbUrl && bf.thumbnailUrl) {
+        const expiresAt = parseExpiresFromUrl(bf.thumbnailUrl);
+        thumbnailCache.set(bf.id, bf.thumbnailUrl, expiresAt);
+      } else {
+        const cached = thumbnailCache.get(bf.id);
+        if (cached) thumbUrl = cached;
+      }
+
       merged.set(bf.id, {
         id: bf.id,
         backendFileId: bf.id,
@@ -74,13 +102,25 @@ export function useUnifiedFiles(page: number = 1, limit: number = 50) {
         isFolder: bf.isFolder,
         parentFileId: bf.parentFileId,
         url: bf.url,
-        thumbnailUrl: bf.thumbnailUrl,
+        thumbnailUrl: thumbUrl,
       });
     }
 
     for (const lf of localFiles) {
       if (lf.backendFileId && merged.has(lf.backendFileId)) continue;
       if (merged.has(lf.id)) continue;
+
+      if (!lf.folderId && lf.size > 0) {
+        const key = `${lf.name}::${lf.size}`;
+        const matchId = nameSizeIndex.get(key);
+        if (matchId) {
+          const existing = merged.get(matchId);
+          if (existing && !existing.localUri && lf.localUri) {
+            merged.set(matchId, { ...existing, localUri: lf.localUri, syncStatus: 'synced' });
+          }
+          continue;
+        }
+      }
 
       merged.set(lf.id, {
         id: lf.id,
@@ -138,6 +178,16 @@ export function useUnifiedFilesByParent(parentId: string) {
 
     for (const bf of backendFiles) {
       const localEntry = backendIdToLocal.get(bf.id);
+
+      let thumbUrl = bf.thumbnailUrl;
+      if (thumbUrl && bf.thumbnailUrl) {
+        const expiresAt = parseExpiresFromUrl(bf.thumbnailUrl);
+        thumbnailCache.set(bf.id, bf.thumbnailUrl, expiresAt);
+      } else {
+        const cached = thumbnailCache.get(bf.id);
+        if (cached) thumbUrl = cached;
+      }
+
       merged.set(bf.id, {
         id: bf.id,
         backendFileId: bf.id,
@@ -153,7 +203,7 @@ export function useUnifiedFilesByParent(parentId: string) {
         isFolder: bf.isFolder,
         parentFileId: bf.parentFileId,
         url: bf.url,
-        thumbnailUrl: bf.thumbnailUrl,
+        thumbnailUrl: thumbUrl,
       });
     }
 

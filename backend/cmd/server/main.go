@@ -33,7 +33,7 @@ func main() {
 	fileSvc := service.NewFileService(queries, cfg)
 	ocrSvc := service.NewOCRService(cfg, fileSvc)
 	conversionSvc := service.NewConversionService(queries, cfg)
-	urlSvc := service.NewURLService(cfg.HMACSecret, cfg.ServerHost)
+	urlSvc := service.NewURLService(cfg.HMACSecret, cfg.ServerHost, cfg.URLExpiryMinutes)
 	authSvc, err := auth.NewAuthService(queries, cfg)
 	if err != nil {
 		log.Fatalf("Failed to create auth service: %v", err)

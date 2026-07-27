@@ -9,12 +9,20 @@ import (
 )
 
 type URLService struct {
-	secret     string
-	serverHost string
+	secret         string
+	serverHost     string
+	expiryDuration time.Duration
 }
 
-func NewURLService(secret, serverHost string) *URLService {
-	return &URLService{secret: secret, serverHost: serverHost}
+func NewURLService(secret, serverHost string, expiryMinutes int) *URLService {
+	if expiryMinutes <= 0 {
+		expiryMinutes = 60
+	}
+	return &URLService{
+		secret:         secret,
+		serverHost:     serverHost,
+		expiryDuration: time.Duration(expiryMinutes) * time.Minute,
+	}
 }
 
 func (s *URLService) sign(fileID string, expires int64) string {
@@ -25,7 +33,7 @@ func (s *URLService) sign(fileID string, expires int64) string {
 }
 
 func (s *URLService) GenerateDownloadURL(fileUUID string) string {
-	expires := time.Now().Add(10 * time.Minute).Unix()
+	expires := time.Now().Add(s.expiryDuration).Unix()
 	sig := s.sign(fileUUID, expires)
 
 	return fmt.Sprintf(
@@ -38,7 +46,7 @@ func (s *URLService) GenerateDownloadURL(fileUUID string) string {
 }
 
 func (s *URLService) GenerateThumbnailURL(thumbUUID string) string {
-	expires := time.Now().Add(10 * time.Minute).Unix()
+	expires := time.Now().Add(s.expiryDuration).Unix()
 	sig := s.sign(thumbUUID, expires)
 
 	return fmt.Sprintf(

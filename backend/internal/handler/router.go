@@ -37,4 +37,6 @@ func SetupRoutes(r *gin.Engine, h *Handler, authMiddleware *auth.AuthService) {
 	protected.GET("/ocr/jobs/:id", h.OCR.GetJobStatus)
 
 	protected.GET("/files/:id/thumbnails", h.File.GetThumbnails)
+
+	protected.POST("/files/dedup-check", h.File.CheckDuplicates)
 }

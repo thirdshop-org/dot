@@ -10,8 +10,10 @@ interface SyncStatusBadgeProps {
 
 const STATUS_CONFIG: Record<SyncStatus, { icon: string; color: string; bg: string }> = {
   local: { icon: 'phone-android', color: '#757575', bg: 'rgba(245,245,245,0.9)' },
+  syncing: { icon: 'sync', color: '#FF9800', bg: 'rgba(255,243,224,0.9)' },
   synced: { icon: 'sync', color: '#4CAF50', bg: 'rgba(232,245,233,0.9)' },
   cloud: { icon: 'cloud', color: '#1976D2', bg: 'rgba(227,242,253,0.9)' },
+  conflict: { icon: 'warning', color: '#E53935', bg: 'rgba(255,235,238,0.9)' },
 };
 
 export function SyncStatusBadge({ status, size = 16 }: SyncStatusBadgeProps) {

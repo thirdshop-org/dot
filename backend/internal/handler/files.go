@@ -3,6 +3,7 @@ package handler
 import (
 	"log"
 	"net/http"
+	"os"
 	"path"
 	"strconv"
 
@@ -218,10 +219,22 @@ func (h *FileHandler) Get(c *gin.Context) {
 
 func (h *FileHandler) Delete(c *gin.Context) {
 	id := c.Param("id")
+
+	storagePath, _ := h.files.GetStoragePath(id)
+	thumbnails, _ := h.files.GetThumbnailsByFileID(id)
+
 	if err := h.files.Delete(id); err != nil {
 		api.Error(c, http.StatusInternalServerError, "DB_ERROR", "Failed to delete file")
 		return
 	}
+
+	if storagePath != "" {
+		os.Remove(path.Clean(storagePath))
+	}
+	for _, t := range thumbnails {
+		os.Remove(path.Clean(t.StorageKey))
+	}
+
 	api.Success(c, gin.H{"deleted": true})
 }
 
@@ -431,4 +444,48 @@ func (h *FileHandler) ServeThumbnail(c *gin.Context) {
 	}
 
 	c.File(path.Clean(storagePath))
+}
+
+func (h *FileHandler) CheckDuplicates(c *gin.Context) {
+	var body struct {
+		Name     string `json:"name" binding:"required"`
+		Size     int64  `json:"size" binding:"required"`
+		MimeType string `json:"mime_type"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		api.Error(c, http.StatusBadRequest, "INVALID_BODY", "Body must contain 'name' and 'size'")
+		return
+	}
+
+	duplicates, err := h.files.FindDuplicatesByNameSize(body.Name, body.Size)
+	if err != nil {
+		api.Error(c, http.StatusInternalServerError, "DB_ERROR", "Failed to check duplicates")
+		return
+	}
+
+	type dupResponse struct {
+		ID        string `json:"id"`
+		Name      string `json:"name"`
+		MimeType  string `json:"mimeType"`
+		Size      int64  `json:"size"`
+		Checksum  string `json:"checksum"`
+		CreatedAt string `json:"createdAt"`
+	}
+
+	resp := make([]dupResponse, len(duplicates))
+	for i, d := range duplicates {
+		resp[i] = dupResponse{
+			ID:        d.ID,
+			Name:      d.Name,
+			MimeType:  d.MimeType,
+			Size:      d.Size,
+			Checksum:  d.Checksum,
+			CreatedAt: d.CreatedAt.Format("2006-01-02 15:04:05"),
+		}
+	}
+
+	api.Success(c, gin.H{
+		"duplicates": resp,
+		"count":      len(resp),
+	})
 }

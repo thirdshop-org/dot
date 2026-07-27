@@ -5,13 +5,17 @@ import { LocalFileEntry } from '../types';
 
 export function useLocalFiles() {
   const { files: deviceFiles, isLoading: deviceLoading, hasPermission, requestPermission, rescan, pickDirectory, folders, refreshFolders } = useDeviceFiles();
-
-  const registryEntries = useMemo(() => localFileRegistry.getAll(), []);
+  const lastDeviceCount = useRef(0);
 
   useEffect(() => {
+    if (deviceFiles.length === 0) return;
+    if (deviceFiles.length === lastDeviceCount.current) return;
+    lastDeviceCount.current = deviceFiles.length;
+
+    const newEntries: LocalFileEntry[] = [];
     for (const df of deviceFiles) {
       if (localFileRegistry.get(df.id)) continue;
-      const entry: LocalFileEntry = {
+      newEntries.push({
         id: df.id,
         localUri: df.uri,
         name: df.name,
@@ -20,12 +24,15 @@ export function useLocalFiles() {
         syncStatus: 'local',
         createdAt: df.createdAt,
         folderId: df.folderId,
-      };
-      localFileRegistry.register(entry);
+      });
+    }
+    if (newEntries.length > 0) {
+      localFileRegistry.registerBatch(newEntries);
     }
   }, [deviceFiles]);
 
   const localFiles = useMemo(() => {
+    const registryEntries = localFileRegistry.getAll();
     const merged = new Map<string, LocalFileEntry>();
 
     for (const entry of registryEntries) {
@@ -47,10 +54,8 @@ export function useLocalFiles() {
       }
     }
 
-    const result = Array.from(merged.values());
-    console.log(`[useLocalFiles] registry=${registryEntries.length} device=${deviceFiles.length} merged=${result.length}`);
-    return result;
-  }, [deviceFiles, registryEntries]);
+    return Array.from(merged.values());
+  }, [deviceFiles]);
 
   return {
     localFiles,

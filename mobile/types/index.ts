@@ -117,7 +117,7 @@ export interface RefreshResponse {
   refresh_token: string;
 }
 
-export type SyncStatus = 'local' | 'synced' | 'cloud';
+export type SyncStatus = 'local' | 'syncing' | 'synced' | 'cloud' | 'conflict';
 
 export interface LocalFileEntry {
   id: string;

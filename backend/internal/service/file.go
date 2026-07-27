@@ -47,6 +47,17 @@ func (s *FileService) Upload(file *multipart.FileHeader) (*model.UploadResult, e
 
 	checksum := hex.EncodeToString(CreateSHA256Hash(data))
 
+	existing, err := s.queries.FindDuplicateByChecksum(context.Background(), checksum)
+	if err == nil && existing.ID != "" {
+		os.Remove(dst)
+		return &model.UploadResult{
+			ID:       existing.ID,
+			Name:     existing.Name,
+			Path:     existing.StorageKey,
+			MimeType: existing.MimeType,
+		}, nil
+	}
+
 	dbFile, err := s.queries.CreateFile(context.Background(), db.CreateFileParams{
 		Name:       file.Filename,
 		MimeType:   file.Header.Get("Content-Type"),
@@ -278,6 +289,13 @@ func (s *FileService) GetBestThumbnail(fileID, preferredLabel string) *model.Thu
 	}
 
 	return fallback
+}
+
+func (s *FileService) FindDuplicatesByNameSize(name string, size int64) ([]db.FindDuplicatesByNameSizeRow, error) {
+	return s.queries.FindDuplicatesByNameSize(context.Background(), db.FindDuplicatesByNameSizeParams{
+		Name: name,
+		Size: size,
+	})
 }
 
 func dbToModel(f db.File, dbTags []db.Tag) model.File {

@@ -91,7 +91,6 @@ export function useAutoSync() {
 
       if (pendingFiles.length === 0) return;
 
-      console.log(`[useAutoSync] mode=${globalMode}, upload de ${pendingFiles.length} fichier(s)`);
       setIsSyncing(true);
 
       for (const entry of pendingFiles) {
@@ -107,15 +106,12 @@ export function useAutoSync() {
             backendFileId: uploaded.id,
             syncStatus: 'synced',
           });
-
-          console.log(`[useAutoSync] "${entry.name}" uploadé → id=${uploaded.id}`);
         } catch (err) {
-          console.error(`[useAutoSync] échec upload "${entry.name}":`, err);
+          // upload failed, will retry on next cycle
         }
       }
 
       queryClient.invalidateQueries({ queryKey: ['files'] });
-      console.log(`[useAutoSync] sync terminé`);
     } finally {
       setIsSyncing(false);
       isRunning.current = false;
@@ -123,9 +119,11 @@ export function useAutoSync() {
   }, [queryClient]);
 
   useEffect(() => {
+    const timeout = setTimeout(() => {
+      checkAndSync();
+    }, 5_000);
     const interval = setInterval(checkAndSync, 30_000);
-    checkAndSync();
-    return () => clearInterval(interval);
+    return () => { clearTimeout(timeout); clearInterval(interval); };
   }, [checkAndSync]);
 
   return { triggerSync: checkAndSync };

@@ -8,6 +8,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"time"
 
 	"github.com/lib/pq"
 )
@@ -84,6 +85,81 @@ WHERE id = $1
 func (q *Queries) DeleteFile(ctx context.Context, id string) error {
 	_, err := q.db.ExecContext(ctx, deleteFile, id)
 	return err
+}
+
+const findDuplicateByChecksum = `-- name: FindDuplicateByChecksum :one
+SELECT id, name, mime_type, size, storage_key, checksum, ocr_text, created_at, updated_at, parent_file_id, is_folder FROM files
+WHERE checksum = $1 AND is_folder = false
+LIMIT 1
+`
+
+func (q *Queries) FindDuplicateByChecksum(ctx context.Context, checksum string) (File, error) {
+	row := q.db.QueryRowContext(ctx, findDuplicateByChecksum, checksum)
+	var i File
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.MimeType,
+		&i.Size,
+		&i.StorageKey,
+		&i.Checksum,
+		&i.OcrText,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.ParentFileID,
+		&i.IsFolder,
+	)
+	return i, err
+}
+
+const findDuplicatesByNameSize = `-- name: FindDuplicatesByNameSize :many
+SELECT id, name, mime_type, size, checksum, created_at FROM files
+WHERE name = $1 AND size = $2 AND is_folder = false
+ORDER BY created_at DESC
+`
+
+type FindDuplicatesByNameSizeParams struct {
+	Name string `json:"name"`
+	Size int64  `json:"size"`
+}
+
+type FindDuplicatesByNameSizeRow struct {
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	MimeType  string    `json:"mime_type"`
+	Size      int64     `json:"size"`
+	Checksum  string    `json:"checksum"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+func (q *Queries) FindDuplicatesByNameSize(ctx context.Context, arg FindDuplicatesByNameSizeParams) ([]FindDuplicatesByNameSizeRow, error) {
+	rows, err := q.db.QueryContext(ctx, findDuplicatesByNameSize, arg.Name, arg.Size)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []FindDuplicatesByNameSizeRow
+	for rows.Next() {
+		var i FindDuplicatesByNameSizeRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.MimeType,
+			&i.Size,
+			&i.Checksum,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getFile = `-- name: GetFile :one

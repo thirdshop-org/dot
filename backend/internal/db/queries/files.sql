@@ -45,3 +45,13 @@ WHERE id = $4;
 -- name: DeleteFile :exec
 DELETE FROM files
 WHERE id = $1;
+
+-- name: FindDuplicatesByNameSize :many
+SELECT id, name, mime_type, size, checksum, created_at FROM files
+WHERE name = $1 AND size = $2 AND is_folder = false
+ORDER BY created_at DESC;
+
+-- name: FindDuplicateByChecksum :one
+SELECT * FROM files
+WHERE checksum = $1 AND is_folder = false
+LIMIT 1;
