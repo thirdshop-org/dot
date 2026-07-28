@@ -304,6 +304,23 @@ export const fileStore = {
     return rows.map((r) => rowToRecord(r, getTagsForFile(r.id)));
   },
 
+  getRootFiles(): { files: FileRecord[]; total: number } {
+    const d = getDb();
+    const countRow = d.select({ count: sql<number>`count(*)` })
+      .from(files)
+      .where(and(isNull(files.parentResourceId), eq(files.isFolder, 0)))
+      .get();
+    const total = countRow?.count ?? 0;
+    const rows = d.select().from(files)
+      .where(and(isNull(files.parentResourceId), eq(files.isFolder, 0)))
+      .orderBy(desc(files.createdAt))
+      .all() as FileRow[];
+    return {
+      files: rows.map((r) => rowToRecord(r, getTagsForFile(r.id))),
+      total,
+    };
+  },
+
   getPaginated(page: number, limit: number): { files: FileRecord[]; total: number } {
     const d = getDb();
     const offset = (page - 1) * limit;
@@ -414,7 +431,7 @@ export const fileStore = {
           lastSyncedAt: now,
         });
 
-        if (bf.tags) setTagsForFile(bf.id, bf.tags);
+        if (bf.tags && bf.tags.length > 0) setTagsForFile(bf.id, bf.tags);
       }
     });
   },

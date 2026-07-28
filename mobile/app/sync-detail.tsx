@@ -12,6 +12,8 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { fileStore, FileRecord } from '../services/fileStore';
 import { safDirectory } from '../services/safDirectory';
 import { useSyncQueue } from '../hooks/useSyncQueue';
+import { useAutoSync } from '../hooks/useAutoSync';
+import { useSyncPush } from '../hooks/useSyncPush';
 
 function formatSize(bytes: number): string {
   if (bytes === 0) return '';
@@ -23,15 +25,28 @@ function formatSize(bytes: number): string {
 export function SyncDetailScreen() {
   const insets = useSafeAreaInsets();
   const { pendingCount, isSyncing, refresh } = useSyncQueue();
+  const { triggerSync } = useAutoSync();
+  const { push } = useSyncPush();
 
   const pendingFiles = useMemo(() => {
     return fileStore.getPendingSync();
   }, []);
 
-  const handleSyncAll = useCallback(() => {
-    // TODO: lancer l'upload batch de tous les fichiers pending
-    console.log(`[SyncDetail] sync demandé pour ${pendingFiles.length} fichiers`);
-  }, [pendingFiles.length]);
+  const handleSyncAll = useCallback(async () => {
+    await triggerSync();
+
+    try {
+      const { getStoredDeviceServerId } = await import('../hooks/useDeviceRegistration');
+      const serverId = await getStoredDeviceServerId();
+      if (serverId) {
+        await push(serverId);
+      }
+    } catch {
+      // push notification is best-effort
+    }
+
+    refresh();
+  }, [triggerSync, push, refresh]);
 
   const renderItem = useCallback(({ item }: { item: FileRecord }) => (
     <View style={styles.fileRow}>

@@ -1,5 +1,5 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { View, FlatList, StyleSheet, TouchableOpacity, Text, Dimensions, KeyboardAvoidingView, Platform, Keyboard, Alert, Modal, TextInput, ScrollView } from 'react-native';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import { View, FlatList, StyleSheet, TouchableOpacity, Text, Dimensions, KeyboardAvoidingView, Platform, Keyboard, Alert, Modal, TextInput, ScrollView, RefreshControl, ActivityIndicator } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -20,6 +20,7 @@ import { apiClient } from '../api/client';
 import { ENDPOINTS } from '../constants/api';
 import { useLocalFiles } from '../hooks/useLocalFiles';
 import { deleteAsync } from 'expo-file-system/legacy';
+import { useDebounce } from '../hooks/useDebounce';
 
 const NUM_COLUMNS = 3;
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -89,12 +90,12 @@ function formatDateLabel(key: string): string {
   return key.charAt(0).toUpperCase() + key.slice(1);
 }
 
-const FileGridItem = React.memo(function FileGridItem({ file, onPress, onLongPress, selected }: { file: UnifiedFileItem; onPress?: () => void; onLongPress?: () => void; selected?: boolean }) {
+const FileGridItem = React.memo(function FileGridItem({ file, onPress, onLongPress, selected }: { file: UnifiedFileItem; onPress?: (f: UnifiedFileItem) => void; onLongPress?: (f: UnifiedFileItem) => void; selected?: boolean }) {
   return (
     <TouchableOpacity
       style={[styles.gridItem, selected && styles.gridItemSelected]}
-      onPress={onPress}
-      onLongPress={onLongPress}
+      onPress={() => onPress?.(file)}
+      onLongPress={() => onLongPress?.(file)}
       delayLongPress={400}
       activeOpacity={0.7}
     >
@@ -131,8 +132,8 @@ const FileGroup = React.memo(function FileGroup({ groupFiles, selectedIds, onIte
           key={file.id}
           file={file}
           selected={selectedIds.has(file.id)}
-          onPress={() => onItemPress(file)}
-          onLongPress={() => onItemLongPress(file)}
+          onPress={onItemPress}
+          onLongPress={onItemLongPress}
         />
       ))}
     </View>
@@ -159,15 +160,19 @@ function matchesQuery(file: UnifiedFileItem, query: string, filters: SearchFilte
   return false;
 }
 
+const PAGE_SIZE = 100;
+
 export function HomeScreen() {
   const navigation = useNavigation<NavigationProp>();
   const insets = useSafeAreaInsets();
-  const { data, isLoading, error } = useFiles();
+  const [page, setPage] = useState(1);
+  const { data, isLoading, error, isFetching, refetch } = useFiles(null, page, PAGE_SIZE);
   const { hasPermission, requestPermission, pickDirectory, folders, refreshFolders } = useLocalFiles();
   const deleteFile = useDeleteFile();
   const freeLocalSpace = useFreeLocalSpace();
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
+  const debouncedSearch = useDebounce(searchQuery, 250);
   const [filters, setFilters] = useState<SearchFilters>({ name: true, ocrText: true, tags: true });
   const [keyboardOpen, setKeyboardOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -184,6 +189,24 @@ export function HomeScreen() {
   const [globalSyncCellular, setGlobalSyncCellular] = useState(() => safDirectory.getGlobalSyncCellular());
   const { pendingCount, isSyncing } = useSyncQueue();
   useAutoSync();
+
+  const loadMore = useCallback(() => {
+    if (isFetching) return;
+    const total = data?.meta?.total ?? 0;
+    const loaded = data?.data?.length ?? 0;
+    if (loaded < total) {
+      setPage((p) => p + 1);
+    }
+  }, [isFetching, data?.meta?.total, data?.data?.length]);
+
+  const onRefresh = useCallback(() => {
+    setPage(1);
+    refetch();
+  }, [refetch]);
+
+  const totalFiles = data?.meta?.total ?? 0;
+  const loadedFiles = data?.data?.length ?? 0;
+  const hasMore = loadedFiles > 0 && loadedFiles < totalFiles;
 
   useEffect(() => {
     const show = Keyboard.addListener('keyboardDidShow', () => setKeyboardOpen(true));
@@ -213,12 +236,16 @@ export function HomeScreen() {
   const files = data?.data ?? [];
 
   const filteredFiles = useMemo(
-    () => searchQuery.trim() ? files.filter((f) => matchesQuery(f, searchQuery, filters)) : files,
-    [files, searchQuery, filters]
+    () => debouncedSearch.trim() ? files.filter((f) => matchesQuery(f, debouncedSearch, filters)) : files,
+    [files, debouncedSearch, filters]
   );
 
-  const groups = groupByTags ? groupByTag(filteredFiles) : groupByDate(filteredFiles);
-  const groupKeys = Object.keys(groups);
+  const groups = useMemo(
+    () => groupByTags ? groupByTag(filteredFiles) : groupByDate(filteredFiles),
+    [filteredFiles, groupByTags]
+  );
+
+  const groupKeys = useMemo(() => Object.keys(groups), [groups]);
 
   const fileIdToIndex = useMemo(() => {
     const map = new Map<string, number>();
@@ -394,6 +421,27 @@ export function HomeScreen() {
     }
   }, [selectionMode, toggleSelection]);
 
+  const renderSection = useCallback(({ item: groupKey }: { item: string }) => {
+    const groupFiles = groups[groupKey];
+    if (!groupFiles) return null;
+    const label = groupByTags ? groupKey : formatDateLabel(groupKey);
+    return (
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          {groupByTags && <MaterialIcons name="label" size={16} color="#1976D2" style={styles.sectionIcon} />}
+          <Text style={styles.sectionTitle}>{label}</Text>
+          <Text style={styles.sectionCount}>{groupFiles.length}</Text>
+        </View>
+        <FileGroup
+          groupFiles={groupFiles}
+          selectedIds={selectedIds}
+          onItemPress={handleItemPress}
+          onItemLongPress={handleItemLongPress}
+        />
+      </View>
+    );
+  }, [groups, groupByTags, selectedIds, handleItemPress, handleItemLongPress]);
+
   if (isLoading) {
     return (
       <View style={styles.center}>
@@ -453,32 +501,39 @@ export function HomeScreen() {
         contentContainerStyle={styles.list}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
+        refreshControl={
+          <RefreshControl
+            refreshing={isFetching && page === 1}
+            onRefresh={onRefresh}
+            tintColor="#1976D2"
+            colors={['#1976D2']}
+          />
+        }
+        onEndReached={loadMore}
+        onEndReachedThreshold={0.5}
+        ListFooterComponent={
+          hasMore ? (
+            <TouchableOpacity style={styles.loadMoreBtn} onPress={loadMore} disabled={isFetching}>
+              {isFetching ? (
+                <ActivityIndicator size="small" color="#1976D2" />
+              ) : (
+                <Text style={styles.loadMoreText}>
+                  Charger plus ({loadedFiles}/{totalFiles})
+                </Text>
+              )}
+            </TouchableOpacity>
+          ) : loadedFiles > 0 ? (
+            <Text style={styles.loadedAllText}>{loadedFiles} fichier{loadedFiles > 1 ? 's' : ''}</Text>
+          ) : null
+        }
         ListEmptyComponent={
           <View style={styles.empty}>
             <Text style={styles.emptyText}>
-              {searchQuery ? 'Aucun résultat' : 'Aucun fichier'}
+              {debouncedSearch ? 'Aucun résultat' : 'Aucun fichier'}
             </Text>
           </View>
         }
-        renderItem={({ item: groupKey }) => {
-          const groupFiles = groups[groupKey];
-          const label = groupByTags ? groupKey : formatDateLabel(groupKey);
-          return (
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                {groupByTags && <MaterialIcons name="label" size={16} color="#1976D2" style={styles.sectionIcon} />}
-                <Text style={styles.sectionTitle}>{label}</Text>
-                <Text style={styles.sectionCount}>{groupFiles.length}</Text>
-              </View>
-              <FileGroup
-                groupFiles={groupFiles}
-                selectedIds={selectedIds}
-                onItemPress={handleItemPress}
-                onItemLongPress={handleItemLongPress}
-              />
-            </View>
-          );
-        }}
+        renderItem={renderSection}
       />
 
       {!selectionMode && (
@@ -650,6 +705,21 @@ export function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
+  loadMoreBtn: {
+    alignItems: 'center',
+    paddingVertical: 16,
+  },
+  loadMoreText: {
+    fontSize: 14,
+    color: '#1976D2',
+    fontWeight: '600',
+  },
+  loadedAllText: {
+    textAlign: 'center',
+    fontSize: 13,
+    color: '#999',
+    paddingVertical: 12,
+  },
   container: {
     flex: 1,
     backgroundColor: '#f5f5f5',

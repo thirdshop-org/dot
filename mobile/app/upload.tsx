@@ -1,10 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { useUpload, UploadFile } from '../hooks/useUpload';
+import { usePollOcr } from '../hooks/usePollOcr';
 import { UploadProgress } from '../components/UploadProgress';
-import { UploadError } from '../types';
+import { UploadError, HttpError } from '../types';
+import { apiClient } from '../api/client';
+import { ENDPOINTS } from '../constants/api';
 
 function getUploadErrorMessage(err: UploadError): string {
   switch (err.status) {
@@ -29,6 +32,40 @@ export function UploadScreen() {
   const [uploadedCount, setUploadedCount] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
   const upload = useUpload();
+  const { pollOcr } = usePollOcr();
+
+  const checkDupBeforeUpload = useCallback(async (files: UploadFile[]): Promise<UploadFile[]> => {
+    const toUpload: UploadFile[] = [];
+    for (const file of files) {
+      try {
+        const result = await apiClient.post<{ data: { duplicates: Array<{ id: string; name: string }>; count: number } }>(
+          ENDPOINTS.DEDUP_CHECK,
+          { name: file.name, size: 0 },
+        );
+        const duplicates = result.data?.duplicates ?? [];
+        if (duplicates.length > 0) {
+          const names = duplicates.map((d: { name: string }) => d.name).join(', ');
+          let proceed = false;
+          await new Promise<void>((resolve) => {
+            Alert.alert(
+              'Fichier existant',
+              `"${file.name}" existe déjà sur le serveur (${names}).\nUploader quand même ?`,
+              [
+                { text: 'Ignorer', style: 'cancel', onPress: () => resolve() },
+                { text: 'Uploader', onPress: () => { proceed = true; resolve(); } },
+              ],
+            );
+          });
+          if (proceed) toUpload.push(file);
+        } else {
+          toUpload.push(file);
+        }
+      } catch {
+        toUpload.push(file);
+      }
+    }
+    return toUpload;
+  }, []);
 
   const doUpload = async (files: UploadFile[]) => {
     setUploadStatus('uploading');
@@ -37,8 +74,29 @@ export function UploadScreen() {
     setError(undefined);
 
     try {
-      const response = await upload.mutateAsync(files);
+      const deduped = await checkDupBeforeUpload(files);
+      if (deduped.length === 0) {
+        setUploadStatus('success');
+        setUploadedCount(files.length);
+        return;
+      }
+
+      setTotalCount(deduped.length);
+      const response = await upload.mutateAsync(deduped);
       setUploadedCount(response.uploaded.length);
+
+      if (response.uploaded.length > 0) {
+        setUploadStatus('processing');
+        const results = await Promise.allSettled(
+          response.uploaded.map((f) => pollOcr(f.id)),
+        );
+        const completed = results.filter(
+          (r) => r.status === 'fulfilled' && r.value.status === 'completed',
+        ).length;
+        if (completed > 0) {
+          setUploadStatus('success');
+        }
+      }
 
       if (response.errors.length > 0) {
         setUploadStatus('error');

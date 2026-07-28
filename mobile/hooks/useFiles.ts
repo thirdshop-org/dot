@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { apiClient } from '../api/client';
 import { ENDPOINTS } from '../constants/api';
 import type { UnifiedFileItem, PaginatedResponse, FileItem, Tag } from '../types';
@@ -27,7 +27,7 @@ function recordToUnifiedItem(record: ReturnType<typeof fileStore.getById>): Unif
   };
 }
 
-function recordsToUnifiedItems(records: ReturnType<typeof fileStore.getPaginated>): {
+function recordsToUnifiedItems(records: ReturnType<typeof fileStore.getRootFiles>): {
   data: UnifiedFileItem[];
   meta: { page: number; total: number };
 } {
@@ -37,7 +37,7 @@ function recordsToUnifiedItems(records: ReturnType<typeof fileStore.getPaginated
   };
 }
 
-export function useFiles(parentId?: string | null, page: number = 1, limit: number = 50) {
+export function useFiles(parentId?: string | null, page: number = 1, limit: number = 100) {
   const queryKey = parentId
     ? ['resources', parentId]
     : ['resources', 'root', page, limit];
@@ -93,19 +93,20 @@ export function useFiles(parentId?: string | null, page: number = 1, limit: numb
         })),
       );
 
-      const cached = fileStore.getPaginated(page, limit);
-      return recordsToUnifiedItems(cached);
+      const cached = fileStore.getRootFiles();
+      return {
+        data: cached.files.map((r) => recordToUnifiedItem(r)!).filter(Boolean),
+        meta: { page, total: backendRes.meta?.total ?? cached.total },
+      };
     },
+    placeholderData: keepPreviousData,
     initialData: () => {
-      let records;
-      if (parentId) {
-        const children = fileStore.getChildrenByParent(parentId);
-        records = { files: children, total: children.length };
-      } else {
-        records = fileStore.getPaginated(page, limit);
-      }
-      if (records.files.length === 0) return undefined;
-      return recordsToUnifiedItems(records);
+      const cached = fileStore.getRootFiles();
+      if (cached.files.length === 0) return undefined;
+      return {
+        data: cached.files.map((r) => recordToUnifiedItem(r)!).filter(Boolean),
+        meta: { page: 0, total: cached.total },
+      };
     },
     staleTime: 30_000,
   });
