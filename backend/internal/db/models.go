@@ -22,8 +22,8 @@ type RebacRelation struct {
 }
 
 type RefreshToken struct {
-	ID        string    `json:"id"`
-	UserID    string    `json:"user_id"`
+	ID        uuid.UUID `json:"id"`
+	UserID    uuid.UUID `json:"user_id"`
 	TokenHash string    `json:"token_hash"`
 	ExpiresAt time.Time `json:"expires_at"`
 	Revoked   bool      `json:"revoked"`
@@ -55,9 +55,9 @@ type ResourcePlacement struct {
 }
 
 type ResourceTag struct {
-	ID         uuid.UUID      `json:"id"`
-	TagID      sql.NullString `json:"tag_id"`
-	ResourceID sql.NullString `json:"resource_id"`
+	ID         uuid.UUID `json:"id"`
+	TagID      uuid.UUID `json:"tag_id"`
+	ResourceID uuid.UUID `json:"resource_id"`
 }
 
 type ResourceVariant struct {
@@ -103,18 +103,18 @@ type SyncQueue struct {
 }
 
 type Tag struct {
-	ID          string         `json:"id"`
-	ParentTagID sql.NullString `json:"parent_tag_id"`
-	TagName     string         `json:"tag_name"`
-	CreatedAt   time.Time      `json:"created_at"`
-	UpdatedAt   time.Time      `json:"updated_at"`
+	ID          uuid.UUID     `json:"id"`
+	ParentTagID uuid.NullUUID `json:"parent_tag_id"`
+	TagName     string        `json:"tag_name"`
+	CreatedAt   time.Time     `json:"created_at"`
+	UpdatedAt   time.Time     `json:"updated_at"`
 }
 
 type User struct {
-	ID           string        `json:"id"`
+	ID           uuid.UUID     `json:"id"`
 	Username     string        `json:"username"`
 	PasswordHash string        `json:"password_hash"`
+	ParentUserID uuid.NullUUID `json:"parent_user_id"`
 	CreatedAt    time.Time     `json:"created_at"`
 	UpdatedAt    time.Time     `json:"updated_at"`
-	ParentUserID uuid.NullUUID `json:"parent_user_id"`
 }

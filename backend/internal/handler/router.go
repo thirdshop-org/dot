@@ -21,7 +21,7 @@ func SetupRoutes(r *gin.Engine, h *Handler, authMiddleware *auth.AuthService) {
 	protected := api.Group("")
 	protected.Use(authMiddleware.RequireAuth())
 
-	// Resources (replaces /files)
+	// Resources
 	protected.GET("/resources", h.Resource.List)
 	protected.POST("/resources/upload", h.Resource.Upload)
 	protected.POST("/resources/move", h.Resource.MoveResources)
@@ -31,14 +31,14 @@ func SetupRoutes(r *gin.Engine, h *Handler, authMiddleware *auth.AuthService) {
 	protected.DELETE("/resources/:id", h.Resource.Delete)
 	protected.GET("/resources/:id", h.Resource.Get)
 
-	// Tags on resources
+	// Tags
 	protected.POST("/resources/:id/tags", h.Resource.AddTags)
 	protected.GET("/resources/:id/tags", h.Resource.GetTags)
 
 	// Variants
 	protected.GET("/resources/:id/variants", h.Resource.GetVariants)
 
-	// Dedup check
+	// Dedup
 	protected.POST("/resources/dedup-check", h.Resource.CheckDuplicates)
 
 	// Sharing (ReBAC)
@@ -47,12 +47,9 @@ func SetupRoutes(r *gin.Engine, h *Handler, authMiddleware *auth.AuthService) {
 	protected.GET("/resources/:id/share", h.Share.List)
 	protected.GET("/resources/:id/access", h.Share.Check)
 
-	// Device management
+	// Devices
 	protected.GET("/devices", h.Device.List)
 	protected.POST("/devices", h.Device.Register)
-
-	// Placements
-	protected.GET("/resources/:id/placements", h.Resource.GetVariants)
 
 	// Sync
 	protected.POST("/sync/pull", h.Sync.Pull)
@@ -61,18 +58,4 @@ func SetupRoutes(r *gin.Engine, h *Handler, authMiddleware *auth.AuthService) {
 	// OCR
 	protected.POST("/ocr/jobs", h.OCR.CreateJob)
 	protected.GET("/ocr/jobs/:id", h.OCR.GetJobStatus)
-
-	// Legacy /files/* endpoints (maintain backward compatibility)
-	protected.GET("/files", h.Resource.List)
-	protected.POST("/files/upload", h.Resource.Upload)
-	protected.POST("/files/move", h.Resource.MoveResources)
-	protected.POST("/files/folders", h.Resource.CreateFolder)
-	protected.GET("/files/folders", h.Resource.ListFolders)
-	protected.GET("/files/folders/:id/files", h.Resource.ListByParent)
-	protected.DELETE("/files/:id", h.Resource.Delete)
-	protected.GET("/files/:id", h.Resource.Get)
-	protected.POST("/files/:id/tags", h.Resource.AddTags)
-	protected.GET("/files/:id/tags", h.Resource.GetTags)
-	protected.GET("/files/:id/thumbnails", h.Resource.GetVariants)
-	protected.POST("/files/dedup-check", h.Resource.CheckDuplicates)
 }

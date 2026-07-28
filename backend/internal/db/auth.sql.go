@@ -8,6 +8,8 @@ package db
 import (
 	"context"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 const createRefreshToken = `-- name: CreateRefreshToken :one
@@ -17,7 +19,7 @@ RETURNING id, user_id, token_hash, expires_at, revoked, created_at
 `
 
 type CreateRefreshTokenParams struct {
-	UserID    string    `json:"user_id"`
+	UserID    uuid.UUID `json:"user_id"`
 	TokenHash string    `json:"token_hash"`
 	ExpiresAt time.Time `json:"expires_at"`
 }
@@ -39,7 +41,7 @@ func (q *Queries) CreateRefreshToken(ctx context.Context, arg CreateRefreshToken
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (username, password_hash)
 VALUES ($1, $2)
-RETURNING id, username, password_hash, created_at, updated_at, parent_user_id
+RETURNING id, username, password_hash, parent_user_id, created_at, updated_at
 `
 
 type CreateUserParams struct {
@@ -54,9 +56,9 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.ID,
 		&i.Username,
 		&i.PasswordHash,
+		&i.ParentUserID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.ParentUserID,
 	)
 	return i, err
 }
@@ -81,25 +83,25 @@ func (q *Queries) GetRefreshToken(ctx context.Context, tokenHash string) (Refres
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, username, password_hash, created_at, updated_at, parent_user_id FROM users WHERE id = $1
+SELECT id, username, password_hash, parent_user_id, created_at, updated_at FROM users WHERE id = $1
 `
 
-func (q *Queries) GetUserByID(ctx context.Context, id string) (User, error) {
+func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (User, error) {
 	row := q.db.QueryRowContext(ctx, getUserByID, id)
 	var i User
 	err := row.Scan(
 		&i.ID,
 		&i.Username,
 		&i.PasswordHash,
+		&i.ParentUserID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.ParentUserID,
 	)
 	return i, err
 }
 
 const getUserByUsername = `-- name: GetUserByUsername :one
-SELECT id, username, password_hash, created_at, updated_at, parent_user_id FROM users WHERE username = $1
+SELECT id, username, password_hash, parent_user_id, created_at, updated_at FROM users WHERE username = $1
 `
 
 func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User, error) {
@@ -109,9 +111,9 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 		&i.ID,
 		&i.Username,
 		&i.PasswordHash,
+		&i.ParentUserID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.ParentUserID,
 	)
 	return i, err
 }
@@ -120,7 +122,7 @@ const revokeAllUserRefreshTokens = `-- name: RevokeAllUserRefreshTokens :exec
 UPDATE refresh_tokens SET revoked = TRUE WHERE user_id = $1
 `
 
-func (q *Queries) RevokeAllUserRefreshTokens(ctx context.Context, userID string) error {
+func (q *Queries) RevokeAllUserRefreshTokens(ctx context.Context, userID uuid.UUID) error {
 	_, err := q.db.ExecContext(ctx, revokeAllUserRefreshTokens, userID)
 	return err
 }

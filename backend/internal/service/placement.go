@@ -52,14 +52,4 @@ func (s *PlacementService) ListUserLocations(userID string) ([]db.StorageLocatio
 	return s.queries.ListStorageLocationsByUser(context.Background(), userUUID)
 }
 
-func (s *PlacementService) ensureServerLocation(userID uuid.UUID) (db.StorageLocation, error) {
-	loc, err := s.queries.GetServerStorageLocation(context.Background(), userID)
-	if err != nil {
-		return s.queries.CreateStorageLocation(context.Background(), db.CreateStorageLocationParams{
-			UserID:     userID,
-			DeviceName: "VaultDrop Server",
-			Role:       "server",
-		})
-	}
-	return loc, nil
-}
+

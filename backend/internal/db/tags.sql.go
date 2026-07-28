@@ -7,7 +7,8 @@ package db
 
 import (
 	"context"
-	"database/sql"
+
+	"github.com/google/uuid"
 )
 
 const addTagToResource = `-- name: AddTagToResource :exec
@@ -17,8 +18,8 @@ ON CONFLICT DO NOTHING
 `
 
 type AddTagToResourceParams struct {
-	TagID      sql.NullString `json:"tag_id"`
-	ResourceID sql.NullString `json:"resource_id"`
+	TagID      uuid.UUID `json:"tag_id"`
+	ResourceID uuid.UUID `json:"resource_id"`
 }
 
 func (q *Queries) AddTagToResource(ctx context.Context, arg AddTagToResourceParams) error {
@@ -50,7 +51,7 @@ DELETE FROM tags
 WHERE id = $1
 `
 
-func (q *Queries) DeleteTag(ctx context.Context, id string) error {
+func (q *Queries) DeleteTag(ctx context.Context, id uuid.UUID) error {
 	_, err := q.db.ExecContext(ctx, deleteTag, id)
 	return err
 }
@@ -62,7 +63,7 @@ WHERE rt.tag_id = $1
 ORDER BY r.created_at DESC
 `
 
-func (q *Queries) GetResourcesByTagID(ctx context.Context, tagID sql.NullString) ([]Resource, error) {
+func (q *Queries) GetResourcesByTagID(ctx context.Context, tagID uuid.UUID) ([]Resource, error) {
 	rows, err := q.db.QueryContext(ctx, getResourcesByTagID, tagID)
 	if err != nil {
 		return nil, err
@@ -102,7 +103,7 @@ SELECT id, parent_tag_id, tag_name, created_at, updated_at FROM tags
 WHERE id = $1
 `
 
-func (q *Queries) GetTag(ctx context.Context, id string) (Tag, error) {
+func (q *Queries) GetTag(ctx context.Context, id uuid.UUID) (Tag, error) {
 	row := q.db.QueryRowContext(ctx, getTag, id)
 	var i Tag
 	err := row.Scan(
@@ -140,7 +141,7 @@ WHERE rt.resource_id = $1
 ORDER BY t.tag_name ASC
 `
 
-func (q *Queries) GetTagsByResourceID(ctx context.Context, resourceID sql.NullString) ([]Tag, error) {
+func (q *Queries) GetTagsByResourceID(ctx context.Context, resourceID uuid.UUID) ([]Tag, error) {
 	rows, err := q.db.QueryContext(ctx, getTagsByResourceID, resourceID)
 	if err != nil {
 		return nil, err
@@ -209,8 +210,8 @@ WHERE tag_id = $1 AND resource_id = $2
 `
 
 type RemoveTagFromResourceParams struct {
-	TagID      sql.NullString `json:"tag_id"`
-	ResourceID sql.NullString `json:"resource_id"`
+	TagID      uuid.UUID `json:"tag_id"`
+	ResourceID uuid.UUID `json:"resource_id"`
 }
 
 func (q *Queries) RemoveTagFromResource(ctx context.Context, arg RemoveTagFromResourceParams) error {

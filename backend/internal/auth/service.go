@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"aidanwoods.dev/go-paseto"
+	"github.com/google/uuid"
 	"github.com/vaultdrop/backend/internal/config"
 	"github.com/vaultdrop/backend/internal/db"
 	"golang.org/x/crypto/argon2"
@@ -70,7 +71,7 @@ func (s *AuthService) Register(ctx context.Context, username, password string) (
 	}
 
 	existing, err := s.queries.GetUserByUsername(ctx, username)
-	if err == nil && existing.ID != "" {
+	if err == nil && existing.ID != uuid.Nil {
 		return nil, nil, ErrUsernameTaken
 	}
 
@@ -87,12 +88,12 @@ func (s *AuthService) Register(ctx context.Context, username, password string) (
 		return nil, nil, fmt.Errorf("create user: %w", err)
 	}
 
-	tokens, err := s.generateTokens(ctx, user.ID)
+	tokens, err := s.generateTokens(ctx, user.ID.String())
 	if err != nil {
 		return nil, nil, fmt.Errorf("generate tokens: %w", err)
 	}
 
-	return tokens, &UserResponse{ID: user.ID, Username: user.Username}, nil
+	return tokens, &UserResponse{ID: user.ID.String(), Username: user.Username}, nil
 }
 
 func (s *AuthService) Login(ctx context.Context, username, password string) (*TokenPair, *UserResponse, error) {
@@ -105,12 +106,12 @@ func (s *AuthService) Login(ctx context.Context, username, password string) (*To
 		return nil, nil, ErrInvalidCredentials
 	}
 
-	tokens, err := s.generateTokens(ctx, user.ID)
+	tokens, err := s.generateTokens(ctx, user.ID.String())
 	if err != nil {
 		return nil, nil, fmt.Errorf("generate tokens: %w", err)
 	}
 
-	return tokens, &UserResponse{ID: user.ID, Username: user.Username}, nil
+	return tokens, &UserResponse{ID: user.ID.String(), Username: user.Username}, nil
 }
 
 func (s *AuthService) Refresh(ctx context.Context, refreshToken string) (*TokenPair, error) {
@@ -125,7 +126,7 @@ func (s *AuthService) Refresh(ctx context.Context, refreshToken string) (*TokenP
 		return nil, ErrInvalidToken
 	}
 
-	if stored.UserID != userID {
+	if stored.UserID.String() != userID {
 		return nil, ErrInvalidToken
 	}
 
@@ -172,8 +173,9 @@ func (s *AuthService) generateTokens(ctx context.Context, userID string) (*Token
 	}
 
 	refreshHash := hashToken(refreshToken)
+	userUUID := uuid.MustParse(userID)
 	_, err = s.queries.CreateRefreshToken(ctx, db.CreateRefreshTokenParams{
-		UserID:    userID,
+		UserID:    userUUID,
 		TokenHash: refreshHash,
 		ExpiresAt: time.Now().Add(refreshTokenTTL),
 	})

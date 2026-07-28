@@ -81,7 +81,7 @@ func (s *ResourceService) Upload(file *multipart.FileHeader, ownerID string) (*m
 		return nil, fmt.Errorf("create resource in db: %w", err)
 	}
 
-	placement, err := s.ensureServerPlacement(dbResource.ID, dst)
+	placement, err := s.ensureServerPlacement(dbResource.ID, ownerUUID, dst)
 	if err != nil {
 		return nil, fmt.Errorf("create server placement: %w", err)
 	}
@@ -98,8 +98,8 @@ func (s *ResourceService) Upload(file *multipart.FileHeader, ownerID string) (*m
 	}, nil
 }
 
-func (s *ResourceService) ensureServerPlacement(resourceID uuid.UUID, dst string) (db.ResourcePlacement, error) {
-	serverLoc, err := s.queries.GetServerStorageLocation(context.Background(), uuid.Nil)
+func (s *ResourceService) ensureServerPlacement(resourceID, ownerID uuid.UUID, dst string) (db.ResourcePlacement, error) {
+	serverLoc, err := s.queries.GetServerStorageLocation(context.Background(), ownerID)
 	if err != nil {
 		return db.ResourcePlacement{}, fmt.Errorf("get server location: %w", err)
 	}
@@ -137,7 +137,7 @@ func (s *ResourceService) List(ownerID string) ([]model.Resource, error) {
 
 	resources := make([]model.Resource, len(dbResources))
 	for i, r := range dbResources {
-		tags, err := s.queries.GetTagsByResourceID(context.Background(), sql.NullString{String: r.ID.String(), Valid: true})
+		tags, err := s.queries.GetTagsByResourceID(context.Background(), r.ID)
 		if err != nil {
 			return nil, fmt.Errorf("get tags for resource %s: %w", r.ID, err)
 		}
@@ -152,7 +152,7 @@ func (s *ResourceService) Get(id string) (*model.Resource, error) {
 	if err != nil {
 		return nil, fmt.Errorf("get resource: %w", err)
 	}
-	tags, err := s.queries.GetTagsByResourceID(context.Background(), sql.NullString{String: r.ID.String(), Valid: true})
+	tags, err := s.queries.GetTagsByResourceID(context.Background(), r.ID)
 	if err != nil {
 		return nil, fmt.Errorf("get tags: %w", err)
 	}
@@ -202,8 +202,8 @@ func (s *ResourceService) AddTags(resourceID string, tagNames []string) error {
 		}
 
 		err = s.queries.AddTagToResource(context.Background(), db.AddTagToResourceParams{
-			TagID:      sql.NullString{String: tag.ID, Valid: true},
-			ResourceID: sql.NullString{String: resourceUUID.String(), Valid: true},
+			TagID:      tag.ID,
+			ResourceID: resourceUUID,
 		})
 		if err != nil {
 			return fmt.Errorf("link tag %q to resource: %w", name, err)
@@ -214,13 +214,13 @@ func (s *ResourceService) AddTags(resourceID string, tagNames []string) error {
 
 func (s *ResourceService) GetTagsByResourceID(resourceID string) ([]model.Tag, error) {
 	resourceUUID, _ := uuid.Parse(resourceID)
-	dbTags, err := s.queries.GetTagsByResourceID(context.Background(), sql.NullString{String: resourceUUID.String(), Valid: true})
+	dbTags, err := s.queries.GetTagsByResourceID(context.Background(), resourceUUID)
 	if err != nil {
 		return nil, fmt.Errorf("get tags: %w", err)
 	}
 	tags := make([]model.Tag, len(dbTags))
 	for i, t := range dbTags {
-		tags[i] = model.Tag{ID: t.ID, Name: t.TagName}
+		tags[i] = model.Tag{ID: t.ID.String(), Name: t.TagName}
 	}
 	return tags, nil
 }
@@ -283,7 +283,7 @@ func (s *ResourceService) ListResourcesByParentID(parentID, ownerID string) ([]m
 	}
 	resources := make([]model.Resource, len(dbResources))
 	for i, r := range dbResources {
-		tags, err := s.queries.GetTagsByResourceID(context.Background(), sql.NullString{String: r.ID.String(), Valid: true})
+		tags, err := s.queries.GetTagsByResourceID(context.Background(), r.ID)
 		if err != nil {
 			return nil, fmt.Errorf("get tags for resource %s: %w", r.ID, err)
 		}
@@ -370,7 +370,7 @@ func (s *ResourceService) FindDuplicatesByNameSize(name string, size int64) ([]d
 func dbResourceToModel(r db.Resource, dbTags []db.Tag) model.Resource {
 	tags := make([]model.Tag, len(dbTags))
 	for i, t := range dbTags {
-		tags[i] = model.Tag{ID: t.ID, Name: t.TagName}
+		tags[i] = model.Tag{ID: t.ID.String(), Name: t.TagName}
 	}
 
 	parentID := ""
@@ -383,7 +383,6 @@ func dbResourceToModel(r db.Resource, dbTags []db.Tag) model.Resource {
 		Name:             r.Name,
 		MimeType:         r.MimeType,
 		Size:             r.Size,
-		Checksum:         r.Checksum,
 		OcrText:          r.OcrText,
 		IsFolder:         r.IsFolder,
 		ParentResourceID: parentID,

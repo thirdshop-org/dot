@@ -12,8 +12,6 @@ type Resource struct {
 	Name             string    `json:"name"`
 	MimeType         string    `json:"mimeType"`
 	Size             int64     `json:"size"`
-	StorageKey       string    `json:"-"`
-	Checksum         string    `json:"-"`
 	OcrText          string    `json:"ocrText,omitempty"`
 	Tags             []Tag     `json:"tags"`
 	IsFolder         bool      `json:"isFolder"`

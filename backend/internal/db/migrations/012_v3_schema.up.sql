@@ -1,9 +1,34 @@
--- VaultDrop 012: V3 new tables - resources, storage_locations, resource_placements, etc.
+-- VaultDrop 012: Clean V3 schema
+-- Drops all legacy V1 tables, recreates everything with UUIDs
 
--- Add parent_user_id to users for groups/organizations
-ALTER TABLE users ADD COLUMN parent_user_id UUID REFERENCES users(id);
+-- Drop legacy tables (order matters for FK dependencies)
+DROP TABLE IF EXISTS file_tags CASCADE;
+DROP TABLE IF EXISTS resource_tags CASCADE;
+DROP TABLE IF EXISTS thumbnails CASCADE;
+DROP TABLE IF EXISTS refresh_tokens CASCADE;
+DROP TABLE IF EXISTS files CASCADE;
+DROP TABLE IF EXISTS tags CASCADE;
+DROP TABLE IF EXISTS users CASCADE;
 
--- Resources (replaces files)
+-- Level 1: No dependencies
+CREATE TABLE users (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    username TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    parent_user_id UUID REFERENCES users(id),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE tags (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    parent_tag_id UUID REFERENCES tags(id),
+    tag_name TEXT NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Level 2: Depend on users
 CREATE TABLE resources (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name TEXT NOT NULL,
@@ -22,7 +47,40 @@ CREATE INDEX idx_resources_owner ON resources(owner_id);
 CREATE INDEX idx_resources_parent ON resources(parent_resource_id);
 CREATE INDEX idx_resources_checksum_owner ON resources(checksum, owner_id);
 
--- Resource variants (replaces thumbnails)
+CREATE TABLE storage_locations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id),
+    device_name TEXT NOT NULL,
+    role TEXT NOT NULL CHECK (role IN ('primary', 'device', 'backup', 'server')),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_seen_at TIMESTAMP
+);
+
+CREATE INDEX idx_locations_user ON storage_locations(user_id);
+
+CREATE TABLE refresh_tokens (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token_hash TEXT NOT NULL,
+    expires_at TIMESTAMP NOT NULL,
+    revoked BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_refresh_tokens_user_id ON refresh_tokens(user_id);
+CREATE INDEX idx_refresh_tokens_token_hash ON refresh_tokens(token_hash);
+
+-- Level 3: Depend on level 1-2
+CREATE TABLE resource_tags (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tag_id UUID NOT NULL REFERENCES tags(id),
+    resource_id UUID NOT NULL REFERENCES resources(id),
+    UNIQUE(tag_id, resource_id)
+);
+
+CREATE INDEX idx_resource_tags_tag ON resource_tags(tag_id);
+CREATE INDEX idx_resource_tags_resource ON resource_tags(resource_id);
+
 CREATE TABLE resource_variants (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     resource_id UUID NOT NULL REFERENCES resources(id) ON DELETE CASCADE,
@@ -39,19 +97,6 @@ CREATE TABLE resource_variants (
 CREATE INDEX idx_variants_resource ON resource_variants(resource_id);
 CREATE UNIQUE INDEX idx_variants_resource_type_page ON resource_variants(resource_id, variant_type, page_number);
 
--- Storage locations (devices, server, backup)
-CREATE TABLE storage_locations (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id),
-    device_name TEXT NOT NULL,
-    role TEXT NOT NULL CHECK (role IN ('primary', 'device', 'backup', 'server')),
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    last_seen_at TIMESTAMP
-);
-
-CREATE INDEX idx_locations_user ON storage_locations(user_id);
-
--- Resource placements (pivot resource × storage_location)
 CREATE TABLE resource_placements (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     resource_id UUID NOT NULL REFERENCES resources(id) ON DELETE CASCADE,
@@ -67,7 +112,19 @@ CREATE INDEX idx_placements_resource ON resource_placements(resource_id);
 CREATE INDEX idx_placements_location ON resource_placements(storage_location_id);
 CREATE INDEX idx_placements_status ON resource_placements(status);
 
--- Retention policies
+CREATE TABLE rebac_relations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    resource_id UUID NOT NULL REFERENCES resources(id) ON DELETE CASCADE,
+    subject_user_id UUID NOT NULL REFERENCES users(id),
+    role TEXT NOT NULL CHECK (role IN ('owner', 'admin', 'editor', 'viewer')),
+    granted_by UUID NOT NULL REFERENCES users(id),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(resource_id, subject_user_id)
+);
+
+CREATE INDEX idx_rebac_resource ON rebac_relations(resource_id);
+CREATE INDEX idx_rebac_subject ON rebac_relations(subject_user_id);
+
 CREATE TABLE retention_policies (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES users(id),
@@ -80,7 +137,6 @@ CREATE TABLE retention_policies (
 CREATE INDEX idx_policies_user ON retention_policies(user_id);
 CREATE INDEX idx_policies_location ON retention_policies(storage_location_id);
 
--- Sync queue
 CREATE TABLE sync_queue (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     resource_id UUID NOT NULL REFERENCES resources(id) ON DELETE CASCADE,
@@ -96,21 +152,7 @@ CREATE INDEX idx_queue_status ON sync_queue(status);
 CREATE INDEX idx_queue_resource ON sync_queue(resource_id);
 CREATE INDEX idx_queue_location ON sync_queue(storage_location_id);
 
--- ReBAC relations
-CREATE TABLE rebac_relations (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    resource_id UUID NOT NULL REFERENCES resources(id) ON DELETE CASCADE,
-    subject_user_id UUID NOT NULL REFERENCES users(id),
-    role TEXT NOT NULL CHECK (role IN ('owner', 'admin', 'editor', 'viewer')),
-    granted_by UUID NOT NULL REFERENCES users(id),
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(resource_id, subject_user_id)
-);
-
-CREATE INDEX idx_rebac_resource ON rebac_relations(resource_id);
-CREATE INDEX idx_rebac_subject ON rebac_relations(subject_user_id);
-
--- Function to resolve effective role with recursive parent/group traversal
+-- ReBAC permission resolver
 CREATE OR REPLACE FUNCTION resolve_effective_role(p_user_id UUID, p_resource_id UUID)
 RETURNS TEXT AS $$
 DECLARE
