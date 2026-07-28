@@ -17,9 +17,9 @@ import (
 )
 
 type ConversionJob struct {
-	FileID   string
-	FilePath string
-	MimeType string
+	ResourceID string
+	FilePath   string
+	MimeType   string
 }
 
 type ConversionService struct {
@@ -46,9 +46,9 @@ func (s *ConversionService) Stop() {
 	log.Println("[Conversion] Worker stopped")
 }
 
-func (s *ConversionService) Enqueue(fileID, filePath, mimeType string) {
-	s.jobs <- ConversionJob{FileID: fileID, FilePath: filePath, MimeType: mimeType}
-	log.Printf("[Conversion] Enqueued file %s", fileID)
+func (s *ConversionService) Enqueue(resourceID, filePath, mimeType string) {
+	s.jobs <- ConversionJob{ResourceID: resourceID, FilePath: filePath, MimeType: mimeType}
+	log.Printf("[Conversion] Enqueued resource %s", resourceID)
 }
 
 func (s *ConversionService) worker() {
@@ -58,7 +58,7 @@ func (s *ConversionService) worker() {
 }
 
 func (s *ConversionService) process(job ConversionJob) {
-	log.Printf("[Conversion] Processing file %s (mime: %s)", job.FileID, job.MimeType)
+	log.Printf("[Conversion] Processing resource %s (mime: %s)", job.ResourceID, job.MimeType)
 
 	pdfPath := job.FilePath
 	tmpDir := ""
@@ -67,18 +67,18 @@ func (s *ConversionService) process(job ConversionJob) {
 		var err error
 		pdfPath, tmpDir, err = s.convertToPDF(job.FilePath)
 		if err != nil {
-			log.Printf("[Conversion] Failed to convert file %s to PDF: %v", job.FileID, err)
+			log.Printf("[Conversion] Failed to convert resource %s to PDF: %v", job.ResourceID, err)
 			return
 		}
 		defer os.RemoveAll(tmpDir)
 	} else if !isPDF(job.MimeType) {
-		log.Printf("[Conversion] Skipping file %s: unsupported mime type %s", job.FileID, job.MimeType)
+		log.Printf("[Conversion] Skipping resource %s: unsupported mime type %s", job.ResourceID, job.MimeType)
 		return
 	}
 
-	thumbDir := filepath.Join(s.cfg.ThumbnailDir, job.FileID)
+	thumbDir := filepath.Join(s.cfg.ThumbnailDir, job.ResourceID)
 	if err := os.MkdirAll(thumbDir, 0o755); err != nil {
-		log.Printf("[Conversion] Failed to create thumbnail dir for %s: %v", job.FileID, err)
+		log.Printf("[Conversion] Failed to create thumbnail dir for %s: %v", job.ResourceID, err)
 		return
 	}
 
@@ -86,14 +86,14 @@ func (s *ConversionService) process(job ConversionJob) {
 		label string
 		dpi   int
 	}{
-		{"thumbnail", 21},
-		{"full", 200},
+		{"thumbnail_small", 21},
+		{"thumbnail_full", 200},
 	}
 
 	for _, res := range resolutions {
 		pages, err := s.convertPDFToImages(pdfPath, thumbDir, res.dpi)
 		if err != nil {
-			log.Printf("[Conversion] Failed to convert file %s to images (res=%s): %v", job.FileID, res.label, err)
+			log.Printf("[Conversion] Failed to convert resource %s to images (res=%s): %v", job.ResourceID, res.label, err)
 			continue
 		}
 
@@ -104,32 +104,33 @@ func (s *ConversionService) process(job ConversionJob) {
 				width, height = 0, 0
 			}
 
-			thumbUUID := uuid.New().String()
-			dstPath := filepath.Join(thumbDir, thumbUUID+".jpg")
+			dstPath := filepath.Join(thumbDir, uuid.New().String()+".jpg")
 			if err := os.Rename(page.path, dstPath); err != nil {
 				log.Printf("[Conversion] Failed to move %s to %s: %v", page.path, dstPath, err)
 				continue
 			}
 
-			_, err = s.queries.CreateThumbnail(context.Background(), db.CreateThumbnailParams{
-				FileID:          job.FileID,
-				PageNumber:      int32(page.number),
-				ResolutionLabel: res.label,
-				Width:           int32(width),
-				Height:          int32(height),
-				StorageKey:      dstPath,
-				MimeType:        "image/jpeg",
+			resourceUUID, _ := uuid.Parse(job.ResourceID)
+			_, err = s.queries.CreateResourceVariant(context.Background(), db.CreateResourceVariantParams{
+				ResourceID:  resourceUUID,
+				VariantType: res.label,
+				PageNumber:  int32(page.number),
+				Width:       int32(width),
+				Height:      int32(height),
+				MimeType:    "image/jpeg",
+				GeneratedBy: "server",
+				StorageKey:  dstPath,
 			})
 			if err != nil {
-				log.Printf("[Conversion] Failed to create thumbnail record for file %s page %d: %v", job.FileID, page.number, err)
+				log.Printf("[Conversion] Failed to create variant record for resource %s page %d: %v", job.ResourceID, page.number, err)
 				continue
 			}
 		}
 
-		log.Printf("[Conversion] Generated %d %s images for file %s", len(pages), res.label, job.FileID)
+		log.Printf("[Conversion] Generated %d %s images for resource %s", len(pages), res.label, job.ResourceID)
 	}
 
-	log.Printf("[Conversion] Completed file %s", job.FileID)
+	log.Printf("[Conversion] Completed resource %s", job.ResourceID)
 }
 
 func (s *ConversionService) convertToPDF(inputPath string) (string, string, error) {

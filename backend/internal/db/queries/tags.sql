@@ -1,6 +1,6 @@
 -- name: CreateTag :one
-INSERT INTO tags (tag_name, tag_type)
-VALUES ($1, $2)
+INSERT INTO tags (tag_name)
+VALUES ($1)
 RETURNING *;
 
 -- name: GetTag :one
@@ -19,23 +19,23 @@ ORDER BY tag_name ASC;
 DELETE FROM tags
 WHERE id = $1;
 
--- name: AddTagToFile :exec
-INSERT INTO file_tags (tag_id, file_id)
+-- name: AddTagToResource :exec
+INSERT INTO resource_tags (tag_id, resource_id)
 VALUES ($1, $2)
 ON CONFLICT DO NOTHING;
 
--- name: RemoveTagFromFile :exec
-DELETE FROM file_tags
-WHERE tag_id = $1 AND file_id = $2;
+-- name: RemoveTagFromResource :exec
+DELETE FROM resource_tags
+WHERE tag_id = $1 AND resource_id = $2;
 
--- name: GetTagsByFileID :many
+-- name: GetTagsByResourceID :many
 SELECT t.* FROM tags t
-JOIN file_tags ft ON t.id = ft.tag_id
-WHERE ft.file_id = $1
+JOIN resource_tags rt ON t.id = rt.tag_id
+WHERE rt.resource_id = $1
 ORDER BY t.tag_name ASC;
 
--- name: GetFilesByTagID :many
-SELECT f.* FROM files f
-JOIN file_tags ft ON f.id = ft.file_id
-WHERE ft.tag_id = $1
-ORDER BY f.created_at DESC;
+-- name: GetResourcesByTagID :many
+SELECT r.* FROM resources r
+JOIN resource_tags rt ON r.id = rt.resource_id
+WHERE rt.tag_id = $1
+ORDER BY r.created_at DESC;

@@ -10,41 +10,35 @@ import (
 	"database/sql"
 )
 
-const addTagToFile = `-- name: AddTagToFile :exec
-INSERT INTO file_tags (tag_id, file_id)
+const addTagToResource = `-- name: AddTagToResource :exec
+INSERT INTO resource_tags (tag_id, resource_id)
 VALUES ($1, $2)
 ON CONFLICT DO NOTHING
 `
 
-type AddTagToFileParams struct {
-	TagID  sql.NullString `json:"tag_id"`
-	FileID sql.NullString `json:"file_id"`
+type AddTagToResourceParams struct {
+	TagID      sql.NullString `json:"tag_id"`
+	ResourceID sql.NullString `json:"resource_id"`
 }
 
-func (q *Queries) AddTagToFile(ctx context.Context, arg AddTagToFileParams) error {
-	_, err := q.db.ExecContext(ctx, addTagToFile, arg.TagID, arg.FileID)
+func (q *Queries) AddTagToResource(ctx context.Context, arg AddTagToResourceParams) error {
+	_, err := q.db.ExecContext(ctx, addTagToResource, arg.TagID, arg.ResourceID)
 	return err
 }
 
 const createTag = `-- name: CreateTag :one
-INSERT INTO tags (tag_name, tag_type)
-VALUES ($1, $2)
-RETURNING id, parent_tag_id, tag_name, tag_type, created_at, updated_at
+INSERT INTO tags (tag_name)
+VALUES ($1)
+RETURNING id, parent_tag_id, tag_name, created_at, updated_at
 `
 
-type CreateTagParams struct {
-	TagName string `json:"tag_name"`
-	TagType string `json:"tag_type"`
-}
-
-func (q *Queries) CreateTag(ctx context.Context, arg CreateTagParams) (Tag, error) {
-	row := q.db.QueryRowContext(ctx, createTag, arg.TagName, arg.TagType)
+func (q *Queries) CreateTag(ctx context.Context, tagName string) (Tag, error) {
+	row := q.db.QueryRowContext(ctx, createTag, tagName)
 	var i Tag
 	err := row.Scan(
 		&i.ID,
 		&i.ParentTagID,
 		&i.TagName,
-		&i.TagType,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -61,34 +55,34 @@ func (q *Queries) DeleteTag(ctx context.Context, id string) error {
 	return err
 }
 
-const getFilesByTagID = `-- name: GetFilesByTagID :many
-SELECT f.id, f.name, f.mime_type, f.size, f.storage_key, f.checksum, f.ocr_text, f.created_at, f.updated_at, f.parent_file_id, f.is_folder FROM files f
-JOIN file_tags ft ON f.id = ft.file_id
-WHERE ft.tag_id = $1
-ORDER BY f.created_at DESC
+const getResourcesByTagID = `-- name: GetResourcesByTagID :many
+SELECT r.id, r.name, r.mime_type, r.size, r.checksum, r.ocr_text, r.is_folder, r.parent_resource_id, r.owner_id, r.created_at, r.updated_at FROM resources r
+JOIN resource_tags rt ON r.id = rt.resource_id
+WHERE rt.tag_id = $1
+ORDER BY r.created_at DESC
 `
 
-func (q *Queries) GetFilesByTagID(ctx context.Context, tagID sql.NullString) ([]File, error) {
-	rows, err := q.db.QueryContext(ctx, getFilesByTagID, tagID)
+func (q *Queries) GetResourcesByTagID(ctx context.Context, tagID sql.NullString) ([]Resource, error) {
+	rows, err := q.db.QueryContext(ctx, getResourcesByTagID, tagID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []File
+	var items []Resource
 	for rows.Next() {
-		var i File
+		var i Resource
 		if err := rows.Scan(
 			&i.ID,
 			&i.Name,
 			&i.MimeType,
 			&i.Size,
-			&i.StorageKey,
 			&i.Checksum,
 			&i.OcrText,
+			&i.IsFolder,
+			&i.ParentResourceID,
+			&i.OwnerID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
-			&i.ParentFileID,
-			&i.IsFolder,
 		); err != nil {
 			return nil, err
 		}
@@ -104,7 +98,7 @@ func (q *Queries) GetFilesByTagID(ctx context.Context, tagID sql.NullString) ([]
 }
 
 const getTag = `-- name: GetTag :one
-SELECT id, parent_tag_id, tag_name, tag_type, created_at, updated_at FROM tags
+SELECT id, parent_tag_id, tag_name, created_at, updated_at FROM tags
 WHERE id = $1
 `
 
@@ -115,7 +109,6 @@ func (q *Queries) GetTag(ctx context.Context, id string) (Tag, error) {
 		&i.ID,
 		&i.ParentTagID,
 		&i.TagName,
-		&i.TagType,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -123,7 +116,7 @@ func (q *Queries) GetTag(ctx context.Context, id string) (Tag, error) {
 }
 
 const getTagByName = `-- name: GetTagByName :one
-SELECT id, parent_tag_id, tag_name, tag_type, created_at, updated_at FROM tags
+SELECT id, parent_tag_id, tag_name, created_at, updated_at FROM tags
 WHERE tag_name = $1
 `
 
@@ -134,22 +127,21 @@ func (q *Queries) GetTagByName(ctx context.Context, tagName string) (Tag, error)
 		&i.ID,
 		&i.ParentTagID,
 		&i.TagName,
-		&i.TagType,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
 	return i, err
 }
 
-const getTagsByFileID = `-- name: GetTagsByFileID :many
-SELECT t.id, t.parent_tag_id, t.tag_name, t.tag_type, t.created_at, t.updated_at FROM tags t
-JOIN file_tags ft ON t.id = ft.tag_id
-WHERE ft.file_id = $1
+const getTagsByResourceID = `-- name: GetTagsByResourceID :many
+SELECT t.id, t.parent_tag_id, t.tag_name, t.created_at, t.updated_at FROM tags t
+JOIN resource_tags rt ON t.id = rt.tag_id
+WHERE rt.resource_id = $1
 ORDER BY t.tag_name ASC
 `
 
-func (q *Queries) GetTagsByFileID(ctx context.Context, fileID sql.NullString) ([]Tag, error) {
-	rows, err := q.db.QueryContext(ctx, getTagsByFileID, fileID)
+func (q *Queries) GetTagsByResourceID(ctx context.Context, resourceID sql.NullString) ([]Tag, error) {
+	rows, err := q.db.QueryContext(ctx, getTagsByResourceID, resourceID)
 	if err != nil {
 		return nil, err
 	}
@@ -161,7 +153,6 @@ func (q *Queries) GetTagsByFileID(ctx context.Context, fileID sql.NullString) ([
 			&i.ID,
 			&i.ParentTagID,
 			&i.TagName,
-			&i.TagType,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -179,7 +170,7 @@ func (q *Queries) GetTagsByFileID(ctx context.Context, fileID sql.NullString) ([
 }
 
 const listTags = `-- name: ListTags :many
-SELECT id, parent_tag_id, tag_name, tag_type, created_at, updated_at FROM tags
+SELECT id, parent_tag_id, tag_name, created_at, updated_at FROM tags
 ORDER BY tag_name ASC
 `
 
@@ -196,7 +187,6 @@ func (q *Queries) ListTags(ctx context.Context) ([]Tag, error) {
 			&i.ID,
 			&i.ParentTagID,
 			&i.TagName,
-			&i.TagType,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -213,17 +203,17 @@ func (q *Queries) ListTags(ctx context.Context) ([]Tag, error) {
 	return items, nil
 }
 
-const removeTagFromFile = `-- name: RemoveTagFromFile :exec
-DELETE FROM file_tags
-WHERE tag_id = $1 AND file_id = $2
+const removeTagFromResource = `-- name: RemoveTagFromResource :exec
+DELETE FROM resource_tags
+WHERE tag_id = $1 AND resource_id = $2
 `
 
-type RemoveTagFromFileParams struct {
-	TagID  sql.NullString `json:"tag_id"`
-	FileID sql.NullString `json:"file_id"`
+type RemoveTagFromResourceParams struct {
+	TagID      sql.NullString `json:"tag_id"`
+	ResourceID sql.NullString `json:"resource_id"`
 }
 
-func (q *Queries) RemoveTagFromFile(ctx context.Context, arg RemoveTagFromFileParams) error {
-	_, err := q.db.ExecContext(ctx, removeTagFromFile, arg.TagID, arg.FileID)
+func (q *Queries) RemoveTagFromResource(ctx context.Context, arg RemoveTagFromResourceParams) error {
+	_, err := q.db.ExecContext(ctx, removeTagFromResource, arg.TagID, arg.ResourceID)
 	return err
 }

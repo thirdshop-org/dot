@@ -9,8 +9,8 @@ import (
 )
 
 type OCRHandler struct {
-	ocr   *service.OCRService
-	files *service.FileService
+	ocr       *service.OCRService
+	resources *service.ResourceService
 }
 
 func (h *OCRHandler) CreateJob(c *gin.Context) {

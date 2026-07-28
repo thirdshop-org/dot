@@ -6,17 +6,37 @@ import (
 )
 
 type Handler struct {
-	File   *FileHandler
-	OCR    *OCRHandler
-	Health *HealthHandler
-	Auth   *auth.AuthHandler
+	Resource  *ResourceHandler
+	OCR       *OCRHandler
+	Health    *HealthHandler
+	Auth      *auth.AuthHandler
+	Share     *ShareHandler
+	Device    *DeviceHandler
+	Sync      *SyncHandler
 }
 
-func New(fileSvc *service.FileService, ocrSvc *service.OCRService, urlSvc *service.URLService, authHandler *auth.AuthHandler, conversionSvc *service.ConversionService) *Handler {
+func New(
+	resourceSvc *service.ResourceService,
+	ocrSvc *service.OCRService,
+	urlSvc *service.URLService,
+	authHandler *auth.AuthHandler,
+	conversionSvc *service.ConversionService,
+	rebacSvc *service.RebacService,
+	placementSvc *service.PlacementService,
+	syncSvc *service.SyncService,
+) *Handler {
 	return &Handler{
-		File:   &FileHandler{files: fileSvc, urls: urlSvc, ocr: ocrSvc, conversion: conversionSvc},
-		OCR:    &OCRHandler{ocr: ocrSvc, files: fileSvc},
+		Resource: &ResourceHandler{
+			resources:  resourceSvc,
+			urls:       urlSvc,
+			ocr:        ocrSvc,
+			conversion: conversionSvc,
+		},
+		OCR:    &OCRHandler{ocr: ocrSvc, resources: resourceSvc},
 		Health: &HealthHandler{ocr: ocrSvc},
 		Auth:   authHandler,
+		Share:  &ShareHandler{rebac: rebacSvc},
+		Device: &DeviceHandler{placement: placementSvc},
+		Sync:   &SyncHandler{sync: syncSvc},
 	}
 }

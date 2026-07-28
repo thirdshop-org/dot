@@ -30,8 +30,8 @@ func main() {
 
 	queries := db.New(database)
 
-	fileSvc := service.NewFileService(queries, cfg)
-	ocrSvc := service.NewOCRService(cfg, fileSvc)
+	resourceSvc := service.NewResourceService(queries, cfg)
+	ocrSvc := service.NewOCRService(cfg, resourceSvc)
 	conversionSvc := service.NewConversionService(queries, cfg)
 	urlSvc := service.NewURLService(cfg.HMACSecret, cfg.ServerHost, cfg.URLExpiryMinutes)
 	authSvc, err := auth.NewAuthService(queries, cfg)
@@ -39,13 +39,17 @@ func main() {
 		log.Fatalf("Failed to create auth service: %v", err)
 	}
 
+	rebacSvc := service.NewRebacService(queries)
+	placementSvc := service.NewPlacementService(queries)
+	syncSvc := service.NewSyncService(queries)
+
 	ocrSvc.Start()
 	defer ocrSvc.Stop()
 
 	conversionSvc.Start()
 	defer conversionSvc.Stop()
 
-	h := handler.New(fileSvc, ocrSvc, urlSvc, auth.NewAuthHandler(authSvc), conversionSvc)
+	h := handler.New(resourceSvc, ocrSvc, urlSvc, auth.NewAuthHandler(authSvc), conversionSvc, rebacSvc, placementSvc, syncSvc)
 
 	r := gin.Default()
 	handler.SetupRoutes(r, h, authSvc)

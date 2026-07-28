@@ -6,27 +6,19 @@ package db
 
 import (
 	"database/sql"
+	"encoding/json"
 	"time"
+
+	"github.com/google/uuid"
 )
 
-type File struct {
-	ID           string         `json:"id"`
-	Name         string         `json:"name"`
-	MimeType     string         `json:"mime_type"`
-	Size         int64          `json:"size"`
-	StorageKey   string         `json:"storage_key"`
-	Checksum     string         `json:"checksum"`
-	OcrText      string         `json:"ocr_text"`
-	CreatedAt    time.Time      `json:"created_at"`
-	UpdatedAt    time.Time      `json:"updated_at"`
-	ParentFileID sql.NullString `json:"parent_file_id"`
-	IsFolder     bool           `json:"is_folder"`
-}
-
-type FileTag struct {
-	ID     string         `json:"id"`
-	TagID  sql.NullString `json:"tag_id"`
-	FileID sql.NullString `json:"file_id"`
+type RebacRelation struct {
+	ID            uuid.UUID `json:"id"`
+	ResourceID    uuid.UUID `json:"resource_id"`
+	SubjectUserID uuid.UUID `json:"subject_user_id"`
+	Role          string    `json:"role"`
+	GrantedBy     uuid.UUID `json:"granted_by"`
+	CreatedAt     time.Time `json:"created_at"`
 }
 
 type RefreshToken struct {
@@ -38,31 +30,91 @@ type RefreshToken struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+type Resource struct {
+	ID               uuid.UUID     `json:"id"`
+	Name             string        `json:"name"`
+	MimeType         string        `json:"mime_type"`
+	Size             int64         `json:"size"`
+	Checksum         string        `json:"checksum"`
+	OcrText          string        `json:"ocr_text"`
+	IsFolder         bool          `json:"is_folder"`
+	ParentResourceID uuid.NullUUID `json:"parent_resource_id"`
+	OwnerID          uuid.UUID     `json:"owner_id"`
+	CreatedAt        time.Time     `json:"created_at"`
+	UpdatedAt        time.Time     `json:"updated_at"`
+}
+
+type ResourcePlacement struct {
+	ID                uuid.UUID      `json:"id"`
+	ResourceID        uuid.UUID      `json:"resource_id"`
+	StorageLocationID uuid.UUID      `json:"storage_location_id"`
+	Status            string         `json:"status"`
+	StorageKey        sql.NullString `json:"storage_key"`
+	SyncedAt          sql.NullTime   `json:"synced_at"`
+	CreatedAt         time.Time      `json:"created_at"`
+}
+
+type ResourceTag struct {
+	ID         uuid.UUID      `json:"id"`
+	TagID      sql.NullString `json:"tag_id"`
+	ResourceID sql.NullString `json:"resource_id"`
+}
+
+type ResourceVariant struct {
+	ID          uuid.UUID `json:"id"`
+	ResourceID  uuid.UUID `json:"resource_id"`
+	VariantType string    `json:"variant_type"`
+	PageNumber  int32     `json:"page_number"`
+	Width       int32     `json:"width"`
+	Height      int32     `json:"height"`
+	MimeType    string    `json:"mime_type"`
+	GeneratedBy string    `json:"generated_by"`
+	StorageKey  string    `json:"storage_key"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+type RetentionPolicy struct {
+	ID                uuid.UUID       `json:"id"`
+	UserID            uuid.UUID       `json:"user_id"`
+	StorageLocationID uuid.UUID       `json:"storage_location_id"`
+	RuleType          string          `json:"rule_type"`
+	RuleValue         json.RawMessage `json:"rule_value"`
+	CreatedAt         time.Time       `json:"created_at"`
+}
+
+type StorageLocation struct {
+	ID         uuid.UUID    `json:"id"`
+	UserID     uuid.UUID    `json:"user_id"`
+	DeviceName string       `json:"device_name"`
+	Role       string       `json:"role"`
+	CreatedAt  time.Time    `json:"created_at"`
+	LastSeenAt sql.NullTime `json:"last_seen_at"`
+}
+
+type SyncQueue struct {
+	ID                uuid.UUID `json:"id"`
+	ResourceID        uuid.UUID `json:"resource_id"`
+	StorageLocationID uuid.UUID `json:"storage_location_id"`
+	Operation         string    `json:"operation"`
+	Status            string    `json:"status"`
+	Attempts          int32     `json:"attempts"`
+	CreatedAt         time.Time `json:"created_at"`
+	UpdatedAt         time.Time `json:"updated_at"`
+}
+
 type Tag struct {
 	ID          string         `json:"id"`
 	ParentTagID sql.NullString `json:"parent_tag_id"`
 	TagName     string         `json:"tag_name"`
-	TagType     string         `json:"tag_type"`
 	CreatedAt   time.Time      `json:"created_at"`
 	UpdatedAt   time.Time      `json:"updated_at"`
 }
 
-type Thumbnail struct {
-	ID              string    `json:"id"`
-	FileID          string    `json:"file_id"`
-	PageNumber      int32     `json:"page_number"`
-	ResolutionLabel string    `json:"resolution_label"`
-	Width           int32     `json:"width"`
-	Height          int32     `json:"height"`
-	StorageKey      string    `json:"storage_key"`
-	MimeType        string    `json:"mime_type"`
-	CreatedAt       time.Time `json:"created_at"`
-}
-
 type User struct {
-	ID           string    `json:"id"`
-	Username     string    `json:"username"`
-	PasswordHash string    `json:"password_hash"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	ID           string        `json:"id"`
+	Username     string        `json:"username"`
+	PasswordHash string        `json:"password_hash"`
+	CreatedAt    time.Time     `json:"created_at"`
+	UpdatedAt    time.Time     `json:"updated_at"`
+	ParentUserID uuid.NullUUID `json:"parent_user_id"`
 }

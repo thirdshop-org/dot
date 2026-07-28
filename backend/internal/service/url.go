@@ -25,43 +25,43 @@ func NewURLService(secret, serverHost string, expiryMinutes int) *URLService {
 	}
 }
 
-func (s *URLService) sign(fileID string, expires int64) string {
-	data := fmt.Sprintf("%s:%d", fileID, expires)
+func (s *URLService) sign(id string, expires int64) string {
+	data := fmt.Sprintf("%s:%d", id, expires)
 	mac := hmac.New(sha256.New, []byte(s.secret))
 	mac.Write([]byte(data))
 	return hex.EncodeToString(mac.Sum(nil))
 }
 
-func (s *URLService) GenerateDownloadURL(fileUUID string) string {
+func (s *URLService) GenerateDownloadURL(resourceUUID string) string {
 	expires := time.Now().Add(s.expiryDuration).Unix()
-	sig := s.sign(fileUUID, expires)
+	sig := s.sign(resourceUUID, expires)
 
 	return fmt.Sprintf(
-		"%s/api/v1/files/download/%s?expires=%d&sig=%s",
+		"%s/api/v1/resources/download/%s?expires=%d&sig=%s",
 		s.serverHost,
-		fileUUID,
+		resourceUUID,
 		expires,
 		sig,
 	)
 }
 
-func (s *URLService) GenerateThumbnailURL(thumbUUID string) string {
+func (s *URLService) GenerateVariantURL(variantUUID string) string {
 	expires := time.Now().Add(s.expiryDuration).Unix()
-	sig := s.sign(thumbUUID, expires)
+	sig := s.sign(variantUUID, expires)
 
 	return fmt.Sprintf(
-		"%s/api/v1/thumbnails/%s?expires=%d&sig=%s",
+		"%s/api/v1/variants/%s?expires=%d&sig=%s",
 		s.serverHost,
-		thumbUUID,
+		variantUUID,
 		expires,
 		sig,
 	)
 }
 
-func (s *URLService) Validate(fileID, sig string, expires int64) bool {
+func (s *URLService) Validate(id, sig string, expires int64) bool {
 	if time.Now().Unix() > expires {
 		return false
 	}
-	expected := s.sign(fileID, expires)
+	expected := s.sign(id, expires)
 	return hmac.Equal([]byte(sig), []byte(expected))
 }

@@ -10,21 +10,21 @@ import (
 )
 
 type OCRJob struct {
-	FileID   string
-	FilePath string
+	ResourceID string
+	FilePath   string
 }
 
 type OCRService struct {
-	client  *ocr.Client
-	fileSvc *FileService
-	jobs    chan OCRJob
+	client      *ocr.Client
+	resourceSvc *ResourceService
+	jobs        chan OCRJob
 }
 
-func NewOCRService(cfg *config.Config, fileSvc *FileService) *OCRService {
+func NewOCRService(cfg *config.Config, resourceSvc *ResourceService) *OCRService {
 	return &OCRService{
-		client:  ocr.NewClient(cfg.OCREndpoint),
-		fileSvc: fileSvc,
-		jobs:    make(chan OCRJob, 100),
+		client:      ocr.NewClient(cfg.OCREndpoint),
+		resourceSvc: resourceSvc,
+		jobs:        make(chan OCRJob, 100),
 	}
 }
 
@@ -38,9 +38,9 @@ func (s *OCRService) Stop() {
 	log.Println("[OCR] Worker stopped")
 }
 
-func (s *OCRService) Enqueue(fileID, filePath string) {
-	s.jobs <- OCRJob{FileID: fileID, FilePath: filePath}
-	log.Printf("[OCR] Enqueued file %s", fileID)
+func (s *OCRService) Enqueue(resourceID, filePath string) {
+	s.jobs <- OCRJob{ResourceID: resourceID, FilePath: filePath}
+	log.Printf("[OCR] Enqueued resource %s", resourceID)
 }
 
 func (s *OCRService) worker() {
@@ -50,28 +50,28 @@ func (s *OCRService) worker() {
 }
 
 func (s *OCRService) process(job OCRJob) {
-	log.Printf("[OCR] Processing file %s", job.FileID)
+	log.Printf("[OCR] Processing resource %s", job.ResourceID)
 
 	data, err := os.ReadFile(job.FilePath)
 	if err != nil {
-		log.Printf("[OCR] Failed to read file %s: %v", job.FileID, err)
+		log.Printf("[OCR] Failed to read resource %s: %v", job.ResourceID, err)
 		return
 	}
 
 	blocks, err := s.client.Recognize(data)
 	if err != nil {
-		log.Printf("[OCR] Failed to recognize file %s: %v", job.FileID, err)
+		log.Printf("[OCR] Failed to recognize resource %s: %v", job.ResourceID, err)
 		return
 	}
 
 	text := s.FlattenResults(blocks)
 
-	if err := s.fileSvc.UpdateOCRText(job.FileID, text); err != nil {
-		log.Printf("[OCR] Failed to update ocr_text for file %s: %v", job.FileID, err)
+	if err := s.resourceSvc.UpdateOCRText(job.ResourceID, text); err != nil {
+		log.Printf("[OCR] Failed to update ocr_text for resource %s: %v", job.ResourceID, err)
 		return
 	}
 
-	log.Printf("[OCR] Completed file %s (%d chars)", job.FileID, len(text))
+	log.Printf("[OCR] Completed resource %s (%d chars)", job.ResourceID, len(text))
 }
 
 func (s *OCRService) RecognizeFromBytes(data []byte) ([]ocr.TextBlock, error) {
