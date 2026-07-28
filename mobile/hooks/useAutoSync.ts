@@ -1,4 +1,5 @@
 import { useEffect, useCallback, useRef } from 'react';
+import { createMMKV } from 'react-native-mmkv';
 import { useQueryClient } from '@tanstack/react-query';
 import { File, UploadType } from 'expo-file-system';
 import NetInfo, { NetInfoState } from '@react-native-community/netinfo';
@@ -8,6 +9,25 @@ import { apiClient } from '../api/client';
 import { API_BASE_URL, ENDPOINTS } from '../constants/api';
 import { ApiError } from '../types';
 import { setIsSyncing } from './useSyncQueue';
+
+const MAX_RETRIES = 5;
+const RETRY_MMKV_ID = 'vaultdrop-sync-retries';
+
+const retryStorage = createMMKV({ id: RETRY_MMKV_ID });
+
+function getRetryCount(fileId: string): number {
+  return retryStorage.getNumber(`${fileId}_retries`) ?? 0;
+}
+
+function incrementRetry(fileId: string): number {
+  const count = getRetryCount(fileId) + 1;
+  retryStorage.set(`${fileId}_retries`, count);
+  return count;
+}
+
+function resetRetry(fileId: string) {
+  retryStorage.remove(`${fileId}_retries`);
+}
 
 interface UploadResult {
   name: string;
@@ -100,13 +120,20 @@ export function useAutoSync() {
             name: entry.name,
           });
 
+          resetRetry(entry.id);
           fileStore.updatePartial(entry.id, {
             backendId: uploaded.id,
             syncStatus: 'synced',
             source: 'synced',
           });
         } catch (err) {
-          // upload failed, will retry on next cycle
+          const retries = incrementRetry(entry.id);
+          if (retries >= MAX_RETRIES) {
+            fileStore.updatePartial(entry.id, {
+              syncStatus: 'error',
+            });
+            resetRetry(entry.id);
+          }
         }
       }
 

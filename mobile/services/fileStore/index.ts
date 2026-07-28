@@ -568,4 +568,16 @@ export const fileStore = {
       .all() as FileRow[];
     return rows.map((r) => rowToRecord(r, getTagsForFile(r.id)));
   },
+
+  getErrorFiles(): FileRecord[] {
+    const d = getDb();
+    const rows = d.select().from(files)
+      .where(eq(files.syncStatus, 'error'))
+      .all() as FileRow[];
+    return rows.map((r) => rowToRecord(r, getTagsForFile(r.id)));
+  },
+
+  resetSyncError(id: string) {
+    this.updatePartial(id, { syncStatus: 'local' });
+  },
 };

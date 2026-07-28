@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -30,6 +31,7 @@ const (
 )
 
 type AuthService struct {
+	db      *sql.DB
 	queries *db.Queries
 	key     paseto.V4SymmetricKey
 	parser  *paseto.Parser
@@ -45,7 +47,7 @@ type UserResponse struct {
 	Username string `json:"username"`
 }
 
-func NewAuthService(queries *db.Queries, cfg *config.Config) (*AuthService, error) {
+func NewAuthService(database *sql.DB, queries *db.Queries, cfg *config.Config) (*AuthService, error) {
 	key, err := paseto.V4SymmetricKeyFromHex(cfg.PASETOKey)
 	if err != nil {
 		return nil, fmt.Errorf("invalid paseto key: %w", err)
@@ -55,6 +57,7 @@ func NewAuthService(queries *db.Queries, cfg *config.Config) (*AuthService, erro
 	parser.AddRule(paseto.NotExpired())
 
 	return &AuthService{
+		db:      database,
 		queries: queries,
 		key:     key,
 		parser:  &parser,
@@ -80,7 +83,15 @@ func (s *AuthService) Register(ctx context.Context, username, password string) (
 		return nil, nil, fmt.Errorf("hash password: %w", err)
 	}
 
-	user, err := s.queries.CreateUser(ctx, db.CreateUserParams{
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, nil, fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	qtx := s.queries.WithTx(tx)
+
+	user, err := qtx.CreateUser(ctx, db.CreateUserParams{
 		Username:     username,
 		PasswordHash: hash,
 	})
@@ -88,12 +99,41 @@ func (s *AuthService) Register(ctx context.Context, username, password string) (
 		return nil, nil, fmt.Errorf("create user: %w", err)
 	}
 
-	tokens, err := s.generateTokens(ctx, user.ID.String())
-	if err != nil {
-		return nil, nil, fmt.Errorf("generate tokens: %w", err)
+	if _, err := qtx.CreateStorageLocation(ctx, db.CreateStorageLocationParams{
+		UserID:     user.ID,
+		DeviceName: "VaultDrop Server",
+		Role:       "server",
+	}); err != nil {
+		return nil, nil, fmt.Errorf("create server location: %w", err)
 	}
 
-	return tokens, &UserResponse{ID: user.ID.String(), Username: user.Username}, nil
+	accessToken, err := s.createAccessToken(user.ID.String())
+	if err != nil {
+		return nil, nil, fmt.Errorf("create access token: %w", err)
+	}
+
+	refreshToken, err := s.createRefreshToken(user.ID.String())
+	if err != nil {
+		return nil, nil, fmt.Errorf("create refresh token: %w", err)
+	}
+
+	refreshHash := hashToken(refreshToken)
+	if _, err := qtx.CreateRefreshToken(ctx, db.CreateRefreshTokenParams{
+		UserID:    user.ID,
+		TokenHash: refreshHash,
+		ExpiresAt: time.Now().Add(refreshTokenTTL),
+	}); err != nil {
+		return nil, nil, fmt.Errorf("store refresh token: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, nil, fmt.Errorf("commit tx: %w", err)
+	}
+
+	return &TokenPair{
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+	}, &UserResponse{ID: user.ID.String(), Username: user.Username}, nil
 }
 
 func (s *AuthService) Login(ctx context.Context, username, password string) (*TokenPair, *UserResponse, error) {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"mime/multipart"
 	"os"
@@ -17,12 +18,13 @@ import (
 )
 
 type ResourceService struct {
+	db      *sql.DB
 	queries *db.Queries
 	cfg     *config.Config
 }
 
-func NewResourceService(queries *db.Queries, cfg *config.Config) *ResourceService {
-	return &ResourceService{queries: queries, cfg: cfg}
+func NewResourceService(database *sql.DB, queries *db.Queries, cfg *config.Config) *ResourceService {
+	return &ResourceService{db: database, queries: queries, cfg: cfg}
 }
 
 func (s *ResourceService) Upload(file *multipart.FileHeader, ownerID string) (*model.UploadResult, error) {
@@ -53,13 +55,15 @@ func (s *ResourceService) Upload(file *multipart.FileHeader, ownerID string) (*m
 		return nil, fmt.Errorf("parse owner id: %w", err)
 	}
 
-	existing, err := s.queries.FindDuplicateByChecksum(context.Background(), db.FindDuplicateByChecksumParams{
+	ctx := context.Background()
+
+	existing, err := s.queries.FindDuplicateByChecksum(ctx, db.FindDuplicateByChecksumParams{
 		Checksum: checksum,
 		OwnerID:  ownerUUID,
 	})
 	if err == nil && existing.ID != uuid.Nil {
 		os.Remove(dst)
-		placement, err := s.queries.GetServerPlacementByResource(context.Background(), existing.ID)
+		placement, err := s.queries.GetServerPlacementByResource(ctx, existing.ID)
 		if err == nil {
 			return &model.UploadResult{
 				ID:       existing.ID.String(),
@@ -68,9 +72,18 @@ func (s *ResourceService) Upload(file *multipart.FileHeader, ownerID string) (*m
 				MimeType: existing.MimeType,
 			}, nil
 		}
+		return nil, fmt.Errorf("duplicate resource %s has no server placement — upload cannot proceed until resolved", existing.ID.String())
 	}
 
-	dbResource, err := s.queries.CreateResource(context.Background(), db.CreateResourceParams{
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	qtx := s.queries.WithTx(tx)
+
+	dbResource, err := qtx.CreateResource(ctx, db.CreateResourceParams{
 		Name:     file.Filename,
 		MimeType: file.Header.Get("Content-Type"),
 		Size:     info.Size(),
@@ -81,13 +94,22 @@ func (s *ResourceService) Upload(file *multipart.FileHeader, ownerID string) (*m
 		return nil, fmt.Errorf("create resource in db: %w", err)
 	}
 
-	placement, err := s.ensureServerPlacement(dbResource.ID, ownerUUID, dst)
+	placement, err := s.ensureServerPlacementQtx(qtx, dbResource.ID, ownerUUID, dst)
 	if err != nil {
 		return nil, fmt.Errorf("create server placement: %w", err)
 	}
 
-	if err := s.ensureOwnerRebac(dbResource.ID, ownerUUID); err != nil {
+	if _, err := qtx.CreateRebacRelation(ctx, db.CreateRebacRelationParams{
+		ResourceID:    dbResource.ID,
+		SubjectUserID: ownerUUID,
+		Role:          "owner",
+		GrantedBy:     ownerUUID,
+	}); err != nil {
 		return nil, fmt.Errorf("create owner rebac: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("commit tx: %w", err)
 	}
 
 	return &model.UploadResult{
@@ -99,12 +121,26 @@ func (s *ResourceService) Upload(file *multipart.FileHeader, ownerID string) (*m
 }
 
 func (s *ResourceService) ensureServerPlacement(resourceID, ownerID uuid.UUID, dst string) (db.ResourcePlacement, error) {
-	serverLoc, err := s.queries.GetServerStorageLocation(context.Background(), ownerID)
+	return s.ensureServerPlacementQtx(s.queries, resourceID, ownerID, dst)
+}
+
+func (s *ResourceService) ensureServerPlacementQtx(q *db.Queries, resourceID, ownerID uuid.UUID, dst string) (db.ResourcePlacement, error) {
+	ctx := context.Background()
+	serverLoc, err := q.GetServerStorageLocation(ctx, ownerID)
 	if err != nil {
-		return db.ResourcePlacement{}, fmt.Errorf("get server location: %w", err)
+		if errors.Is(err, sql.ErrNoRows) {
+			serverLoc, err = q.CreateStorageLocation(ctx, db.CreateStorageLocationParams{
+				UserID:     ownerID,
+				DeviceName: "VaultDrop Server",
+				Role:       "server",
+			})
+		}
+		if err != nil {
+			return db.ResourcePlacement{}, fmt.Errorf("get/create server location: %w", err)
+		}
 	}
 
-	placement, err := s.queries.CreatePlacement(context.Background(), db.CreatePlacementParams{
+	placement, err := q.CreatePlacement(ctx, db.CreatePlacementParams{
 		ResourceID:        resourceID,
 		StorageLocationID: serverLoc.ID,
 		Status:            "synced",
@@ -116,16 +152,6 @@ func (s *ResourceService) ensureServerPlacement(resourceID, ownerID uuid.UUID, d
 	}
 
 	return placement, nil
-}
-
-func (s *ResourceService) ensureOwnerRebac(resourceID, ownerID uuid.UUID) error {
-	_, err := s.queries.CreateRebacRelation(context.Background(), db.CreateRebacRelationParams{
-		ResourceID:    resourceID,
-		SubjectUserID: ownerID,
-		Role:          "owner",
-		GrantedBy:     ownerID,
-	})
-	return err
 }
 
 func (s *ResourceService) List(ownerID string) ([]model.Resource, error) {
@@ -243,7 +269,17 @@ func (s *ResourceService) MoveResources(resourceIDs []string, parentResourceID *
 
 func (s *ResourceService) CreateFolder(name, ownerID string) (*model.Resource, error) {
 	ownerUUID, _ := uuid.Parse(ownerID)
-	r, err := s.queries.CreateFolder(context.Background(), db.CreateFolderParams{
+	ctx := context.Background()
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	qtx := s.queries.WithTx(tx)
+
+	r, err := qtx.CreateFolder(ctx, db.CreateFolderParams{
 		Name:    name,
 		OwnerID: ownerUUID,
 	})
@@ -251,8 +287,17 @@ func (s *ResourceService) CreateFolder(name, ownerID string) (*model.Resource, e
 		return nil, fmt.Errorf("create folder: %w", err)
 	}
 
-	if err := s.ensureOwnerRebac(r.ID, ownerUUID); err != nil {
+	if _, err := qtx.CreateRebacRelation(ctx, db.CreateRebacRelationParams{
+		ResourceID:    r.ID,
+		SubjectUserID: ownerUUID,
+		Role:          "owner",
+		GrantedBy:     ownerUUID,
+	}); err != nil {
 		return nil, fmt.Errorf("create owner rebac: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("commit tx: %w", err)
 	}
 
 	m := dbResourceToModel(r, nil)
