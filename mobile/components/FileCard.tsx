@@ -2,29 +2,26 @@ import React from 'react';
 import { View, Text, Image, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { FileItem } from '../types';
 import { TagChip } from './TagChip';
-import { useFileImage } from '../hooks/useFileImage';
 
 interface FileCardProps {
   file: FileItem;
   onPress?: (file: FileItem) => void;
 }
 
+function formatSize(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 export function FileCard({ file, onPress }: FileCardProps) {
-  const { localUri, loading } = useFileImage(file.url, file.name);
-  const formatSize = (bytes: number) => {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  };
+  const imageUri = file.thumbnailUrl || (file.url && file.mimeType?.startsWith('image/') ? file.url : undefined);
 
   return (
     <TouchableOpacity style={styles.container} onPress={() => onPress?.(file)}>
-      {file.url && (
+      {imageUri && (
         <View style={styles.imageContainer}>
-          {loading && <ActivityIndicator style={styles.imageLoader} />}
-          {localUri && (
-            <Image source={{ uri: localUri }} style={styles.image} resizeMode="cover" />
-          )}
+          <Image source={{ uri: imageUri }} style={styles.image} resizeMode="cover" />
         </View>
       )}
 
@@ -54,58 +51,50 @@ const styles = StyleSheet.create({
   container: {
     backgroundColor: '#fff',
     borderRadius: 8,
-    padding: 16,
-    marginBottom: 12,
+    padding: 12,
+    marginBottom: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
     elevation: 2,
   },
   imageContainer: {
-    width: '100%',
-    height: 200,
-    borderRadius: 8,
+    marginBottom: 8,
+    borderRadius: 4,
     overflow: 'hidden',
-    marginBottom: 12,
-    backgroundColor: '#f0f0f0',
   },
   image: {
     width: '100%',
-    height: '100%',
-  },
-  imageLoader: {
-    position: 'absolute',
-    top: '50%',
-    left: '50%',
-    marginTop: -10,
-    marginLeft: -10,
+    height: 120,
+    borderRadius: 4,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 4,
   },
   name: {
     fontSize: 16,
     fontWeight: '600',
+    color: '#333',
     flex: 1,
     marginRight: 8,
   },
   size: {
-    fontSize: 14,
-    color: '#666',
+    fontSize: 13,
+    color: '#999',
   },
   preview: {
-    fontSize: 14,
-    color: '#444',
+    fontSize: 13,
+    color: '#666',
     marginBottom: 8,
-    lineHeight: 20,
+    lineHeight: 18,
   },
   tags: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 6,
+    gap: 4,
   },
 });

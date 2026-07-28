@@ -4,7 +4,9 @@ import { eq, like, or, and, desc, asc, sql, isNull } from 'drizzle-orm';
 import { files, fileTags, deletedFiles } from './schema';
 import type { Tag } from '../../types';
 
-const DB_NAME = 'vaultdrop.db';
+const DB_NAME = 'vaultdrop-v3.db';
+const SCHEMA_VERSION_KEY = 'schema_version';
+const SCHEMA_VERSION = 3;
 
 let _db: ReturnType<typeof drizzle> | null = null;
 let _sqliteDb: SQLite.SQLiteDatabase | null = null;
@@ -14,9 +16,41 @@ export function initDB() {
   _sqliteDb = SQLite.openDatabaseSync(DB_NAME);
   _sqliteDb.execSync('PRAGMA journal_mode = WAL;');
   _sqliteDb.execSync('PRAGMA foreign_keys = ON;');
-  _db = drizzle(_sqliteDb);
 
-  _sqliteDb.execSync(`
+  const existingVersion = _sqliteDb.getFirstSync<{ version: number }>(
+    `SELECT name as version FROM sqlite_master WHERE type='table' AND name='schema_version'`
+  );
+
+  if (!existingVersion) {
+    _sqliteDb.execSync(`CREATE TABLE schema_version (version INTEGER PRIMARY KEY);`);
+  }
+
+  const versionRow = _sqliteDb.getFirstSync<{ version: number }>(
+    `SELECT version FROM schema_version ORDER BY version DESC LIMIT 1`
+  );
+  const currentVersion = versionRow?.version ?? 0;
+
+  if (currentVersion < SCHEMA_VERSION) {
+    dropAllTables(_sqliteDb);
+    createSchema(_sqliteDb);
+    _sqliteDb.execSync(`INSERT INTO schema_version (version) VALUES (${SCHEMA_VERSION});`);
+  }
+
+  _db = drizzle(_sqliteDb);
+  return _db;
+}
+
+function dropAllTables(db: SQLite.SQLiteDatabase) {
+  db.execSync(`DROP TABLE IF EXISTS file_tags;`);
+  db.execSync(`DROP TABLE IF EXISTS files;`);
+  db.execSync(`DROP TABLE IF EXISTS deleted_files;`);
+  db.execSync(`DROP TABLE IF EXISTS device_info;`);
+  db.execSync(`DROP TABLE IF EXISTS resources_fts;`);
+  db.execSync(`DROP TABLE IF EXISTS schema_version;`);
+}
+
+function createSchema(db: SQLite.SQLiteDatabase) {
+  db.execSync(`
     CREATE TABLE IF NOT EXISTS files (
       id TEXT PRIMARY KEY,
       backend_id TEXT,
@@ -26,33 +60,75 @@ export function initDB() {
       source TEXT NOT NULL DEFAULT 'cloud',
       local_uri TEXT,
       sync_status TEXT NOT NULL DEFAULT 'cloud',
-      parent_file_id TEXT,
+      parent_resource_id TEXT,
       is_folder INTEGER NOT NULL DEFAULT 0,
       ocr_text TEXT,
       thumbnail_url TEXT,
+      owner_id TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       last_synced_at TEXT
     );
+  `);
+  db.execSync(`CREATE INDEX IF NOT EXISTS idx_files_backend_id ON files(backend_id);`);
+  db.execSync(`CREATE INDEX IF NOT EXISTS idx_files_parent_resource_id ON files(parent_resource_id);`);
+  db.execSync(`CREATE INDEX IF NOT EXISTS idx_files_source ON files(source);`);
+  db.execSync(`CREATE INDEX IF NOT EXISTS idx_files_is_folder ON files(is_folder);`);
+  db.execSync(`CREATE INDEX IF NOT EXISTS idx_files_sync_status ON files(sync_status);`);
+  db.execSync(`CREATE INDEX IF NOT EXISTS idx_files_owner_id ON files(owner_id);`);
+  db.execSync(`CREATE TABLE IF NOT EXISTS schema_version (version INTEGER PRIMARY KEY);`);
+
+  db.execSync(`
     CREATE TABLE IF NOT EXISTS file_tags (
       id TEXT PRIMARY KEY,
       file_id TEXT NOT NULL REFERENCES files(id) ON DELETE CASCADE,
-      tag_name TEXT NOT NULL,
-      tag_type TEXT NOT NULL DEFAULT 'none'
+      tag_name TEXT NOT NULL
     );
-    CREATE INDEX IF NOT EXISTS idx_files_backend_id ON files(backend_id);
-    CREATE INDEX IF NOT EXISTS idx_files_parent_id ON files(parent_file_id);
-    CREATE INDEX IF NOT EXISTS idx_files_source ON files(source);
-    CREATE INDEX IF NOT EXISTS idx_files_is_folder ON files(is_folder);
-    CREATE INDEX IF NOT EXISTS idx_files_sync_status ON files(sync_status);
-    CREATE INDEX IF NOT EXISTS idx_file_tags_file_id ON file_tags(file_id);
+  `);
+  db.execSync(`CREATE INDEX IF NOT EXISTS idx_file_tags_file_id ON file_tags(file_id);`);
+
+  db.execSync(`
     CREATE TABLE IF NOT EXISTS deleted_files (
       id TEXT PRIMARY KEY,
       deleted_at TEXT NOT NULL
     );
   `);
 
-  return _db;
+  db.execSync(`
+    CREATE TABLE IF NOT EXISTS device_info (
+      id TEXT PRIMARY KEY,
+      server_id TEXT,
+      device_name TEXT NOT NULL DEFAULT '',
+      platform TEXT NOT NULL DEFAULT '',
+      registered_at TEXT
+    );
+  `);
+
+  db.execSync(`
+    CREATE VIRTUAL TABLE IF NOT EXISTS resources_fts USING fts5(
+      name,
+      ocr_text,
+      content='files',
+      content_rowid='rowid'
+    );
+  `);
+
+  db.execSync(`
+    CREATE TRIGGER IF NOT EXISTS resources_fts_insert AFTER INSERT ON files BEGIN
+      INSERT INTO resources_fts(rowid, name, ocr_text) VALUES (new.rowid, new.name, new.ocr_text);
+    END;
+  `);
+  db.execSync(`
+    CREATE TRIGGER IF NOT EXISTS resources_fts_delete AFTER DELETE ON files BEGIN
+      INSERT INTO resources_fts(resources_fts, rowid, name, ocr_text) VALUES('delete', old.rowid, old.name, old.ocr_text);
+    END;
+  `);
+  db.execSync(`
+    CREATE TRIGGER IF NOT EXISTS resources_fts_update AFTER UPDATE ON files BEGIN
+      INSERT INTO resources_fts(resources_fts, rowid, name, ocr_text) VALUES('delete', old.rowid, old.name, old.ocr_text);
+      INSERT INTO resources_fts(rowid, name, ocr_text) VALUES (new.rowid, new.name, new.ocr_text);
+    END;
+  `);
 }
 
 function getDb() {
@@ -69,18 +145,35 @@ export type FileRecord = {
   source: string;
   localUri: string | null;
   syncStatus: string;
-  parentFileId: string | null;
+  parentResourceId: string | null;
   isFolder: number;
   ocrText: string | null;
   thumbnailUrl: string | null;
+  ownerId: string | null;
   createdAt: string;
   updatedAt: string;
   lastSyncedAt: string | null;
   tags?: Tag[];
 };
 
-type FileRow = typeof files.$inferSelect;
-type TagRow = typeof fileTags.$inferSelect;
+type FileRow = {
+  id: string;
+  backendId: string | null;
+  name: string;
+  mimeType: string;
+  size: number;
+  source: string;
+  localUri: string | null;
+  syncStatus: string;
+  parentResourceId: string | null;
+  isFolder: number;
+  ocrText: string | null;
+  thumbnailUrl: string | null;
+  ownerId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  lastSyncedAt: string | null;
+};
 
 function rowToRecord(row: FileRow, tags?: Tag[]): FileRecord {
   return {
@@ -92,10 +185,11 @@ function rowToRecord(row: FileRow, tags?: Tag[]): FileRecord {
     source: row.source,
     localUri: row.localUri,
     syncStatus: row.syncStatus,
-    parentFileId: row.parentFileId,
+    parentResourceId: row.parentResourceId,
     isFolder: row.isFolder,
     ocrText: row.ocrText,
     thumbnailUrl: row.thumbnailUrl,
+    ownerId: row.ownerId,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     lastSyncedAt: row.lastSyncedAt,
@@ -106,7 +200,7 @@ function rowToRecord(row: FileRow, tags?: Tag[]): FileRecord {
 function getTagsForFile(fileId: string): Tag[] {
   const d = getDb();
   const rows = d.select().from(fileTags).where(eq(fileTags.fileId, fileId)).all();
-  return rows.map((r) => ({ id: r.tagName, tag_name: r.tagName, tag_type: r.tagType }));
+  return rows.map((r) => ({ id: r.tagName, tag_name: r.tagName }));
 }
 
 function setTagsForFile(fileId: string, tags: Tag[]) {
@@ -118,7 +212,6 @@ function setTagsForFile(fileId: string, tags: Tag[]) {
       id: `${fileId}_${t.id || t.tag_name}`,
       fileId,
       tagName: t.tag_name,
-      tagType: t.tag_type,
     })),
   ).run();
 }
@@ -134,10 +227,11 @@ function upsertRow(file: FileRecord) {
     source: file.source,
     localUri: file.localUri,
     syncStatus: file.syncStatus,
-    parentFileId: file.parentFileId,
+    parentResourceId: file.parentResourceId,
     isFolder: file.isFolder,
     ocrText: file.ocrText,
     thumbnailUrl: file.thumbnailUrl,
+    ownerId: file.ownerId,
     createdAt: file.createdAt,
     updatedAt: file.updatedAt,
     lastSyncedAt: file.lastSyncedAt,
@@ -151,10 +245,11 @@ function upsertRow(file: FileRecord) {
       source: file.source,
       localUri: file.localUri,
       syncStatus: file.syncStatus,
-      parentFileId: file.parentFileId,
+      parentResourceId: file.parentResourceId,
       isFolder: file.isFolder,
       ocrText: file.ocrText,
       thumbnailUrl: file.thumbnailUrl,
+      ownerId: file.ownerId,
       updatedAt: file.updatedAt,
       lastSyncedAt: file.lastSyncedAt,
     },
@@ -179,14 +274,14 @@ export const fileStore = {
 
   getById(id: string): FileRecord | null {
     const d = getDb();
-    const row = d.select().from(files).where(eq(files.id, id)).get();
+    const row = d.select().from(files).where(eq(files.id, id)).get() as FileRow | undefined;
     if (!row) return null;
     return rowToRecord(row, getTagsForFile(id));
   },
 
   getByBackendId(backendId: string): FileRecord | null {
     const d = getDb();
-    const row = d.select().from(files).where(eq(files.backendId, backendId)).get();
+    const row = d.select().from(files).where(eq(files.backendId, backendId)).get() as FileRow | undefined;
     if (!row) return null;
     return rowToRecord(row, getTagsForFile(row.id));
   },
@@ -194,18 +289,18 @@ export const fileStore = {
   getRootFolders(): FileRecord[] {
     const d = getDb();
     const rows = d.select().from(files)
-      .where(and(eq(files.isFolder, 1), isNull(files.parentFileId)))
+      .where(and(eq(files.isFolder, 1), isNull(files.parentResourceId)))
       .orderBy(asc(files.name))
-      .all();
+      .all() as FileRow[];
     return rows.map((r) => rowToRecord(r, getTagsForFile(r.id)));
   },
 
   getChildrenByParent(parentId: string): FileRecord[] {
     const d = getDb();
     const rows = d.select().from(files)
-      .where(eq(files.parentFileId, parentId))
+      .where(eq(files.parentResourceId, parentId))
       .orderBy(desc(files.isFolder), desc(files.createdAt))
-      .all();
+      .all() as FileRow[];
     return rows.map((r) => rowToRecord(r, getTagsForFile(r.id)));
   },
 
@@ -215,16 +310,16 @@ export const fileStore = {
 
     const countRow = d.select({ count: sql<number>`count(*)` })
       .from(files)
-      .where(and(isNull(files.parentFileId), eq(files.isFolder, 0)))
+      .where(and(isNull(files.parentResourceId), eq(files.isFolder, 0)))
       .get();
     const total = countRow?.count ?? 0;
 
     const rows = d.select().from(files)
-      .where(and(isNull(files.parentFileId), eq(files.isFolder, 0)))
+      .where(and(isNull(files.parentResourceId), eq(files.isFolder, 0)))
       .orderBy(desc(files.createdAt))
       .limit(limit)
       .offset(offset)
-      .all();
+      .all() as FileRow[];
 
     return {
       files: rows.map((r) => rowToRecord(r, getTagsForFile(r.id))),
@@ -237,7 +332,29 @@ export const fileStore = {
     const rows = d.select().from(files)
       .where(eq(files.isFolder, 1))
       .orderBy(asc(files.name))
-      .all();
+      .all() as FileRow[];
+    return rows.map((r) => rowToRecord(r, getTagsForFile(r.id)));
+  },
+
+  searchFts(query: string): FileRecord[] {
+    const d = getDb();
+    const sanitized = query.replace(/['"]/g, '').trim();
+    if (!sanitized) return [];
+    const ftsPattern = sanitized.split(/\s+/).map(w => `"${w}"`).join(' OR ');
+    const sqlQuery = `
+      SELECT f.* FROM files f
+      JOIN resources_fts r ON r.rowid = f.rowid
+      WHERE resources_fts MATCH ?
+      ORDER BY rank
+      LIMIT 100
+    `;
+    const sqliteDb = _sqliteDb!;
+    const stmt = sqliteDb.prepareSync(sqlQuery);
+    const result = stmt.executeSync<FileRow>(ftsPattern);
+    const rows: FileRow[] = [];
+    for (const r of result) {
+      rows.push(r as unknown as FileRow);
+    }
     return rows.map((r) => rowToRecord(r, getTagsForFile(r.id)));
   },
 
@@ -248,7 +365,7 @@ export const fileStore = {
       .where(or(like(files.name, pattern), like(files.ocrText, pattern)))
       .orderBy(desc(files.createdAt))
       .limit(100)
-      .all();
+      .all() as FileRow[];
     return rows.map((r) => rowToRecord(r, getTagsForFile(r.id)));
   },
 
@@ -262,15 +379,16 @@ export const fileStore = {
     ocrText?: string;
     tags?: Tag[];
     isFolder: boolean;
-    parentFileId?: string;
+    parentResourceId?: string;
     thumbnailUrl?: string;
+    ownerId?: string;
   }>) {
     const d = getDb();
     const now = new Date().toISOString();
 
     d.transaction(() => {
       for (const bf of backendFiles) {
-        const existing = d.select().from(files).where(eq(files.backendId, bf.id)).get();
+        const existing = d.select().from(files).where(eq(files.backendId, bf.id)).get() as FileRow | undefined;
 
         const source = existing && existing.localUri ? 'synced' : 'cloud';
         const syncStatus = existing && existing.localUri
@@ -286,10 +404,11 @@ export const fileStore = {
           source,
           localUri: existing?.localUri ?? null,
           syncStatus,
-          parentFileId: bf.parentFileId ?? null,
+          parentResourceId: bf.parentResourceId ?? null,
           isFolder: bf.isFolder ? 1 : 0,
           ocrText: bf.ocrText ?? null,
           thumbnailUrl: bf.thumbnailUrl ?? null,
+          ownerId: bf.ownerId ?? null,
           createdAt: bf.createdAt,
           updatedAt: bf.updatedAt ?? now,
           lastSyncedAt: now,
@@ -327,10 +446,11 @@ export const fileStore = {
           source: 'local',
           localUri: df.uri,
           syncStatus: 'local',
-          parentFileId: df.folderId ?? null,
+          parentResourceId: df.folderId ?? null,
           isFolder: 0,
           ocrText: null,
           thumbnailUrl: null,
+          ownerId: null,
           createdAt: df.createdAt,
           updatedAt: now,
           lastSyncedAt: null,
@@ -348,8 +468,9 @@ export const fileStore = {
     if (updates.source !== undefined) setFields.source = updates.source;
     if (updates.thumbnailUrl !== undefined) setFields.thumbnailUrl = updates.thumbnailUrl;
     if (updates.ocrText !== undefined) setFields.ocrText = updates.ocrText;
-    if (updates.parentFileId !== undefined) setFields.parentFileId = updates.parentFileId;
+    if (updates.parentResourceId !== undefined) setFields.parentResourceId = updates.parentResourceId;
     if (updates.name !== undefined) setFields.name = updates.name;
+    if (updates.ownerId !== undefined) setFields.ownerId = updates.ownerId;
     setFields.updatedAt = new Date().toISOString();
 
     d.update(files).set(setFields).where(eq(files.id, id)).run();
@@ -390,7 +511,7 @@ export const fileStore = {
 
   deleteByBackendId(backendId: string) {
     const d = getDb();
-    const row = d.select().from(files).where(eq(files.backendId, backendId)).get();
+    const row = d.select().from(files).where(eq(files.backendId, backendId)).get() as FileRow | undefined;
     if (row) this.markDeleted(row.id);
     d.delete(files).where(eq(files.backendId, backendId)).run();
   },
@@ -411,7 +532,7 @@ export const fileStore = {
     const d = getDb();
     const rows = d.select().from(files)
       .where(or(eq(files.source, 'local'), eq(files.source, 'synced')))
-      .all();
+      .all() as FileRow[];
     return rows.map((r) => rowToRecord(r, getTagsForFile(r.id)));
   },
 
@@ -419,7 +540,7 @@ export const fileStore = {
     const d = getDb();
     const rows = d.select().from(files)
       .where(eq(files.source, 'synced'))
-      .all();
+      .all() as FileRow[];
     return rows.map((r) => rowToRecord(r, getTagsForFile(r.id)));
   },
 
@@ -427,7 +548,7 @@ export const fileStore = {
     const d = getDb();
     const rows = d.select().from(files)
       .where(and(eq(files.syncStatus, 'local'), sql`${files.backendId} IS NULL`))
-      .all();
+      .all() as FileRow[];
     return rows.map((r) => rowToRecord(r, getTagsForFile(r.id)));
   },
 };

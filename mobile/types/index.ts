@@ -1,7 +1,7 @@
-export interface Thumbnail {
+export interface Variant {
   id: string;
   pageNumber: number;
-  resolutionLabel: string;
+  variantType: string;
   width: number;
   height: number;
   url: string;
@@ -10,7 +10,7 @@ export interface Thumbnail {
 
 export interface UnifiedFileItem {
   id: string;
-  backendFileId?: string;
+  backendResourceId?: string;
   name: string;
   mimeType: string;
   size: number;
@@ -22,10 +22,11 @@ export interface UnifiedFileItem {
   ocrText?: string;
   tags: Tag[];
   isFolder: boolean;
-  parentFileId?: string;
+  parentResourceId?: string;
+  ownerId?: string;
   url?: string;
   thumbnailUrl?: string;
-  thumbnails?: Thumbnail[];
+  variants?: Variant[];
   isDeviceFile?: boolean;
 }
 
@@ -38,7 +39,6 @@ export function isFolder(file: UnifiedFileItem | { isFolder: boolean }): boolean
 export interface Tag {
   id: string;
   tag_name: string;
-  tag_type: string;
 }
 
 export interface OcrJob {
@@ -125,3 +125,34 @@ export interface RefreshResponse {
 }
 
 export type SyncStatus = 'local' | 'syncing' | 'synced' | 'cloud' | 'conflict';
+
+export interface Device {
+  id: string;
+  device_name: string;
+  role: string;
+}
+
+export interface SyncQueueItem {
+  id: string;
+  resourceId: string;
+  storageLocationId: string;
+  operation: string;
+  status: string;
+  attempts: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ShareEntry {
+  user_id: string;
+  role: string;
+}
+
+export interface ResourcePlacement {
+  id: string;
+  resourceId: string;
+  storageLocationId: string;
+  status: string;
+  storageKey: string | null;
+  syncedAt: string | null;
+}

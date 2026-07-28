@@ -1,15 +1,43 @@
-import { useQuery } from '@tanstack/react-query';
-import { apiClient } from '../api/client';
-import { ENDPOINTS } from '../constants/api';
-import { FileItem, PaginatedResponse } from '../types';
+import { useMemo } from 'react';
+import { fileStore } from '../services/fileStore';
+import { UnifiedFileItem } from '../types';
 
-export function useSearch(query: string, page: number = 1, limit: number = 20) {
-  return useQuery({
-    queryKey: ['search', query, page, limit],
-    queryFn: () =>
-      apiClient.get<PaginatedResponse<FileItem>>(
-        `${ENDPOINTS.FILES}/search?q=${encodeURIComponent(query)}&page=${page}&limit=${limit}`
-      ),
-    enabled: query.length > 0,
-  });
+function recordToUnifiedItem(record: ReturnType<typeof fileStore.getById>): UnifiedFileItem | null {
+  if (!record) return null;
+  return {
+    id: record.id,
+    backendResourceId: record.backendId ?? undefined,
+    name: record.name,
+    mimeType: record.mimeType,
+    size: record.size,
+    createdAt: record.createdAt,
+    updatedAt: record.updatedAt,
+    source: record.source as UnifiedFileItem['source'],
+    syncStatus: record.syncStatus as UnifiedFileItem['syncStatus'],
+    localUri: record.localUri ?? undefined,
+    ocrText: record.ocrText ?? undefined,
+    tags: record.tags ?? [],
+    isFolder: record.isFolder === 1,
+    parentResourceId: record.parentResourceId ?? undefined,
+    ownerId: record.ownerId ?? undefined,
+    thumbnailUrl: record.thumbnailUrl ?? undefined,
+    isDeviceFile: record.source === 'local' && !record.backendId,
+  };
+}
+
+export function useSearch(query: string) {
+  const results = useMemo(() => {
+    if (!query.trim()) return [];
+    const records = fileStore.searchFts(query);
+    if (records.length === 0) {
+      const fallback = fileStore.search(query);
+      return fallback.map((r) => recordToUnifiedItem(r)!).filter(Boolean);
+    }
+    return records.map((r) => recordToUnifiedItem(r)!).filter(Boolean);
+  }, [query]);
+
+  return {
+    data: results,
+    isLoading: false,
+  };
 }

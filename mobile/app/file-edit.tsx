@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { RouteProp, useRoute, useNavigation } from '@react-navigation/native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useFile, useFileImage, useAddTags } from '../hooks/useFiles';
+import { useFile, useAddTags } from '../hooks/useFiles';
 import { usePdfGeneration } from '../hooks/usePdfGeneration';
 import { useUpload } from '../hooks/useUpload';
 import { TagChip } from '../components/TagChip';
@@ -38,10 +38,9 @@ interface FileEditItemProps {
 
 function FileEditItem({ fileId, selected, onPress }: FileEditItemProps) {
   const { data: fileData, isLoading: fileLoading } = useFile(fileId);
-  const { data: imageData, isLoading: imageLoading } = useFileImage(fileId);
   const file = fileData as any;
-  const uri = imageData?.data?.url;
-  const isLoading = fileLoading || imageLoading;
+  const uri = file?.url;
+  const isLoading = fileLoading;
 
   if (isLoading) {
     return (
@@ -135,8 +134,8 @@ export function FileEditScreen() {
       const imageUris: { uri: string }[] = [];
 
       for (const fileId of targetIds) {
-        const data = await apiClient.get<{ data: { url: string } }>(`${ENDPOINTS.FILES}/${fileId}`);
-        const url = data?.data?.url;
+        const data = await apiClient.get<{ url: string }>(`${ENDPOINTS.RESOURCES}/${fileId}`);
+        const url = data?.url;
         if (url) {
           imageUris.push({ uri: url });
         }

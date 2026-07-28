@@ -36,8 +36,8 @@ export function useSyncQueue() {
         count++;
       } else {
         // mode manuel : uniquement les fichiers des dossiers en mode auto
-        if (!entry.parentFileId) continue;
-        const folder = safDirectory.getAll().find((f) => f.id === entry.parentFileId);
+        if (!entry.parentResourceId) continue;
+        const folder = safDirectory.getAll().find((f) => f.id === entry.parentResourceId);
         if (folder && folder.syncMode === 'auto') {
           count++;
         }

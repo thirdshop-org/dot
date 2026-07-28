@@ -4,7 +4,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useDeleteFile, useAddTags, useMoveFiles, useFolders, useFiles, useFreeLocalSpace } from '../hooks/useFiles';
+import { useDeleteFile, useAddTags, useMoveResources, useFolders, useFiles, useFreeLocalSpace } from '../hooks/useFiles';
 import { UnifiedFileItem, isFolder } from '../types';
 import { SearchBar, SearchFilters } from '../components/SearchBar';
 import { FileThumbnail } from '../components/FileThumbnail';
@@ -176,7 +176,7 @@ export function HomeScreen() {
   const [tagModalMode, setTagModalMode] = useState<'tag' | 'folder'>('tag');
   const [tagInput, setTagInput] = useState('');
   const addTags = useAddTags();
-  const moveFiles = useMoveFiles();
+  const moveFiles = useMoveResources();
   const { data: foldersData } = useFolders();
   const [moveModalVisible, setMoveModalVisible] = useState(false);
   const [settingsModalVisible, setSettingsModalVisible] = useState(false);
@@ -271,9 +271,9 @@ export function HomeScreen() {
       onPress: async () => {
         for (const id of ids) {
           const f = files.find((fi) => fi.id === id);
-          if (f?.backendFileId) {
-            await apiClient.delete(`${ENDPOINTS.FILES}/${f.backendFileId}`);
-            fileStore.deleteByBackendId(f.backendFileId);
+          if (f?.backendResourceId) {
+            await apiClient.delete(`${ENDPOINTS.RESOURCES}/${f.backendResourceId}`);
+            fileStore.deleteByBackendId(f.backendResourceId);
           } else {
             fileStore.deleteById(id);
           }
@@ -306,9 +306,8 @@ export function HomeScreen() {
     const name = tagInput.trim();
     if (!name) return;
     const ids = Array.from(selectedIds);
-    const tagType = tagModalMode === 'folder' ? 'folder' : 'none';
     for (const id of ids) {
-      await addTags.mutateAsync({ fileId: id, tags: [name], tagType });
+      await addTags.mutateAsync({ fileId: id, tags: [name] });
     }
     setTagModalVisible(false);
     setSelectedIds(new Set());
@@ -316,7 +315,7 @@ export function HomeScreen() {
 
   const handleMove = useCallback(async (folderId: string | null) => {
     const ids = Array.from(selectedIds);
-    await moveFiles.mutateAsync({ fileIds: ids, parentFileId: folderId });
+    await moveFiles.mutateAsync({ resourceIds: ids, parentResourceId: folderId });
     setMoveModalVisible(false);
     setSelectedIds(new Set());
   }, [selectedIds, moveFiles]);

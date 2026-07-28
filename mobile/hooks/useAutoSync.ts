@@ -77,7 +77,6 @@ export function useAutoSync() {
 
       if (globalMode === 'auto') {
         // Mode auto global : tous les fichiers locaux sans backendId
-        // (pas de filtre par dossier)
       } else {
         // Mode manuel : uniquement les fichiers des dossiers en mode auto
         const allFolders = safDirectory.getAll();
@@ -85,7 +84,7 @@ export function useAutoSync() {
           allFolders.filter((f) => f.syncMode === 'auto').map((f) => f.id)
         );
         pendingFiles = pendingFiles.filter(
-          (entry) => entry.parentFileId && autoFolderIds.has(entry.parentFileId)
+          (entry) => entry.parentResourceId && autoFolderIds.has(entry.parentResourceId)
         );
       }
 
@@ -111,7 +110,7 @@ export function useAutoSync() {
         }
       }
 
-      queryClient.invalidateQueries({ queryKey: ['files'] });
+      queryClient.invalidateQueries({ queryKey: ['resources'] });
     } finally {
       setIsSyncing(false);
       isRunning.current = false;

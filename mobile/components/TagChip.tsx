@@ -21,23 +21,30 @@ export function TagChip({ name, onRemove }: TagChipProps) {
 
 const styles = StyleSheet.create({
   container: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: '#E3F2FD',
     borderRadius: 12,
     paddingHorizontal: 10,
     paddingVertical: 4,
-    flexDirection: 'row',
-    alignItems: 'center',
+    gap: 4,
   },
   text: {
     fontSize: 12,
     color: '#1976D2',
+    fontWeight: '500',
   },
   removeButton: {
-    marginLeft: 4,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#BBDEFB',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   removeText: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#1976D2',
-    fontWeight: '600',
+    fontWeight: '700',
   },
 });

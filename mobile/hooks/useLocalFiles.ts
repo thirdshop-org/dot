@@ -32,7 +32,7 @@ export function useLocalFiles() {
     for (const entry of registryEntries) {
       merged.set(entry.id, {
         id: entry.id,
-        backendFileId: entry.backendId ?? undefined,
+        backendResourceId: entry.backendId ?? undefined,
         name: entry.name,
         mimeType: entry.mimeType,
         size: entry.size,
@@ -42,7 +42,7 @@ export function useLocalFiles() {
         localUri: entry.localUri ?? undefined,
         tags: entry.tags ?? [],
         isFolder: entry.isFolder === 1,
-        parentFileId: entry.parentFileId ?? undefined,
+        parentResourceId: entry.parentResourceId ?? undefined,
         isDeviceFile: entry.source === 'local' && !entry.backendId,
       });
     }
@@ -61,7 +61,7 @@ export function useLocalFiles() {
           tags: [],
           isFolder: false,
           isDeviceFile: true,
-          parentFileId: df.folderId,
+          parentResourceId: df.folderId,
         });
       }
     }

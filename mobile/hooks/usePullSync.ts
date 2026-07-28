@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { downloadAsync, documentDirectory, makeDirectoryAsync } from 'expo-file-system/legacy';
 import { fileStore } from '../services/fileStore';
 import { apiClient } from '../api/client';
+import { ENDPOINTS } from '../constants/api';
 import { setIsSyncing } from './useSyncQueue';
 
 const SYNC_DIR = `${documentDirectory}synced-files/`;
@@ -25,9 +26,11 @@ export function usePullSync() {
         size: number;
         createdAt: string;
         url?: string;
-      }> }>('/files?page=1&limit=100&thumbnail=thumbnail');
+        thumbnailUrl?: string;
+        ownerId?: string;
+      }> }>(`${ENDPOINTS.RESOURCES}?page=1&limit=100&thumbnail=thumbnail_small`);
 
-      const backendFiles = res.data ?? [];
+      const backendResources = res.data ?? [];
       const registry = fileStore.getAllSynced();
       const existingBackendIds = new Set(
         registry.filter((e) => e.backendId).map((e) => e.backendId)
@@ -35,35 +38,36 @@ export function usePullSync() {
 
       let pulled = 0;
 
-      for (const bf of backendFiles) {
-        if (existingBackendIds.has(bf.id)) continue;
-        if (bf.size === 0) continue;
+      for (const br of backendResources) {
+        if (existingBackendIds.has(br.id)) continue;
+        if (br.size === 0) continue;
 
         try {
-          const detail = await apiClient.get<{ data: { url: string } }>(`/files/${bf.id}`);
-          const downloadUrl = detail.data.url;
+          const detail = await apiClient.get<{ url: string }>(`${ENDPOINTS.RESOURCES}/${br.id}`);
+          const downloadUrl = detail.url;
 
           await makeDirectoryAsync(SYNC_DIR, { intermediates: true });
-          const safeName = bf.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-          const fileUri = `${SYNC_DIR}${bf.id}_${safeName}`;
+          const safeName = br.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+          const fileUri = `${SYNC_DIR}${br.id}_${safeName}`;
 
           const result = await downloadAsync(downloadUrl, fileUri);
 
           fileStore.upsert({
-            id: bf.id,
-            backendId: bf.id,
-            name: bf.name,
-            mimeType: bf.mimeType,
-            size: bf.size,
+            id: br.id,
+            backendId: br.id,
+            name: br.name,
+            mimeType: br.mimeType,
+            size: br.size,
             source: 'synced',
             localUri: result.uri,
             syncStatus: 'synced',
-            parentFileId: null,
+            parentResourceId: null,
             isFolder: 0,
             ocrText: null,
-            thumbnailUrl: null,
-            createdAt: bf.createdAt,
-            updatedAt: bf.createdAt,
+            thumbnailUrl: br.thumbnailUrl ?? null,
+            ownerId: br.ownerId ?? null,
+            createdAt: br.createdAt,
+            updatedAt: br.createdAt,
             lastSyncedAt: new Date().toISOString(),
           });
           pulled++;
@@ -73,7 +77,7 @@ export function usePullSync() {
       }
 
       if (pulled > 0) {
-        queryClient.invalidateQueries({ queryKey: ['files'] });
+        queryClient.invalidateQueries({ queryKey: ['resources'] });
       }
 
       return { pulled };

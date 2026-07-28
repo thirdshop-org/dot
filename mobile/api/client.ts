@@ -109,10 +109,6 @@ class ApiClient {
   async delete<T>(endpoint: string): Promise<T> {
     return this.request<T>(endpoint, { method: 'DELETE' });
   }
-
-  async getFileUrl(fileName: string): Promise<{ data: { url: string; name: string } }> {
-    return this.request(`${ENDPOINTS.FILE}/${fileName}`);
-  }
 }
 
 export const apiClient = new ApiClient(API_BASE_URL);

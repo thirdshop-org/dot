@@ -14,14 +14,14 @@ import {
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { RouteProp, useRoute } from '@react-navigation/native';
-import { useFile, useFileImage, useDownloadFile } from '../hooks/useFiles';
+import { useFile, useDownloadFile } from '../hooks/useFiles';
 import { fileStore } from '../services/fileStore';
 import { TagChip } from '../components/TagChip';
 import { FileThumbnail } from '../components/FileThumbnail';
 import { SyncStatusBadge } from '../components/SyncStatusBadge';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { ZoomableImage } from '../components/ZoomableImage';
-import type { Thumbnail, SyncStatus } from '../types';
+import type { Variant, SyncStatus } from '../types';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
@@ -44,13 +44,12 @@ type FileDetailRouteProp = RouteProp<RootStackParamList, 'FileDetail'>;
 
 function DetailItem({ fileId, deviceFile, onSelectImage }: { fileId: string; deviceFile?: DeviceFileParam; onSelectImage?: (state: ModalState) => void }) {
   const isDevice = !!deviceFile;
-  const { data: imageData, isLoading: imageLoading } = useFileImage(isDevice ? '' : fileId);
   const { data: fileData } = useFile(isDevice ? '' : fileId);
   const downloadFile = useDownloadFile();
   const [downloading, setDownloading] = useState(false);
 
-  const uri = isDevice ? deviceFile.localUri : (imageData?.data?.url);
   const file = fileData as any;
+  const uri = isDevice ? deviceFile.localUri : file?.url;
 
   const localEntry = fileStore.getByBackendId(fileId);
   const syncStatus: SyncStatus = isDevice
@@ -59,9 +58,10 @@ function DetailItem({ fileId, deviceFile, onSelectImage }: { fileId: string; dev
       ? (localEntry.syncStatus === 'cloud' ? 'cloud' : 'synced')
       : (uri ? 'synced' : 'cloud');
 
-  const fullThumbnails: Thumbnail[] = (file?.data?.thumbnails ?? [])
-    .filter((t: Thumbnail) => t.resolutionLabel === 'full')
-    .sort((a: Thumbnail, b: Thumbnail) => a.pageNumber - b.pageNumber);
+  const fullVariants: Variant[] = (file?.variants ?? [])
+    .filter((v: Variant) => v.variantType === 'thumbnail_full')
+    .sort((a: Variant, b: Variant) => a.pageNumber - b.pageNumber);
+  const fullThumbnails = fullVariants;
 
   const hasPages = fullThumbnails.length > 0;
 
@@ -71,14 +71,14 @@ function DetailItem({ fileId, deviceFile, onSelectImage }: { fileId: string; dev
     try {
       await downloadFile.mutateAsync({
         id: fileId,
-        backendFileId: fileId,
-        name: file.data?.name ?? fileId,
-        mimeType: file.mimeType ?? 'application/octet-stream',
-        size: file.data?.size ?? 0,
-        createdAt: file.createdAt ?? new Date().toISOString(),
+        backendResourceId: fileId,
+        name: file?.name ?? fileId,
+        mimeType: file?.mimeType ?? 'application/octet-stream',
+        size: file?.size ?? 0,
+        createdAt: file?.createdAt ?? new Date().toISOString(),
         source: 'cloud',
         syncStatus: 'cloud',
-        tags: file.data?.tags ?? [],
+        tags: file?.tags ?? [],
         isFolder: false,
       });
     } catch {} finally {
@@ -120,11 +120,10 @@ function DetailItem({ fileId, deviceFile, onSelectImage }: { fileId: string; dev
           ) : file ? (
             <View style={styles.cloudOnlyContainer}>
               <FileThumbnail
-                thumbnailUrl={file.data?.thumbnailUrl}
-                mimeType={file.mimeType ?? 'application/pdf'}
-                fileName={file.name ?? fileId}
+                thumbnailUrl={file?.thumbnailUrl}
+                mimeType={file?.mimeType ?? 'application/pdf'}
+                fileName={file?.name ?? fileId}
                 size={SCREEN_WIDTH * 0.6}
-                isLoading={imageLoading}
               />
               {syncStatus === 'cloud' && (
                 <TouchableOpacity
@@ -151,13 +150,13 @@ function DetailItem({ fileId, deviceFile, onSelectImage }: { fileId: string; dev
 
       <View style={styles.details}>
         <View style={styles.detailHeader}>
-          <Text style={styles.fileName}>{deviceFile?.name ?? imageData?.data?.name ?? file?.name ?? fileId}</Text>
+          <Text style={styles.fileName}>{deviceFile?.name ?? file?.name ?? fileId}</Text>
           <SyncStatusBadge status={syncStatus} size={20} />
         </View>
 
-        {(deviceFile || imageData?.data?.size != null) && (
+        {(deviceFile || file?.size != null) && (
           <Text style={styles.meta}>
-            Taille : {((deviceFile ? 0 : imageData?.data?.size) ?? 0 / 1024).toFixed(1)} Ko
+            Taille : {((deviceFile ? 0 : file?.size) ?? 0 / 1024).toFixed(1)} Ko
           </Text>
         )}
 

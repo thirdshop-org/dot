@@ -3,7 +3,7 @@ import { View, FlatList, StyleSheet, TouchableOpacity, Text, Dimensions, Alert }
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useDeleteFile, useFileImage, useFiles, useFreeLocalSpace } from '../hooks/useFiles';
+import { useDeleteFile, useFiles, useFreeLocalSpace } from '../hooks/useFiles';
 import { UnifiedFileItem } from '../types';
 import { isFolder } from '../types';
 import { FileThumbnail } from '../components/FileThumbnail';
@@ -34,7 +34,6 @@ function FolderGridItem({ file, onPress, onLongPress, selected, onFolderPress }:
   selected?: boolean;
   onFolderPress?: () => void;
 }) {
-  const { data, isLoading } = useFileImage(file.id);
   const folder = isFolder(file);
 
   return (
@@ -46,12 +45,11 @@ function FolderGridItem({ file, onPress, onLongPress, selected, onFolderPress }:
       activeOpacity={0.7}
     >
       <FileThumbnail
-        uri={data?.data?.url ?? file.localUri}
+        uri={file.url ?? file.localUri}
         thumbnailUrl={file.thumbnailUrl}
         mimeType={file.mimeType}
         fileName={file.name}
         size={ITEM_SIZE}
-        isLoading={isLoading}
         syncStatus={file.syncStatus}
       />
       {selected && (
@@ -137,9 +135,9 @@ export function FolderScreen() {
       onPress: async () => {
         for (const id of ids) {
           const f = files.find((fi) => fi.id === id);
-          if (f?.backendFileId) {
-            await apiClient.delete(`${ENDPOINTS.FILES}/${f.backendFileId}`);
-            fileStore.deleteByBackendId(f.backendFileId);
+          if (f?.backendResourceId) {
+            await apiClient.delete(`${ENDPOINTS.RESOURCES}/${f.backendResourceId}`);
+            fileStore.deleteByBackendId(f.backendResourceId);
           } else {
             fileStore.deleteById(id);
           }

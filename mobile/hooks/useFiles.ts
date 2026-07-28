@@ -8,7 +8,7 @@ function recordToUnifiedItem(record: ReturnType<typeof fileStore.getById>): Unif
   if (!record) return null;
   return {
     id: record.id,
-    backendFileId: record.backendId ?? undefined,
+    backendResourceId: record.backendId ?? undefined,
     name: record.name,
     mimeType: record.mimeType,
     size: record.size,
@@ -20,7 +20,8 @@ function recordToUnifiedItem(record: ReturnType<typeof fileStore.getById>): Unif
     ocrText: record.ocrText ?? undefined,
     tags: record.tags ?? [],
     isFolder: record.isFolder === 1,
-    parentFileId: record.parentFileId ?? undefined,
+    parentResourceId: record.parentResourceId ?? undefined,
+    ownerId: record.ownerId ?? undefined,
     thumbnailUrl: record.thumbnailUrl ?? undefined,
     isDeviceFile: record.source === 'local' && !record.backendId,
   };
@@ -38,15 +39,15 @@ function recordsToUnifiedItems(records: ReturnType<typeof fileStore.getPaginated
 
 export function useFiles(parentId?: string | null, page: number = 1, limit: number = 50) {
   const queryKey = parentId
-    ? ['files', parentId]
-    : ['files', 'root', page, limit];
+    ? ['resources', parentId]
+    : ['resources', 'root', page, limit];
 
   return useQuery({
     queryKey,
     queryFn: async () => {
       if (parentId) {
         const backendRes = await apiClient.get<{ data: FileItem[] }>(
-          `/files/folders/${parentId}/files?thumbnail=thumbnail`,
+          `${ENDPOINTS.RESOURCES}/folders/${parentId}/resources?thumbnail=thumbnail_small`,
         );
         fileStore.mergeFromBackend(
           backendRes.data.map((f) => ({
@@ -59,7 +60,8 @@ export function useFiles(parentId?: string | null, page: number = 1, limit: numb
             ocrText: f.ocrText,
             tags: f.tags,
             isFolder: f.isFolder,
-            parentFileId: f.parentFileId,
+            parentResourceId: f.parentResourceId,
+            ownerId: f.ownerId,
             thumbnailUrl: f.thumbnailUrl,
           })),
         );
@@ -72,7 +74,7 @@ export function useFiles(parentId?: string | null, page: number = 1, limit: numb
       }
 
       const backendRes = await apiClient.get<PaginatedResponse<FileItem>>(
-        `${ENDPOINTS.FILES}?page=${page}&limit=${limit}&thumbnail=thumbnail`,
+        `${ENDPOINTS.RESOURCES}?page=${page}&limit=${limit}&thumbnail=thumbnail_small`,
       );
       fileStore.mergeFromBackend(
         backendRes.data.map((f) => ({
@@ -85,7 +87,8 @@ export function useFiles(parentId?: string | null, page: number = 1, limit: numb
           ocrText: f.ocrText,
           tags: f.tags,
           isFolder: f.isFolder,
-          parentFileId: f.parentFileId,
+          parentResourceId: f.parentResourceId,
+          ownerId: f.ownerId,
           thumbnailUrl: f.thumbnailUrl,
         })),
       );
@@ -110,20 +113,9 @@ export function useFiles(parentId?: string | null, page: number = 1, limit: numb
 
 export function useFile(id: string) {
   return useQuery({
-    queryKey: ['files', id],
-    queryFn: () => apiClient.get<FileItem>(`${ENDPOINTS.FILES}/${id}?thumbnail=thumbnail`),
+    queryKey: ['resources', id],
+    queryFn: () => apiClient.get<FileItem>(`${ENDPOINTS.RESOURCES}/${id}?thumbnail=thumbnail_small`),
     enabled: !!id,
-  });
-}
-
-export function useFileImage(fileId: string) {
-  return useQuery({
-    queryKey: ['fileImage', fileId],
-    queryFn: () =>
-      apiClient.get<{ data: { id: string; name: string; url: string; size: number } }>(
-        `${ENDPOINTS.FILE}/${fileId}`,
-      ),
-    enabled: !!fileId,
   });
 }
 
@@ -132,12 +124,12 @@ export function useDeleteFile() {
 
   return useMutation({
     mutationFn: async (id: string) => {
-      const result = await apiClient.delete(`${ENDPOINTS.FILES}/${id}`);
+      const result = await apiClient.delete(`${ENDPOINTS.RESOURCES}/${id}`);
       fileStore.deleteByBackendId(id);
       return result;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['files'] });
+      queryClient.invalidateQueries({ queryKey: ['resources'] });
     },
   });
 }
@@ -146,22 +138,22 @@ export function useAddTags() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ fileId, tags, tagType }: { fileId: string; tags: string[]; tagType?: string }) =>
-      apiClient.post(`${ENDPOINTS.FILES}/${fileId}/tags`, { tags, tag_type: tagType }),
+    mutationFn: ({ fileId, tags }: { fileId: string; tags: string[] }) =>
+      apiClient.post(`${ENDPOINTS.RESOURCES}/${fileId}/tags`, { tags }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['files'] });
+      queryClient.invalidateQueries({ queryKey: ['resources'] });
     },
   });
 }
 
-export function useMoveFiles() {
+export function useMoveResources() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ fileIds, parentFileId }: { fileIds: string[]; parentFileId: string | null }) =>
-      apiClient.post(ENDPOINTS.MOVE, { file_ids: fileIds, parent_file_id: parentFileId }),
+    mutationFn: ({ resourceIds, parentResourceId }: { resourceIds: string[]; parentResourceId: string | null }) =>
+      apiClient.post(ENDPOINTS.MOVE, { resource_ids: resourceIds, parent_resource_id: parentResourceId }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['files'] });
+      queryClient.invalidateQueries({ queryKey: ['resources'] });
     },
   });
 }
@@ -182,7 +174,8 @@ export function useFolders() {
           ocrText: f.ocrText,
           tags: f.tags,
           isFolder: f.isFolder,
-          parentFileId: f.parentFileId,
+          parentResourceId: f.parentResourceId,
+          ownerId: f.ownerId,
           thumbnailUrl: f.thumbnailUrl,
         })),
       );
@@ -209,10 +202,9 @@ export function useDownloadFile() {
         return file.localUri ?? '';
       }
 
-      const res = await apiClient.get<{ data: { url: string; name: string } }>(
-        `/files/${file.backendFileId}`,
+      const res = await apiClient.get<{ url: string }>(
+        `${ENDPOINTS.RESOURCES}/${file.backendResourceId ?? file.id}`,
       );
-      const downloadUrl = res.data.url;
 
       const { downloadAsync, documentDirectory, makeDirectoryAsync } = await import('expo-file-system/legacy');
       const DOWNLOAD_DIR = `${documentDirectory}synced-files/`;
@@ -227,28 +219,29 @@ export function useDownloadFile() {
       const ext = dot >= 0 ? file.name.slice(dot) : '';
       const fileUri = `${DOWNLOAD_DIR}${cacheKey}${ext}`;
 
-      const result = await downloadAsync(downloadUrl, fileUri);
+      const result = await downloadAsync(res.url, fileUri);
 
       fileStore.upsert({
-        id: file.backendFileId ?? file.id,
-        backendId: file.backendFileId ?? file.id,
+        id: file.backendResourceId ?? file.id,
+        backendId: file.backendResourceId ?? file.id,
         name: file.name,
         mimeType: file.mimeType,
         size: file.size,
         source: 'synced',
         localUri: result.uri,
         syncStatus: 'synced',
-        parentFileId: file.parentFileId ?? null,
+        parentResourceId: file.parentResourceId ?? null,
         isFolder: 0,
         ocrText: file.ocrText ?? null,
         thumbnailUrl: file.thumbnailUrl ?? null,
+        ownerId: file.ownerId ?? null,
         createdAt: file.createdAt,
         updatedAt: file.updatedAt ?? file.createdAt,
         lastSyncedAt: new Date().toISOString(),
         tags: file.tags,
       });
 
-      queryClient.invalidateQueries({ queryKey: ['files'] });
+      queryClient.invalidateQueries({ queryKey: ['resources'] });
       return result.uri;
     },
   });
@@ -274,7 +267,7 @@ export function useFreeLocalSpace() {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['files'] });
+      queryClient.invalidateQueries({ queryKey: ['resources'] });
     },
   });
 }

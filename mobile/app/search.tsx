@@ -28,7 +28,7 @@ export function SearchScreen() {
       {isLoading && <Text style={styles.loading}>Recherche en cours...</Text>}
 
       <FlatList
-        data={data?.data || []}
+        data={data || []}
         renderItem={renderItem}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.list}

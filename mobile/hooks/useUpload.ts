@@ -71,7 +71,7 @@ export function useUpload() {
       return { uploaded, errors };
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['files'] });
+      queryClient.invalidateQueries({ queryKey: ['resources'] });
     },
   });
 }
