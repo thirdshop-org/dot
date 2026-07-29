@@ -1,77 +1,100 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   FlatList,
   TouchableOpacity,
-  Image,
   TextInput,
   Alert,
   ActivityIndicator,
   Dimensions,
+  Modal,
 } from 'react-native';
-import { RouteProp, useRoute, useNavigation } from '@react-navigation/native';
+import { Image } from 'expo-image';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useFile, useAddTags } from '../hooks/useFiles';
+import { RouteProp, useRoute, useNavigation } from '@react-navigation/native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { useAddTags } from '../hooks/useFiles';
 import { usePdfGeneration } from '../hooks/usePdfGeneration';
 import { useUpload } from '../hooks/useUpload';
 import { TagChip } from '../components/TagChip';
 import { FileThumbnail } from '../components/FileThumbnail';
-import { FileItem } from '../types';
+import { ZoomableImage } from '../components/ZoomableImage';
+import { fileStore } from '../services/fileStore';
 import { apiClient } from '../api/client';
 import { ENDPOINTS } from '../constants/api';
+import type { SyncStatus, Variant } from '../types';
 
 const NUM_COLUMNS = 3;
 const SCREEN_WIDTH = Dimensions.get('window').width;
-const ITEM_SIZE = (SCREEN_WIDTH - 16 * 2 - (NUM_COLUMNS - 1) * 6) / NUM_COLUMNS;
+const PADDING = 16;
+const ITEM_GAP = 6;
+const ITEM_SIZE = (SCREEN_WIDTH - PADDING * 2 - (NUM_COLUMNS - 1) * ITEM_GAP) / NUM_COLUMNS;
 
 type FileEditRouteParams = {
   FileEdit: { fileIds: string[] };
 };
 
+type PreviewFile = { uri: string; width: number; height: number };
+
 interface FileEditItemProps {
   fileId: string;
   selected: boolean;
-  onPress: () => void;
+  onSelect: (id: string) => void;
+  onPreview: (id: string) => void;
+  size: number;
 }
 
-function FileEditItem({ fileId, selected, onPress }: FileEditItemProps) {
-  const { data: fileData, isLoading: fileLoading } = useFile(fileId);
-  const file = fileData as any;
-  const uri = file?.url;
-  const isLoading = fileLoading;
+const FileEditItem = React.memo(function FileEditItem({ fileId, selected, onSelect, onPreview, size }: FileEditItemProps) {
+  const record = fileStore.getByBackendId(fileId) ?? fileStore.getById(fileId);
 
-  if (isLoading) {
-    return (
-      <TouchableOpacity style={[styles.gridItem, styles.gridItemLoading]} onPress={onPress} activeOpacity={0.7}>
-        <ActivityIndicator size="small" color="#1976D2" />
-      </TouchableOpacity>
-    );
-  }
+  const uri = record?.localUri ?? undefined;
+  const thumbnailUrl = record?.thumbnailUrl ?? undefined;
+  const mimeType = record?.mimeType ?? 'application/octet-stream';
+  const fileName = record?.name ?? fileId;
+  const syncStatus = (record?.syncStatus ?? 'cloud') as SyncStatus;
+  const isViewable = mimeType.startsWith('image/') || mimeType === 'application/pdf';
 
   return (
-    <TouchableOpacity style={styles.gridItem} onPress={onPress} activeOpacity={0.7}>
-      {uri && file?.mimeType?.startsWith('image/') ? (
-        <Image source={{ uri }} style={styles.thumb} />
-      ) : (
+    <View style={{ width: size, height: size, marginBottom: ITEM_GAP, borderRadius: 6, overflow: 'hidden' }}>
+      <TouchableOpacity
+        style={StyleSheet.absoluteFill}
+        activeOpacity={0.7}
+        onPress={() => { if (isViewable) onPreview(fileId); else onSelect(fileId); }}
+      >
         <FileThumbnail
-          thumbnailUrl={file?.data?.thumbnailUrl}
-          mimeType={file?.mimeType ?? 'application/octet-stream'}
-          fileName={file?.name ?? fileId}
-          size={ITEM_SIZE}
+          uri={uri}
+          thumbnailUrl={thumbnailUrl}
+          mimeType={mimeType}
+          fileName={fileName}
+          size={size}
+          syncStatus={syncStatus}
         />
+      </TouchableOpacity>
+
+      {isViewable && (
+        <TouchableOpacity
+          style={styles.previewBtn}
+          onPress={() => onPreview(fileId)}
+          hitSlop={6}
+        >
+          <MaterialIcons name="visibility" size={16} color="#fff" />
+        </TouchableOpacity>
       )}
-      {selected && (
-        <View style={styles.selectedOverlay}>
-          <View style={styles.checkCircle}>
-            <MaterialIcons name="check" size={18} color="#fff" />
-          </View>
+
+      <TouchableOpacity
+        style={styles.selectBtn}
+        onPress={() => onSelect(fileId)}
+        hitSlop={8}
+      >
+        <View style={[styles.checkCircle, selected && styles.checkCircleSelected]}>
+          {selected && <MaterialIcons name="check" size={14} color="#fff" />}
         </View>
-      )}
-    </TouchableOpacity>
+      </TouchableOpacity>
+    </View>
   );
-}
+});
 
 export function FileEditScreen() {
   const route = useRoute<RouteProp<FileEditRouteParams, 'FileEdit'>>();
@@ -86,6 +109,9 @@ export function FileEditScreen() {
   const [pendingTags, setPendingTags] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [previewFiles, setPreviewFiles] = useState<PreviewFile[] | null>(null);
+  const [previewIndex, setPreviewIndex] = useState(0);
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   const hasSelection = selectedIds.size > 0;
   const targetIds = hasSelection ? Array.from(selectedIds) : fileIds;
@@ -105,6 +131,58 @@ export function FileEditScreen() {
       return new Set(fileIds);
     });
   }, [fileIds]);
+
+  const openPreview = useCallback((files: PreviewFile[], index: number) => {
+    setPreviewFiles(files);
+    setPreviewIndex(index);
+  }, []);
+
+  const handlePreview = useCallback(async (fileId: string) => {
+    const record = fileStore.getByBackendId(fileId) ?? fileStore.getById(fileId);
+
+    if (record?.localUri) {
+      openPreview([{ uri: record.localUri, width: SCREEN_WIDTH, height: SCREEN_WIDTH }], 0);
+      return;
+    }
+
+    setPreviewLoading(true);
+    try {
+      const data = await apiClient.get<any>(`${ENDPOINTS.RESOURCES}/${fileId}`);
+      const url = data?.url;
+      if (url) {
+        const fullVariants: Variant[] = (data?.variants ?? [])
+          .filter((v: Variant) => v.variantType === 'thumbnail_full')
+          .sort((a: Variant, b: Variant) => a.pageNumber - b.pageNumber);
+
+        if (fullVariants.length > 0) {
+          const pages: PreviewFile[] = fullVariants.map((v) => ({
+            uri: v.url,
+            width: v.width,
+            height: v.height,
+          }));
+          openPreview(pages, 0);
+        } else {
+          openPreview([{ uri: url, width: SCREEN_WIDTH, height: SCREEN_WIDTH }], 0);
+        }
+      } else {
+        Alert.alert('Erreur', 'Impossible de charger l\'aperçu');
+      }
+    } catch {
+      Alert.alert('Erreur', 'Impossible de charger l\'aperçu');
+    } finally {
+      setPreviewLoading(false);
+    }
+  }, [openPreview]);
+
+  const handleSwipeVertical = useCallback((direction: 'up' | 'down') => {
+    setPreviewIndex((prev) => {
+      if (!previewFiles || previewFiles.length <= 1) return prev;
+      const next = direction === 'up'
+        ? Math.min(prev + 1, previewFiles.length - 1)
+        : Math.max(prev - 1, 0);
+      return next;
+    });
+  }, [previewFiles]);
 
   const handleAddTag = () => {
     const tag = tagInput.trim().toLowerCase();
@@ -131,15 +209,15 @@ export function FileEditScreen() {
 
     setUploading(true);
     try {
-      const imageUris: { uri: string }[] = [];
-
-      for (const fileId of targetIds) {
-        const data = await apiClient.get<{ url: string }>(`${ENDPOINTS.RESOURCES}/${fileId}`);
-        const url = data?.url;
-        if (url) {
-          imageUris.push({ uri: url });
-        }
-      }
+      const results = await Promise.all(
+        targetIds.map(async (fileId) => {
+          const record = fileStore.getByBackendId(fileId) ?? fileStore.getById(fileId);
+          if (record?.localUri) return { uri: record.localUri };
+          const data = await apiClient.get<{ url: string }>(`${ENDPOINTS.RESOURCES}/${fileId}`);
+          return { uri: data?.url || '' };
+        })
+      );
+      const imageUris = results.filter((r) => r.uri);
 
       if (imageUris.length === 0) {
         Alert.alert('Erreur', 'Aucune image trouvée pour la génération du PDF');
@@ -184,7 +262,17 @@ export function FileEditScreen() {
     }
   }, [targetIds, generatePdf, upload, navigation]);
 
-  const isLoading = generating || uploading;
+  const isLoading = generating || uploading || previewLoading;
+
+  const renderItem = useCallback(({ item }: { item: string }) => (
+    <FileEditItem
+      fileId={item}
+      selected={hasSelection ? selectedIds.has(item) : true}
+      onSelect={toggleSelection}
+      onPreview={handlePreview}
+      size={ITEM_SIZE}
+    />
+  ), [hasSelection, selectedIds, toggleSelection, handlePreview]);
 
   return (
     <View style={styles.container}>
@@ -199,7 +287,9 @@ export function FileEditScreen() {
             </Text>
           </View>
           <TouchableOpacity style={styles.selectAllBtn} onPress={toggleSelectAll}>
-            <Text style={styles.selectAllText}>{hasSelection && selectedIds.size === fileIds.length ? 'Tout' : 'Tout'}</Text>
+            <Text style={styles.selectAllText}>
+              {hasSelection && selectedIds.size === fileIds.length ? 'Tout' : 'Tout'}
+            </Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -210,13 +300,7 @@ export function FileEditScreen() {
         keyExtractor={(item) => item}
         contentContainerStyle={styles.grid}
         columnWrapperStyle={styles.gridRow}
-        renderItem={({ item }) => (
-          <FileEditItem
-            fileId={item}
-            selected={hasSelection ? selectedIds.has(item) : true}
-            onPress={() => toggleSelection(item)}
-          />
-        )}
+        renderItem={renderItem}
       />
 
       <View style={styles.tagSection}>
@@ -261,6 +345,12 @@ export function FileEditScreen() {
             </Text>
           </View>
         )}
+        {previewLoading && (
+          <View style={styles.progressRow}>
+            <ActivityIndicator size="small" color="#1976D2" />
+            <Text style={styles.progressText}>Chargement de l'aperçu...</Text>
+          </View>
+        )}
         <TouchableOpacity
           style={[styles.pdfBtn, isLoading && styles.pdfBtnDisabled]}
           onPress={handleGeneratePdf}
@@ -274,6 +364,34 @@ export function FileEditScreen() {
           <Text style={styles.pdfBtnText}>Créer un PDF</Text>
         </TouchableOpacity>
       </View>
+
+      <Modal
+        visible={previewFiles !== null}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setPreviewFiles(null)}
+      >
+        {previewFiles && (
+          <GestureHandlerRootView style={{ flex: 1 }}>
+            <ZoomableImage
+              key={previewFiles[previewIndex].uri}
+              uri={previewFiles[previewIndex].uri}
+              width={previewFiles[previewIndex].width}
+              height={previewFiles[previewIndex].height}
+              onClose={() => setPreviewFiles(null)}
+              onSwipeVertical={handleSwipeVertical}
+            />
+            {previewFiles.length > 1 && (
+              <View style={styles.modalPagination}>
+                <Text style={styles.modalPaginationText}>
+                  {previewIndex + 1} / {previewFiles.length}
+                </Text>
+              </View>
+            )}
+          </GestureHandlerRootView>
+        )}
+      </Modal>
     </View>
   );
 }
@@ -284,7 +402,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   header: {
-    padding: 16,
+    padding: PADDING,
     borderBottomWidth: 1,
     borderBottomColor: '#e0e0e0',
   },
@@ -314,47 +432,13 @@ const styles = StyleSheet.create({
     color: '#1976D2',
   },
   grid: {
-    padding: 16,
+    padding: PADDING,
   },
   gridRow: {
-    gap: 6,
-  },
-  gridItem: {
-    width: ITEM_SIZE,
-    height: ITEM_SIZE,
-    borderRadius: 6,
-    overflow: 'hidden',
-    backgroundColor: '#f0f0f0',
-    marginBottom: 6,
-  },
-  gridItemLoading: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  selectedOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    justifyContent: 'flex-start',
-    alignItems: 'flex-end',
-    padding: 4,
-  },
-  checkCircle: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: '#1976D2',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  thumb: {
-    width: '100%',
-    height: '100%',
+    gap: ITEM_GAP,
   },
   tagSection: {
-    padding: 16,
+    padding: PADDING,
     borderTopWidth: 1,
     borderTopColor: '#e0e0e0',
   },
@@ -405,7 +489,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   footer: {
-    padding: 16,
+    padding: PADDING,
     borderTopWidth: 1,
     borderTopColor: '#e0e0e0',
     gap: 8,
@@ -436,5 +520,49 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  previewBtn: {
+    position: 'absolute',
+    top: 4,
+    right: 28,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  selectBtn: {
+    position: 'absolute',
+    bottom: 4,
+    right: 4,
+    padding: 4,
+  },
+  checkCircle: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    borderColor: '#fff',
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  checkCircleSelected: {
+    backgroundColor: '#1976D2',
+    borderColor: '#1976D2',
+  },
+  modalPagination: {
+    position: 'absolute',
+    bottom: 40,
+    alignSelf: 'center',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+  },
+  modalPaginationText: {
+    color: '#fff',
+    fontSize: 13,
   },
 });
