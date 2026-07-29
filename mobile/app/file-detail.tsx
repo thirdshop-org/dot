@@ -1,4 +1,4 @@
-import React, { useRef, useState, useCallback } from 'react';
+import React, { useRef, useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -44,19 +44,31 @@ type FileDetailRouteProp = RouteProp<RootStackParamList, 'FileDetail'>;
 
 function DetailItem({ fileId, deviceFile, onSelectImage }: { fileId: string; deviceFile?: DeviceFileParam; onSelectImage?: (state: ModalState) => void }) {
   const isDevice = !!deviceFile;
-  const { data: fileData } = useFile(isDevice ? '' : fileId);
+
+  const localEntry = fileStore.getById(fileId);
+  const apiId = isDevice ? '' : (localEntry?.backendId ?? fileId);
+  const { data: fileData } = useFile(apiId);
   const downloadFile = useDownloadFile();
   const [downloading, setDownloading] = useState(false);
 
   const file = fileData as any;
-  const uri = isDevice ? deviceFile.localUri : file?.url;
+  const uri = isDevice ? deviceFile.localUri : (localEntry?.localUri ?? file?.url);
 
-  const localEntry = fileStore.getByBackendId(fileId);
+  const [imageSize, setImageSize] = useState<{ width: number; height: number } | null>(null);
+  useEffect(() => {
+    if (!uri) { setImageSize(null); return; }
+    Image.getSize(
+      uri,
+      (w, h) => setImageSize({ width: w, height: h }),
+      () => setImageSize(null),
+    );
+  }, [uri]);
+
   const syncStatus: SyncStatus = isDevice
     ? 'local'
     : localEntry
-      ? (localEntry.syncStatus === 'cloud' ? 'cloud' : 'synced')
-      : (uri ? 'synced' : 'cloud');
+      ? (localEntry.syncStatus as SyncStatus)
+      : 'cloud';
 
   const fullVariants: Variant[] = (file?.variants ?? [])
     .filter((v: Variant) => v.variantType === 'thumbnail_full')
@@ -67,15 +79,16 @@ function DetailItem({ fileId, deviceFile, onSelectImage }: { fileId: string; dev
 
   const handleDownload = useCallback(async () => {
     if (!file) return;
+    const bid = localEntry?.backendId ?? fileId;
     setDownloading(true);
     try {
       await downloadFile.mutateAsync({
-        id: fileId,
-        backendResourceId: fileId,
-        name: file?.name ?? fileId,
-        mimeType: file?.mimeType ?? 'application/octet-stream',
-        size: file?.size ?? 0,
-        createdAt: file?.createdAt ?? new Date().toISOString(),
+        id: bid,
+        backendResourceId: bid,
+        name: file?.name ?? localEntry?.name ?? fileId,
+        mimeType: file?.mimeType ?? localEntry?.mimeType ?? 'application/octet-stream',
+        size: file?.size ?? localEntry?.size ?? 0,
+        createdAt: file?.createdAt ?? localEntry?.createdAt ?? new Date().toISOString(),
         source: 'cloud',
         syncStatus: 'cloud',
         tags: file?.tags ?? [],
@@ -84,7 +97,7 @@ function DetailItem({ fileId, deviceFile, onSelectImage }: { fileId: string; dev
     } catch {} finally {
       setDownloading(false);
     }
-  }, [file, fileId, downloadFile]);
+  }, [file, fileId, localEntry, downloadFile]);
 
   return (
     <ScrollView style={styles.page} contentContainerStyle={styles.pageContent}>
@@ -113,9 +126,19 @@ function DetailItem({ fileId, deviceFile, onSelectImage }: { fileId: string; dev
         <View style={styles.imageContainer}>
           {uri ? (
             <Pressable
-              onPress={() => onSelectImage?.({ images: [{ uri, width: SCREEN_WIDTH, height: SCREEN_WIDTH }], index: 0 })}
+              onPress={() => onSelectImage?.({
+                images: [{ uri, width: SCREEN_WIDTH, height: imageSize ? imageSize.height * SCREEN_WIDTH / imageSize.width : SCREEN_WIDTH }],
+                index: 0,
+              })}
             >
-              <Image source={{ uri }} style={styles.image} resizeMode="contain" />
+              <Image
+                source={{ uri }}
+                style={[
+                  styles.image,
+                  imageSize && { height: imageSize.height * SCREEN_WIDTH / imageSize.width },
+                ]}
+                resizeMode="contain"
+              />
             </Pressable>
           ) : file ? (
             <View style={styles.cloudOnlyContainer}>
@@ -289,14 +312,10 @@ const styles = StyleSheet.create({
     flexGrow: 1,
   },
   imageContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
     backgroundColor: '#000',
   },
   image: {
     width: SCREEN_WIDTH,
-    height: SCREEN_WIDTH,
   },
   pageImageContainer: {
     alignItems: 'center',

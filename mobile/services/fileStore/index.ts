@@ -407,13 +407,15 @@ export const fileStore = {
       for (const bf of backendFiles) {
         const existing = d.select().from(files).where(eq(files.backendId, bf.id)).get() as FileRow | undefined;
 
+        const recordId = existing?.id ?? bf.id;
+
         const source = existing && existing.localUri ? 'synced' : 'cloud';
         const syncStatus = existing && existing.localUri
           ? (existing.syncStatus === 'cloud' ? 'synced' : existing.syncStatus)
           : 'cloud';
 
         upsertRow({
-          id: bf.id,
+          id: recordId,
           backendId: bf.id,
           name: bf.name,
           mimeType: bf.mimeType,
@@ -431,7 +433,7 @@ export const fileStore = {
           lastSyncedAt: now,
         });
 
-        if (bf.tags && bf.tags.length > 0) setTagsForFile(bf.id, bf.tags);
+        if (bf.tags && bf.tags.length > 0) setTagsForFile(recordId, bf.tags);
       }
     });
   },
