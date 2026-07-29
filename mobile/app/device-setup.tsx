@@ -1,11 +1,10 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Platform } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
-import type { NavigationProp } from '@react-navigation/native';
+import { useNavigation, CommonActions } from '@react-navigation/native';
 import { useDevice } from '../contexts/DeviceContext';
 
 export function DeviceSetupScreen() {
-  const navigation = useNavigation<NavigationProp<any>>();
+  const navigation = useNavigation();
   const { register, deviceName } = useDevice();
   const [name, setName] = useState(deviceName || `${Platform.OS.charAt(0).toUpperCase() + Platform.OS.slice(1)} de ${Platform.OS === 'ios' ? 'l\'utilisateur' : 'utilisateur'}`);
   const [isLoading, setIsLoading] = useState(false);
@@ -17,7 +16,7 @@ export function DeviceSetupScreen() {
     setError(null);
     try {
       await register(name.trim());
-      navigation.reset({ index: 0, routes: [{ name: 'Home' }] });
+      navigation.dispatch(CommonActions.reset({ index: 0, routes: [{ name: 'Home' }] }));
     } catch (err: any) {
       setError(err?.message || "Échec de l'enregistrement");
     } finally {

@@ -6,7 +6,7 @@ import {
   TouchableOpacity,
   ScrollView,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, CommonActions } from '@react-navigation/native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { ONBOARDING_STEPS, CURRENT_ONBOARDING_VERSION } from '../config/onboarding';
 import { onboardingStorage } from '../services/onboardingStorage';
@@ -69,7 +69,7 @@ export function OnboardingScreen() {
 
   const complete = useCallback(() => {
     onboardingStorage.setCompletedVersion(CURRENT_ONBOARDING_VERSION);
-    navigation.reset({ index: 0, routes: [{ name: 'Home' as never }] });
+    navigation.dispatch(CommonActions.reset({ index: 0, routes: [{ name: 'Home' }] }));
   }, [navigation]);
 
   const handlePickDirectory = useCallback(async () => {
