@@ -8,6 +8,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { DeviceProvider, useDevice } from './contexts/DeviceContext';
+import { SseProvider } from './contexts/SseContext';
+import { SseOcrListener } from './hooks/usePollOcr';
 import { LoginScreen } from './app/login';
 import { RegisterScreen } from './app/register';
 import { HomeScreen } from './app/index';
@@ -103,10 +105,13 @@ function AppNavigator() {
 function AppContent() {
   return (
     <AuthProvider>
-      <DeviceProvider>
-        <AppNavigator />
-        <StatusBar style="auto" />
-      </DeviceProvider>
+      <SseProvider>
+        <SseOcrListener />
+        <DeviceProvider>
+          <AppNavigator />
+          <StatusBar style="auto" />
+        </DeviceProvider>
+      </SseProvider>
     </AuthProvider>
   );
 }

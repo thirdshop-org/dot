@@ -1,41 +1,75 @@
-import { useCallback, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { apiClient } from '../api/client';
 import { ENDPOINTS } from '../constants/api';
 import { fileStore } from '../services/fileStore';
-
-const MAX_POLL_MS = 120_000;
-const POLL_INTERVAL = 3_000;
+import { useOcrDone } from '../contexts/SseContext';
 
 export type OcrPollResult = { resourceId: string; status: 'completed' | 'failed' | 'timeout' };
 
+type OcrState = Record<string, { resolve: (res: OcrPollResult) => void; timeout: ReturnType<typeof setTimeout> }>;
+
+let globalOcrState: OcrState = {};
+let globalSetState: React.Dispatch<React.SetStateAction<number>> | null = null;
+
+function handleOcrDone(resourceId: string) {
+  const entry = globalOcrState[resourceId];
+  if (!entry) return;
+  clearTimeout(entry.timeout);
+
+  apiClient
+    .get<{ data: { ocrText?: string } }>(`${ENDPOINTS.RESOURCES}/${resourceId}`)
+    .then((detail) => {
+      const ocrText = detail.data?.ocrText;
+      if (ocrText) {
+        fileStore.updatePartial(resourceId, { ocrText });
+      }
+      entry.resolve({ resourceId, status: 'completed' });
+    })
+    .catch(() => {
+      entry.resolve({ resourceId, status: 'failed' });
+    })
+    .finally(() => {
+      delete globalOcrState[resourceId];
+      globalSetState?.(Date.now());
+    });
+}
+
+export function SseOcrListener() {
+  const { onOcrDone } = useOcrDone();
+
+  useEffect(() => {
+    const unsub = onOcrDone(handleOcrDone);
+    return unsub;
+  }, [onOcrDone]);
+
+  return null;
+}
+
 export function usePollOcr() {
-  const running = useRef<Set<string>>(new Set());
+  const [, forceUpdate] = useState(0);
+
+  useEffect(() => {
+    globalSetState = forceUpdate;
+    return () => {
+      globalSetState = null;
+    };
+  }, []);
 
   const pollOcr = useCallback(async (resourceId: string): Promise<OcrPollResult> => {
-    if (running.current.has(resourceId)) return { resourceId, status: 'failed' };
-    running.current.add(resourceId);
-
-    const start = Date.now();
-    try {
-      while (Date.now() - start < MAX_POLL_MS) {
-        try {
-          const detail = await apiClient.get<{ data: { ocrText?: string } }>(
-            `${ENDPOINTS.RESOURCES}/${resourceId}`,
-          );
-          const ocrText = detail.data?.ocrText;
-          if (ocrText && ocrText.length > 0) {
-            fileStore.updatePartial(resourceId, { ocrText });
-            return { resourceId, status: 'completed' };
-          }
-        } catch {
-          return { resourceId, status: 'failed' };
-        }
-        await new Promise((r) => setTimeout(r, POLL_INTERVAL));
-      }
-      return { resourceId, status: 'timeout' };
-    } finally {
-      running.current.delete(resourceId);
+    const existing = globalOcrState[resourceId];
+    if (existing) {
+      return new Promise((resolve) => existing.resolve = resolve);
     }
+
+    return new Promise((resolve) => {
+      const timeout = setTimeout(() => {
+        delete globalOcrState[resourceId];
+        resolve({ resourceId, status: 'timeout' });
+      }, 120_000);
+
+      globalOcrState[resourceId] = { resolve, timeout };
+      globalSetState?.(Date.now());
+    });
   }, []);
 
   return { pollOcr };

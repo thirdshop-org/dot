@@ -95,6 +95,68 @@ class ApiClient {
     await tokenStorage.deleteUser();
   }
 
+  async subscribeEvents(
+    onEvent: (event: string, data: string) => void,
+    onError: (err: Error) => void,
+  ): Promise<() => void> {
+    const abortController = new AbortController();
+
+    const connect = async () => {
+      try {
+        const headers: Record<string, string> = {
+          Accept: 'text/event-stream',
+        };
+        if (this.accessToken) {
+          headers['Authorization'] = `Bearer ${this.accessToken}`;
+        }
+
+        const response = await fetch(`${this.baseUrl}${ENDPOINTS.EVENTS}`, {
+          headers,
+          signal: abortController.signal,
+        });
+
+        if (!response.ok) {
+          throw new Error(`SSE connection failed: ${response.status}`);
+        }
+
+        const reader = response.body?.getReader();
+        if (!reader) throw new Error('Streaming not supported');
+
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let currentEvent = '';
+
+        while (!abortController.signal.aborted) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            if (line.startsWith('event: ')) {
+              currentEvent = line.slice(7);
+            } else if (line.startsWith('data: ')) {
+              if (currentEvent) {
+                onEvent(currentEvent, line.slice(6));
+                currentEvent = '';
+              }
+            }
+          }
+        }
+      } catch (err) {
+        if (!abortController.signal.aborted) {
+          onError(err instanceof Error ? err : new Error(String(err)));
+        }
+      }
+    };
+
+    connect();
+
+    return () => abortController.abort();
+  }
+
   async get<T>(endpoint: string): Promise<T> {
     return this.request<T>(endpoint);
   }

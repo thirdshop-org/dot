@@ -9,7 +9,7 @@ import {
   Alert,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { StoredFolder, SyncMode, SyncGlobalMode } from '../services/safDirectory';
+import { StoredFolder, SyncMode, SyncGlobalMode, type FolderSource } from '../services/safDirectory';
 
 type SettingsView = 'menu' | 'folders' | 'sync';
 
@@ -20,6 +20,7 @@ interface SettingsModalProps {
   onToggleVisibility: (folderId: string) => void;
   onRemoveFolder: (folderId: string) => void;
   onAddFolder: () => void;
+  onAddFolderRecursive?: () => void;
   onUpdateSyncMode: (folderId: string, mode: SyncMode) => void;
   onUpdateSyncCellular: (folderId: string, enabled: boolean) => void;
   globalSyncMode: SyncGlobalMode;
@@ -47,6 +48,7 @@ export function SettingsModal({
   onToggleVisibility,
   onRemoveFolder,
   onAddFolder,
+  onAddFolderRecursive,
   onUpdateSyncMode,
   onUpdateSyncCellular,
   globalSyncMode,
@@ -108,6 +110,7 @@ export function SettingsModal({
               onToggleVisibility={onToggleVisibility}
               onRemoveFolder={handleRemoveFolder}
               onAddFolder={onAddFolder}
+              onAddFolderRecursive={onAddFolderRecursive}
             />
           )}
 
@@ -163,18 +166,31 @@ function MenuView({ onSelect, onClose }: { onSelect: (v: SettingsView) => void; 
   );
 }
 
+function folderIcon(folder: StoredFolder): { name: keyof typeof MaterialIcons.glyphMap; color: string } {
+  switch (folder.source) {
+    case 'media-library':
+      return { name: 'photo-library', color: '#43A047' };
+    case 'recursive':
+      return { name: 'subdirectory-arrow-right', color: '#8E24AA' };
+    default:
+      return { name: 'folder', color: '#F57C00' };
+  }
+}
+
 function FoldersView({
   folders,
   onBack,
   onToggleVisibility,
   onRemoveFolder,
   onAddFolder,
+  onAddFolderRecursive,
 }: {
   folders: StoredFolder[];
   onBack: () => void;
   onToggleVisibility: (id: string) => void;
   onRemoveFolder: (folder: StoredFolder) => void;
   onAddFolder: () => void;
+  onAddFolderRecursive?: () => void;
 }) {
   return (
     <ScrollView style={styles.viewContainer} showsVerticalScrollIndicator={false}>
@@ -188,36 +204,46 @@ function FoldersView({
       {folders.length === 0 ? (
         <Text style={styles.emptyText}>Aucun dossier configuré</Text>
       ) : (
-        folders.map((folder) => (
-          <View key={folder.id} style={styles.folderRow}>
-            <MaterialIcons name="folder" size={20} color="#F57C00" />
-            <Text style={styles.folderName} numberOfLines={1}>
-              {folder.name}
-            </Text>
-            <TouchableOpacity
-              onPress={() => onToggleVisibility(folder.id)}
-              style={styles.actionBtn}
-            >
-              <MaterialIcons
-                name={folder.visible ? 'visibility' : 'visibility-off'}
-                size={20}
-                color={folder.visible ? '#1976D2' : '#999'}
-              />
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => onRemoveFolder(folder)}
-              style={styles.actionBtn}
-            >
-              <MaterialIcons name="delete-outline" size={20} color="#E53935" />
-            </TouchableOpacity>
-          </View>
-        ))
+        folders.map((folder) => {
+          const icon = folderIcon(folder);
+          return (
+            <View key={folder.id} style={styles.folderRow}>
+              <MaterialIcons name={icon.name} size={20} color={icon.color} />
+              <Text style={styles.folderName} numberOfLines={1}>
+                {folder.name}
+              </Text>
+              <TouchableOpacity
+                onPress={() => onToggleVisibility(folder.id)}
+                style={styles.actionBtn}
+              >
+                <MaterialIcons
+                  name={folder.visible ? 'visibility' : 'visibility-off'}
+                  size={20}
+                  color={folder.visible ? '#1976D2' : '#999'}
+                />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => onRemoveFolder(folder)}
+                style={styles.actionBtn}
+              >
+                <MaterialIcons name="delete-outline" size={20} color="#E53935" />
+              </TouchableOpacity>
+            </View>
+          );
+        })
       )}
 
       <TouchableOpacity style={styles.addBtn} onPress={onAddFolder}>
         <MaterialIcons name="add" size={20} color="#fff" />
         <Text style={styles.addBtnText}>Ajouter un dossier</Text>
       </TouchableOpacity>
+
+      {onAddFolderRecursive && (
+        <TouchableOpacity style={styles.scanRootBtn} onPress={onAddFolderRecursive}>
+          <MaterialIcons name="linear-scale" size={20} color="#fff" />
+          <Text style={styles.addBtnText}>Ajouter (scan récursif)</Text>
+        </TouchableOpacity>
+      )}
     </ScrollView>
   );
 }
@@ -502,6 +528,16 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     paddingVertical: 12,
     marginTop: 16,
+    gap: 8,
+  },
+  scanRootBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#8E24AA',
+    borderRadius: 10,
+    paddingVertical: 12,
+    marginTop: 10,
     gap: 8,
   },
   addBtnText: {

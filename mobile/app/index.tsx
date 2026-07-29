@@ -94,7 +94,7 @@ export function HomeScreen() {
   const insets = useSafeAreaInsets();
   const [page, setPage] = useState(1);
   const { data, isLoading, error, isFetching, refetch } = useFiles(null, page, PAGE_SIZE);
-  const { hasPermission, requestPermission, pickDirectory, folders, refreshFolders } = useLocalFiles();
+  const { hasPermission, requestPermission, pickDirectory, pickAndScanRecursive, folders, refreshFolders, discovered } = useLocalFiles();
   const freeLocalSpace = useFreeLocalSpace();
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
@@ -336,6 +336,11 @@ export function HomeScreen() {
     await pickDirectory();
   }, [pickDirectory]);
 
+  const handleAddFolderRecursive = useCallback(async () => {
+    setSettingsModalVisible(false);
+    await pickAndScanRecursive();
+  }, [pickAndScanRecursive]);
+
   const handleUpdateSyncMode = useCallback((folderId: string, mode: SyncMode) => {
     safDirectory.updateSyncMode(folderId, mode);
     refreshFolders();
@@ -438,12 +443,29 @@ export function HomeScreen() {
         </View>
       )}
       {files.length === 0 && !searchQuery && (
-        <TouchableOpacity style={styles.folderScanBanner} onPress={pickDirectory}>
-          <MaterialIcons name="folder-open" size={24} color="#F57C00" />
-          <Text style={styles.folderScanText}>
-            {folders.length > 0 ? 'Aucun fichier trouvé — re-sélectionner' : 'Scanner un dossier de votre appareil'}
-          </Text>
-        </TouchableOpacity>
+        <View style={styles.folderScanBanner}>
+          {folders.length > 0 ? (
+            <>
+              <MaterialIcons name="folder" size={24} color="#F57C00" />
+              <Text style={styles.folderScanText}>
+                {folders.length} dossier{folders.length > 1 ? 's' : ''} scanné{folders.length > 1 ? 's' : ''}
+              </Text>
+              <TouchableOpacity style={styles.permissionBtn} onPress={pickAndScanRecursive}>
+                <Text style={styles.permissionBtnText}>Tout scanner</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              <MaterialIcons name="folder-open" size={24} color="#F57C00" />
+              <Text style={styles.folderScanText}>
+                Scanner un dossier de votre appareil
+              </Text>
+              <TouchableOpacity style={styles.permissionBtn} onPress={pickAndScanRecursive}>
+                <Text style={styles.permissionBtnText}>Choisir</Text>
+              </TouchableOpacity>
+            </>
+          )}
+        </View>
       )}
       <GestureDetector gesture={pinchGesture}>
         <View style={styles.listWrapper}>
@@ -647,6 +669,7 @@ export function HomeScreen() {
         onToggleVisibility={handleToggleFolderVisibility}
         onRemoveFolder={handleRemoveFolder}
         onAddFolder={handleAddFolder}
+        onAddFolderRecursive={handleAddFolderRecursive}
         onUpdateSyncMode={handleUpdateSyncMode}
         onUpdateSyncCellular={handleUpdateSyncCellular}
         globalSyncMode={globalSyncMode}

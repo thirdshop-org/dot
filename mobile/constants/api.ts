@@ -9,6 +9,7 @@ export const ENDPOINTS = {
   VARIANT: '/variants',
   DEDUP_CHECK: '/resources/dedup-check',
   OCR_JOBS: '/ocr/jobs',
+  EVENTS: '/events',
   HEALTH: '/health',
   AUTH_LOGIN: '/auth/login',
   AUTH_REGISTER: '/auth/register',

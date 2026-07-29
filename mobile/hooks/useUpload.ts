@@ -1,8 +1,8 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { File, UploadType } from 'expo-file-system';
 import { apiClient } from '../api/client';
 import { API_BASE_URL, ENDPOINTS } from '../constants/api';
-import { ApiError, OcrJob, UploadError } from '../types';
+import { ApiError, UploadError } from '../types';
 
 export type UploadFile = { uri: string; type: string; name: string };
 export type UploadResult = { name: string; id: string };
@@ -76,15 +76,4 @@ export function useUpload() {
   });
 }
 
-export function useOcrJobStatus(jobId: string) {
-  return useQuery({
-    queryKey: ['ocr', jobId],
-    queryFn: () => apiClient.get<OcrJob>(`${ENDPOINTS.OCR_JOBS}/${jobId}`),
-    enabled: !!jobId,
-    refetchInterval: (query: any) => {
-      const status = query.state.data?.status;
-      if (status === 'completed' || status === 'failed') return false;
-      return 1000;
-    },
-  });
-}
+

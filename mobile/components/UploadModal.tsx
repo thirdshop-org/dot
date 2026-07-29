@@ -1,10 +1,10 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, Alert } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { useUpload, UploadFile } from '../hooks/useUpload';
-import { usePollOcr } from '../hooks/usePollOcr';
+import { usePollOcr, SseOcrListener } from '../hooks/usePollOcr';
 import { UploadProgress } from './UploadProgress';
 import { UploadError } from '../types';
 import { apiClient } from '../api/client';

@@ -54,6 +54,18 @@ function eventToDeviceFile(event: FileDetectedEvent): DeviceFile {
   };
 }
 
+const SKIP_SUBDIRS = new Set([
+  'Android', 'android', 'data', 'obb', 'cache',
+  '.thumbnails', '.Trash', 'lost+found',
+  'LOST.DIR', 'System Volume Information',
+  'com.android', '.cache', 'tmp', '.tmp',
+]);
+
+function shouldSkipDir(name: string): boolean {
+  if (name.startsWith('.')) return true;
+  return SKIP_SUBDIRS.has(name);
+}
+
 async function scanSafFolder(folder: StoredFolder): Promise<DeviceFile[]> {
   try {
     const entries = await FileSystem.StorageAccessFramework.readDirectoryAsync(folder.uri);
@@ -78,11 +90,62 @@ async function scanSafFolder(folder: StoredFolder): Promise<DeviceFile[]> {
     }
 }
 
+async function scanMediaAlbum(folder: StoredFolder): Promise<DeviceFile[]> {
+  try {
+    if (!folder.albumId) return [];
+    const result = await MediaLibrary.getAssetsAsync({
+      album: folder.albumId,
+      first: 500,
+      sortBy: 'creationTime',
+    });
+    return result.assets.map((asset) => ({
+      id: `media_${folder.id}_${asset.id}`,
+      uri: asset.uri,
+      name: asset.filename,
+      mimeType: asset.mediaType === 'video' ? 'video/mp4' : 'image/jpeg',
+      size: 0,
+      createdAt: asset.creationTime
+        ? new Date(asset.creationTime).toISOString()
+        : new Date().toISOString(),
+      folderId: folder.id,
+    }));
+  } catch (err) {
+    return [];
+  }
+}
+
+async function scanSubdirectories(
+  baseUri: string,
+  depth: number = 0,
+  maxDepth: number = 3,
+  discovered: Array<{ uri: string; name: string; parentUri: string }> = []
+): Promise<Array<{ uri: string; name: string; parentUri: string }>> {
+  if (depth >= maxDepth || discovered.length >= 300) return discovered;
+
+  try {
+    const entries = await FileSystem.StorageAccessFramework.readDirectoryAsync(baseUri);
+    for (const entryUri of entries) {
+      const parts = entryUri.split('/');
+      const name = decodeURIComponent(parts[parts.length - 1]);
+      if (shouldSkipDir(name)) continue;
+
+      try {
+        await FileSystem.StorageAccessFramework.readDirectoryAsync(entryUri);
+        discovered.push({ uri: entryUri, name, parentUri: baseUri });
+        await scanSubdirectories(entryUri, depth + 1, maxDepth, discovered);
+      } catch {}
+    }
+  } catch {}
+
+  return discovered;
+}
+
 export function useDeviceFiles() {
   const [files, setFiles] = useState<DeviceFile[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [hasPermission, setHasPermission] = useState(false);
   const [folders, setFolders] = useState<StoredFolder[]>(() => safDirectory.getAll());
+  const [discovered, setDiscovered] = useState(() => safDirectory.getDiscovered());
   const { newFiles, clearNewFiles } = useFileWatcher();
 
   const requestPermission = useCallback(async () => {
@@ -125,11 +188,35 @@ export function useDeviceFiles() {
     }
   }, []);
 
+  const discoverMediaAlbums = useCallback(async (): Promise<number> => {
+    try {
+      const albums = await MediaLibrary.getAlbumsAsync();
+      let added = 0;
+      for (const album of albums) {
+        if (album.title && album.assetCount > 0) {
+          safDirectory.addMediaFolder(album.id, album.title, '');
+          added++;
+        }
+      }
+      if (added > 0) {
+        setFolders(safDirectory.getAll());
+      }
+      return added;
+    } catch (err) {
+      return 0;
+    }
+  }, []);
+
   const scanVisibleFolders = useCallback(async () => {
     const visibleFolders = safDirectory.getVisibleFolders();
     if (visibleFolders.length === 0) return;
 
-    const results = await Promise.all(visibleFolders.map((folder) => scanSafFolder(folder)));
+    const results = await Promise.all(
+      visibleFolders.map((folder) => {
+        if (folder.source === 'media-library') return scanMediaAlbum(folder);
+        return scanSafFolder(folder);
+      })
+    );
     const safFiles = results.flat();
 
     setFiles((prev) => {
@@ -174,7 +261,7 @@ export function useDeviceFiles() {
       safDirectory.addFolder(dirUri, dirName);
       setFolders(safDirectory.getAll());
 
-      const folderFiles = await scanSafFolder({ id: 'new', uri: dirUri, name: dirName, visible: true, syncMode: 'none', syncCellular: false });
+      const folderFiles = await scanSafFolder({ id: 'new', uri: dirUri, name: dirName, visible: true, syncMode: 'none', syncCellular: false, source: 'saf' });
       setFiles((prev) => {
         const existing = new Set(prev.map((f) => f.id));
         const merged = [...prev];
@@ -188,6 +275,54 @@ export function useDeviceFiles() {
       return false;
     }
   }, []);
+
+  const pickAndScanRecursive = useCallback(async (): Promise<{ addedFolders: number }> => {
+    try {
+      const result = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
+      if (!result.granted) return { addedFolders: 0 };
+
+      const dirUri = result.directoryUri;
+      const parts = dirUri.split('/');
+      const dirName = decodeURIComponent(parts[parts.length - 1] ?? 'Dossier');
+
+      safDirectory.addFolder(dirUri, dirName);
+
+      const subdirs = await scanSubdirectories(dirUri);
+      if (subdirs.length > 0) {
+        safDirectory.addBatchFolders(
+          subdirs.map((d) => ({ uri: d.uri, name: d.name, source: 'recursive', parentUri: d.parentUri }))
+        );
+      }
+
+      setFolders(safDirectory.getAll());
+
+      if (!discovered) {
+        safDirectory.setDiscovered();
+        setDiscovered(true);
+      }
+
+      await scanVisibleFolders();
+
+      return { addedFolders: 1 + subdirs.length };
+    } catch (err) {
+      return { addedFolders: 0 };
+    }
+  }, [discovered, scanVisibleFolders]);
+
+  const runInitialDiscovery = useCallback(async () => {
+    if (safDirectory.getDiscovered()) return;
+
+    const granted = hasPermission || await requestPermission();
+    if (granted) {
+      const mediaCount = await discoverMediaAlbums();
+      if (mediaCount > 0) {
+        await scanVisibleFolders();
+      }
+    }
+
+    safDirectory.setDiscovered();
+    setDiscovered(true);
+  }, [hasPermission, requestPermission, discoverMediaAlbums, scanVisibleFolders]);
 
   const refreshFolders = useCallback(() => {
     setFolders(safDirectory.getAll());
@@ -206,10 +341,8 @@ export function useDeviceFiles() {
   useEffect(() => {
     if (newFiles.length === 0) return;
 
-    // Persist to MMKV
     downloadRegistry.addBatch(newFiles);
 
-    // Add to in-memory state
     const newDeviceFiles = newFiles.map(eventToDeviceFile);
     setFiles((prev) => {
       const existing = new Set(prev.map((f) => f.id));
@@ -232,8 +365,15 @@ export function useDeviceFiles() {
     });
     scanVisibleFolders();
     loadRegistryFiles();
+    runInitialDiscovery();
   }, []);
 
-  return { files, isLoading, hasPermission, requestPermission, rescan, pickDirectory, folders, refreshFolders };
+  return {
+    files, isLoading, hasPermission,
+    requestPermission, rescan,
+    pickDirectory, pickAndScanRecursive,
+    folders, refreshFolders,
+    discovered, discoverMediaAlbums,
+  };
 }
 

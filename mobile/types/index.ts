@@ -124,6 +124,11 @@ export interface RefreshResponse {
   refresh_token: string;
 }
 
+export type SseEvent = {
+  event: string;
+  data: string;
+};
+
 export type SyncStatus = 'local' | 'syncing' | 'synced' | 'cloud' | 'conflict';
 
 export interface Device {
