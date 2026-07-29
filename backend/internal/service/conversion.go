@@ -36,9 +36,11 @@ func NewConversionService(queries *db.Queries, cfg *config.Config) *ConversionSe
 	}
 }
 
-func (s *ConversionService) Start() {
-	go s.worker()
-	log.Println("[Conversion] Worker started")
+func (s *ConversionService) Start(workerCount int) {
+	for i := range workerCount {
+		go s.worker()
+		log.Printf("[Conversion] Worker %d started", i)
+	}
 }
 
 func (s *ConversionService) Stop() {
@@ -46,9 +48,15 @@ func (s *ConversionService) Stop() {
 	log.Println("[Conversion] Worker stopped")
 }
 
-func (s *ConversionService) Enqueue(resourceID, filePath, mimeType string) {
-	s.jobs <- ConversionJob{ResourceID: resourceID, FilePath: filePath, MimeType: mimeType}
-	log.Printf("[Conversion] Enqueued resource %s", resourceID)
+func (s *ConversionService) Enqueue(resourceID, filePath, mimeType string) error {
+	select {
+	case s.jobs <- ConversionJob{ResourceID: resourceID, FilePath: filePath, MimeType: mimeType}:
+		log.Printf("[Conversion] Enqueued resource %s", resourceID)
+		return nil
+	default:
+		log.Printf("[Conversion] Queue full, dropping resource %s", resourceID)
+		return fmt.Errorf("conversion queue full (%d pending)", len(s.jobs))
+	}
 }
 
 func (s *ConversionService) worker() {

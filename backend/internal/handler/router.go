@@ -38,6 +38,9 @@ func SetupRoutes(r *gin.Engine, h *Handler, authMiddleware *auth.AuthService) {
 	// Variants
 	protected.GET("/resources/:id/variants", h.Resource.GetVariants)
 
+	// Events (SSE)
+	protected.GET("/events", h.Events.Stream)
+
 	// Dedup
 	protected.POST("/resources/dedup-check", h.Resource.CheckDuplicates)
 

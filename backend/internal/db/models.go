@@ -12,6 +12,16 @@ import (
 	"github.com/google/uuid"
 )
 
+type OcrJob struct {
+	ID           uuid.UUID `json:"id"`
+	ResourceID   uuid.UUID `json:"resource_id"`
+	FilePath     string    `json:"file_path"`
+	Status       string    `json:"status"`
+	ErrorMessage string    `json:"error_message"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}
+
 type RebacRelation struct {
 	ID            uuid.UUID `json:"id"`
 	ResourceID    uuid.UUID `json:"resource_id"`

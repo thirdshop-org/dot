@@ -30,8 +30,10 @@ func main() {
 
 	queries := db.New(database)
 
+	eventBroker := service.NewEventBroker()
+
 	resourceSvc := service.NewResourceService(database, queries, cfg)
-	ocrSvc := service.NewOCRService(cfg, resourceSvc)
+	ocrSvc := service.NewOCRService(database, queries, cfg, resourceSvc, eventBroker)
 	conversionSvc := service.NewConversionService(queries, cfg)
 	urlSvc := service.NewURLService(cfg.HMACSecret, cfg.ServerHost, cfg.URLExpiryMinutes)
 	authSvc, err := auth.NewAuthService(database, queries, cfg)
@@ -43,13 +45,13 @@ func main() {
 	placementSvc := service.NewPlacementService(queries)
 	syncSvc := service.NewSyncService(queries)
 
-	ocrSvc.Start()
+	ocrSvc.Start(cfg.OCRWorkers)
 	defer ocrSvc.Stop()
 
-	conversionSvc.Start()
+	conversionSvc.Start(cfg.ConversionWorkers)
 	defer conversionSvc.Stop()
 
-	h := handler.New(resourceSvc, ocrSvc, urlSvc, auth.NewAuthHandler(authSvc), conversionSvc, rebacSvc, placementSvc, syncSvc)
+	h := handler.New(resourceSvc, ocrSvc, urlSvc, auth.NewAuthHandler(authSvc), conversionSvc, rebacSvc, placementSvc, syncSvc, eventBroker)
 
 	r := gin.Default()
 	handler.SetupRoutes(r, h, authSvc)

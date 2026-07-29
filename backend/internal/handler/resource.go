@@ -43,10 +43,14 @@ func (h *ResourceHandler) Upload(c *gin.Context) {
 			return
 		}
 
-		h.ocr.Enqueue(result.ID, result.Path)
+		if err := h.ocr.Enqueue(result.ID, result.Path); err != nil {
+			log.Printf("WARN %v", err)
+		}
 
 		if service.IsConvertible(result.MimeType) {
-			h.conversion.Enqueue(result.ID, result.Path, result.MimeType)
+			if err := h.conversion.Enqueue(result.ID, result.Path, result.MimeType); err != nil {
+				log.Printf("WARN %v", err)
+			}
 		}
 
 		results = append(results, gin.H{

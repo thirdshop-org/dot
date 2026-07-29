@@ -11,12 +11,14 @@ type Config struct {
 	OCREndpoint      string
 	UploadDir        string
 	HMACSecret       string
-	ServerHost       string
-	PASETOKey        string
-	LibreOfficePath  string
-	PdftoppmPath     string
-	ThumbnailDir     string
-	URLExpiryMinutes int
+	ServerHost        string
+	PASETOKey         string
+	LibreOfficePath   string
+	PdftoppmPath      string
+	ThumbnailDir      string
+	URLExpiryMinutes  int
+	OCRWorkers        int
+	ConversionWorkers int
 }
 
 func Load() *Config {
@@ -31,7 +33,9 @@ func Load() *Config {
 		LibreOfficePath:  envOr("LIBREOFFICE_PATH", "/usr/bin/libreoffice"),
 		PdftoppmPath:     envOr("PDFTOPPM_PATH", "/usr/bin/pdftoppm"),
 		ThumbnailDir:     envOr("THUMBNAIL_DIR", "./uploads/thumbnails"),
-		URLExpiryMinutes: envOrInt("URL_EXPIRY_MINUTES", 60),
+		URLExpiryMinutes:  envOrInt("URL_EXPIRY_MINUTES", 60),
+		OCRWorkers:        envOrInt("OCR_WORKERS", 1),
+		ConversionWorkers: envOrInt("CONVERSION_WORKERS", 1),
 	}
 }
 

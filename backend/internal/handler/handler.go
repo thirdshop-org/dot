@@ -13,6 +13,7 @@ type Handler struct {
 	Share     *ShareHandler
 	Device    *DeviceHandler
 	Sync      *SyncHandler
+	Events    *EventHandler
 }
 
 func New(
@@ -24,6 +25,7 @@ func New(
 	rebacSvc *service.RebacService,
 	placementSvc *service.PlacementService,
 	syncSvc *service.SyncService,
+	eventBroker *service.EventBroker,
 ) *Handler {
 	return &Handler{
 		Resource: &ResourceHandler{
@@ -38,5 +40,6 @@ func New(
 		Share:  &ShareHandler{rebac: rebacSvc},
 		Device: &DeviceHandler{placement: placementSvc},
 		Sync:   &SyncHandler{sync: syncSvc},
+		Events: NewEventHandler(eventBroker),
 	}
 }
