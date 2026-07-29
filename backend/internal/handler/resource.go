@@ -250,18 +250,16 @@ func (h *ResourceHandler) Get(c *gin.Context) {
 func (h *ResourceHandler) Delete(c *gin.Context) {
 	id := c.Param("id")
 
-	storagePath, _ := h.resources.GetStoragePath(id)
-	variants, _ := h.resources.GetVariantsByResourceID(id)
-
-	if err := h.resources.Delete(id); err != nil {
+	result, err := h.resources.DeleteRecursive(id)
+	if err != nil {
 		api.Error(c, http.StatusInternalServerError, "DB_ERROR", "Failed to delete resource")
 		return
 	}
 
-	if storagePath != "" {
-		os.Remove(path.Clean(storagePath))
+	for _, p := range result.StoragePaths {
+		os.Remove(path.Clean(p))
 	}
-	for _, v := range variants {
+	for _, v := range result.Variants {
 		os.Remove(path.Clean(v.StorageKey))
 	}
 

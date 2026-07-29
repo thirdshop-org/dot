@@ -190,9 +190,55 @@ func (s *ResourceService) Get(id string) (*model.Resource, error) {
 	return &m, nil
 }
 
+type DeleteResult struct {
+	StoragePaths []string
+	Variants     []model.Variant
+}
+
 func (s *ResourceService) Delete(id string) error {
 	resourceUUID, _ := uuid.Parse(id)
 	return s.queries.DeleteResource(context.Background(), resourceUUID)
+}
+
+func (s *ResourceService) DeleteRecursive(id string) (*DeleteResult, error) {
+	resourceUUID, _ := uuid.Parse(id)
+
+	r, err := s.queries.GetResource(context.Background(), resourceUUID)
+	if err != nil {
+		return nil, fmt.Errorf("get resource: %w", err)
+	}
+
+	result := &DeleteResult{}
+
+	if r.IsFolder {
+		children, err := s.queries.ListResourcesByParentID(context.Background(), uuid.NullUUID{UUID: resourceUUID, Valid: true})
+		if err != nil {
+			return nil, fmt.Errorf("list children: %w", err)
+		}
+
+		for _, child := range children {
+			childResult, err := s.DeleteRecursive(child.ID.String())
+			if err != nil {
+				return nil, fmt.Errorf("delete child %s: %w", child.ID, err)
+			}
+			result.StoragePaths = append(result.StoragePaths, childResult.StoragePaths...)
+			result.Variants = append(result.Variants, childResult.Variants...)
+		}
+	}
+
+	if err := s.queries.DeleteResource(context.Background(), resourceUUID); err != nil {
+		return nil, fmt.Errorf("delete resource: %w", err)
+	}
+
+	storagePath, _ := s.GetStoragePath(id)
+	if storagePath != "" {
+		result.StoragePaths = append(result.StoragePaths, storagePath)
+	}
+
+	variants, _ := s.GetVariantsByResourceID(id)
+	result.Variants = append(result.Variants, variants...)
+
+	return result, nil
 }
 
 func (s *ResourceService) GetStoragePath(id string) (string, error) {
