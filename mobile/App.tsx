@@ -10,6 +10,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { DeviceProvider, useDevice } from './contexts/DeviceContext';
 import { SseProvider } from './contexts/SseContext';
 import { SseOcrListener } from './hooks/usePollOcr';
+import { registerBackgroundUpload } from './services/backgroundUpload';
 import { LoginScreen } from './app/login';
 import { RegisterScreen } from './app/register';
 import { HomeScreen } from './app/index';
@@ -43,6 +44,12 @@ const persister = createMMKVPersister();
 function AppNavigator() {
   const { user, isLoading: authLoading } = useAuth();
   const { isLoading: deviceLoading } = useDevice();
+
+  useEffect(() => {
+    if (user) {
+      registerBackgroundUpload();
+    }
+  }, [user]);
 
   if (authLoading || (user && deviceLoading)) {
     return (

@@ -1,4 +1,5 @@
 import { File, UploadType } from 'expo-file-system';
+import { createMMKV } from 'react-native-mmkv';
 import { apiClient } from '../api/client';
 import { API_BASE_URL, ENDPOINTS } from '../constants/api';
 import { ApiError, UploadError } from '../types';
@@ -21,6 +22,69 @@ export type UploadTask = {
 
 type Listener = () => void;
 
+const storage = createMMKV({ id: 'vaultdrop-upload-queue' });
+const STORAGE_KEY = 'tasks';
+
+function serialize(task: UploadTask): unknown {
+  return {
+    id: task.id,
+    file: task.file,
+    status: task.status,
+    progress: task.progress,
+    result: task.result ?? null,
+    error: task.error ?? null,
+    createdAt: task.createdAt,
+    updatedAt: task.updatedAt,
+  };
+}
+
+function deserialize(data: unknown): UploadTask | null {
+  const d = data as Record<string, unknown>;
+  if (!d || !d.id || !d.file) return null;
+  const file = d.file as Record<string, string>;
+  if (!file.uri || !file.type || !file.name) return null;
+  return {
+    id: d.id as string,
+    file: { uri: file.uri, type: file.type, name: file.name },
+    status: d.status as UploadTaskStatus,
+    progress: d.progress as number,
+    result: d.result ? (d.result as UploadResult) : undefined,
+    error: d.error ? (d.error as string) : undefined,
+    createdAt: d.createdAt as number,
+    updatedAt: d.updatedAt as number,
+  };
+}
+
+function saveTasks(tasks: UploadTask[]) {
+  const persistable = tasks
+    .filter((t) => t.status !== 'done')
+    .map(serialize);
+  storage.set(STORAGE_KEY, JSON.stringify(persistable));
+}
+
+function loadTasks(): UploadTask[] {
+  try {
+    const raw = storage.getString(STORAGE_KEY);
+    if (!raw) return [];
+    const parsed: unknown[] = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    const tasks: UploadTask[] = [];
+    let maxId = 0;
+    for (const item of parsed) {
+      const t = deserialize(item);
+      if (t) {
+        tasks.push(t);
+        const num = parseInt(t.id.replace('upload_', ''), 10);
+        if (num > maxId) maxId = num;
+      }
+    }
+    nextId = maxId;
+    return tasks;
+  } catch {
+    return [];
+  }
+}
+
 let nextId = 0;
 function genId() {
   nextId++;
@@ -33,6 +97,30 @@ class UploadQueue {
   private concurrency = 3;
   private active = 0;
   private cleanupTimer: ReturnType<typeof setTimeout> | null = null;
+
+  constructor() {
+    this.tasks = loadTasks();
+    const pendingExist = this.tasks.some(
+      (t) => t.status === 'pending' || t.status === 'uploading',
+    );
+    if (pendingExist) {
+      setTimeout(() => {
+        this.restartUploading();
+        this.processNext();
+      }, 0);
+    }
+  }
+
+  private restartUploading() {
+    for (const task of this.tasks) {
+      if (task.status === 'uploading') {
+        task.status = 'pending';
+        task.progress = 0;
+        task.updatedAt = Date.now();
+      }
+    }
+    this.persist();
+  }
 
   getTasks(): UploadTask[] {
     return this.tasks;
@@ -47,6 +135,10 @@ class UploadQueue {
     this.listeners.forEach((l) => l());
   }
 
+  private persist() {
+    saveTasks(this.tasks);
+  }
+
   enqueue(files: UploadFile[]) {
     const now = Date.now();
     for (const file of files) {
@@ -59,6 +151,7 @@ class UploadQueue {
         updatedAt: now,
       });
     }
+    this.persist();
     this.notify();
     this.processNext();
   }
@@ -69,6 +162,7 @@ class UploadQueue {
     task.status = 'error';
     task.error = 'Annulé';
     task.updatedAt = Date.now();
+    this.persist();
     this.notify();
   }
 
@@ -80,6 +174,7 @@ class UploadQueue {
     task.error = undefined;
     task.result = undefined;
     task.updatedAt = Date.now();
+    this.persist();
     this.notify();
     this.processNext();
   }
@@ -94,8 +189,13 @@ class UploadQueue {
         task.updatedAt = Date.now();
       }
     }
+    this.persist();
     this.notify();
     this.processNext();
+  }
+
+  getPendingCount(): number {
+    return this.tasks.filter((t) => t.status === 'pending' || t.status === 'uploading').length;
   }
 
   private processNext() {
@@ -105,6 +205,7 @@ class UploadQueue {
       this.active++;
       next.status = 'uploading';
       next.updatedAt = Date.now();
+      this.persist();
       this.notify();
       this.runTask(next);
     }
@@ -146,6 +247,7 @@ class UploadQueue {
       task.progress = 100;
       task.result = item as UploadResult;
       task.updatedAt = Date.now();
+      this.persist();
       this.notify();
       this.scheduleCleanup();
     } catch (err) {
@@ -157,6 +259,7 @@ class UploadQueue {
             ? err.message
             : 'Erreur inconnue';
       task.updatedAt = Date.now();
+      this.persist();
       this.notify();
     } finally {
       this.active--;
@@ -175,6 +278,7 @@ class UploadQueue {
         (t) => t.status !== 'done' || now - t.updatedAt < 5000,
       );
       if (this.tasks.length !== before) {
+        this.persist();
         this.notify();
       }
       if (this.tasks.some((t) => t.status === 'done')) {
