@@ -1,7 +1,7 @@
-export const CURRENT_ONBOARDING_VERSION = 2;
+export const CURRENT_ONBOARDING_VERSION = 3;
 
 export type OnboardingAction = {
-  type: 'pick_directory' | 'recursive_scan';
+  type: 'pick_directory';
   label: string;
 };
 
@@ -18,18 +18,17 @@ export type OnboardingStep = {
 export const ONBOARDING_STEPS: OnboardingStep[] = [
   {
     id: 'welcome',
-    version: 2,
+    version: 3,
     title: 'Bienvenue sur Dot.',
     description: 'Votre espace document personnel, toujours accessible.',
     icon: 'waving-hand',
   },
   {
-    id: 'pick_root_folder',
-    version: 2,
-    title: 'Choisissez votre dossier principal',
-    description: 'Sélectionnez la racine de votre stockage dans le sélecteur.\n\nDot. va scanner automatiquement tous les sous-dossiers (photos, téléchargements, documents…).',
+    id: 'select_folders',
+    version: 3,
+    title: 'Ajoutez vos dossiers',
+    description: 'Sélectionnez les dossiers que vous souhaitez synchroniser avec Dot.\n\nAjoutez-en autant que vous voulez, vous pourrez les gérer plus tard.',
     icon: 'create-new-folder',
-    action: { type: 'recursive_scan', label: 'Choisir le dossier principal' },
-    condition: 'has_no_folders',
+    action: { type: 'pick_directory', label: 'Ajouter un dossier' },
   },
 ];

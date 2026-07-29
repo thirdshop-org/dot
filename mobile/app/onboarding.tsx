@@ -4,64 +4,65 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  Dimensions,
-  ActivityIndicator,
+  ScrollView,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { ONBOARDING_STEPS, CURRENT_ONBOARDING_VERSION, type OnboardingStep } from '../config/onboarding';
+import { ONBOARDING_STEPS, CURRENT_ONBOARDING_VERSION } from '../config/onboarding';
 import { onboardingStorage } from '../services/onboardingStorage';
-import { scanSubdirectories } from '../hooks/useDeviceFiles';
-import { safDirectory } from '../services/safDirectory';
+import { safDirectory, StoredFolder } from '../services/safDirectory';
 import * as FileSystem from 'expo-file-system/legacy';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
-type ScanState = 'idle' | 'scanning' | 'done';
-
-function stepIcon(step: OnboardingStep): keyof typeof MaterialIcons.glyphMap {
-  if (step.icon === 'waving-hand') return 'waving-hand';
-  if (step.icon === 'create-new-folder') return 'create-new-folder';
-  if (step.icon === 'check-circle') return 'check-circle';
-  if (step.icon === 'folder-off') return 'folder-off';
-  return 'info';
-}
-
-function ScanProgressView() {
+function SelectFoldersStep({
+  selectedFolders,
+  onAddFolder,
+  onRemoveFolder,
+}: {
+  selectedFolders: StoredFolder[];
+  onAddFolder: () => void;
+  onRemoveFolder: (folder: StoredFolder) => void;
+}) {
   return (
-    <>
+    <View style={styles.folderStepContent}>
       <View style={styles.iconContainer}>
-        <ActivityIndicator size={48} color="#1976D2" />
+        <MaterialIcons name="create-new-folder" size={64} color="#1976D2" />
       </View>
-      <Text style={styles.title}>Scan en cours...</Text>
+      <Text style={styles.title}>Ajoutez vos dossiers</Text>
       <Text style={styles.description}>
-        Dot. explore les sous-dossiers de votre stockage. Cela peut prendre quelques secondes.
+        Sélectionnez les dossiers que vous souhaitez synchroniser avec Dot.
       </Text>
-    </>
-  );
-}
 
-function ScanDoneView({ folderCount }: { folderCount: number }) {
-  return (
-    <>
-      <View style={[styles.iconContainer, { backgroundColor: '#E8F5E9' }]}>
-        <MaterialIcons name="check-circle" size={64} color="#43A047" />
-      </View>
-      <Text style={styles.title}>Scan terminé !</Text>
-      <Text style={styles.description}>
-        {folderCount > 1
-          ? `${folderCount} dossiers découverts et ajoutés à votre espace Dot.`
-          : '1 dossier ajouté à votre espace Dot.'}
-      </Text>
-    </>
+      {selectedFolders.length > 0 && (
+        <View style={styles.folderList}>
+          {selectedFolders.map((f) => (
+            <View key={f.id} style={styles.selectedFolderRow}>
+              <MaterialIcons name="folder" size={20} color="#F57C00" />
+              <Text style={styles.selectedFolderName} numberOfLines={1}>
+                {f.name}
+              </Text>
+              <TouchableOpacity
+                onPress={() => onRemoveFolder(f)}
+                style={styles.removeBtn}
+              >
+                <MaterialIcons name="close" size={18} color="#E53935" />
+              </TouchableOpacity>
+            </View>
+          ))}
+        </View>
+      )}
+
+      <TouchableOpacity style={styles.actionBtn} onPress={onAddFolder}>
+        <MaterialIcons name="add" size={20} color="#fff" />
+        <Text style={styles.actionBtnText}>Ajouter un dossier</Text>
+      </TouchableOpacity>
+    </View>
   );
 }
 
 export function OnboardingScreen() {
   const navigation = useNavigation();
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [scanState, setScanState] = useState<ScanState>('idle');
-  const [folderCount, setFolderCount] = useState(0);
+  const [selectedFolders, setSelectedFolders] = useState<StoredFolder[]>([]);
   const pendingSteps = onboardingStorage.getPendingSteps();
 
   const step = pendingSteps[currentIndex];
@@ -71,34 +72,24 @@ export function OnboardingScreen() {
     navigation.reset({ index: 0, routes: [{ name: 'Home' as never }] });
   }, [navigation]);
 
-  const handleRecursiveScan = useCallback(async () => {
+  const handlePickDirectory = useCallback(async () => {
     try {
       const result = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
       if (!result.granted) return;
-
       const dirUri = result.directoryUri;
       const parts = dirUri.split('/');
-      const dirName = decodeURIComponent(parts[parts.length - 1] ?? 'Stockage');
+      const dirName = decodeURIComponent(parts[parts.length - 1] ?? 'Dossier');
 
-      setScanState('scanning');
-
-      safDirectory.addFolder(dirUri, dirName);
-
-      const subdirs = await scanSubdirectories(dirUri);
-      if (subdirs.length > 0) {
-        safDirectory.addBatchFolders(
-          subdirs.map((d) => ({ uri: d.uri, name: d.name, source: 'recursive', parentUri: d.parentUri }))
-        );
-      }
-
-      setFolderCount(1 + subdirs.length);
-      setScanState('done');
-
-      safDirectory.setDiscovered();
+      const folder = safDirectory.addFolder(dirUri, dirName);
+      setSelectedFolders((prev) => [...prev, folder]);
     } catch (err) {
-      console.error('[Onboarding] recursive scan error:', err);
-      setScanState('idle');
+      console.error('[Onboarding] pickDirectory error:', err);
     }
+  }, []);
+
+  const handleRemoveFolder = useCallback((folder: StoredFolder) => {
+    safDirectory.removeFolder(folder.id);
+    setSelectedFolders((prev) => prev.filter((f) => f.id !== folder.id));
   }, []);
 
   const handleNext = useCallback(async () => {
@@ -107,8 +98,7 @@ export function OnboardingScreen() {
 
     if (currentIndex < pendingSteps.length - 1) {
       setCurrentIndex(currentIndex + 1);
-      setScanState('idle');
-      setFolderCount(0);
+      setSelectedFolders([]);
     } else {
       complete();
     }
@@ -123,7 +113,7 @@ export function OnboardingScreen() {
     return null;
   }
 
-  const isScanStep = step.action?.type === 'recursive_scan';
+  const isFolderStep = step.action?.type === 'pick_directory';
 
   return (
     <View style={styles.container}>
@@ -133,28 +123,23 @@ export function OnboardingScreen() {
         </TouchableOpacity>
       </View>
 
-      <View style={styles.content}>
-        {scanState === 'scanning' && isScanStep ? (
-          <ScanProgressView />
-        ) : scanState === 'done' && isScanStep ? (
-          <ScanDoneView folderCount={folderCount} />
+      <ScrollView style={styles.scrollContent} contentContainerStyle={styles.scrollInner}>
+        {isFolderStep ? (
+          <SelectFoldersStep
+            selectedFolders={selectedFolders}
+            onAddFolder={handlePickDirectory}
+            onRemoveFolder={handleRemoveFolder}
+          />
         ) : (
-          <>
+          <View style={styles.welcomeContent}>
             <View style={styles.iconContainer}>
-              <MaterialIcons name={stepIcon(step)} size={64} color="#1976D2" />
+              <MaterialIcons name="waving-hand" size={64} color="#1976D2" />
             </View>
             <Text style={styles.title}>{step.title}</Text>
             <Text style={styles.description}>{step.description}</Text>
-
-            {isScanStep && scanState === 'idle' && (
-              <TouchableOpacity style={styles.actionBtn} onPress={handleRecursiveScan}>
-                <MaterialIcons name="folder-open" size={20} color="#fff" />
-                <Text style={styles.actionBtnText}>{step.action?.label ?? 'Choisir un dossier'}</Text>
-              </TouchableOpacity>
-            )}
-          </>
+          </View>
         )}
-      </View>
+      </ScrollView>
 
       <View style={styles.footer}>
         <View style={styles.dots}>
@@ -166,21 +151,12 @@ export function OnboardingScreen() {
           ))}
         </View>
 
-        {(!isScanStep || scanState === 'done') && (
-          <TouchableOpacity style={styles.nextBtn} onPress={handleNext}>
-            <Text style={styles.nextBtnText}>
-              {currentIndex < pendingSteps.length - 1 ? 'Suivant' : 'Commencer'}
-            </Text>
-            <MaterialIcons name="arrow-forward" size={20} color="#fff" />
-          </TouchableOpacity>
-        )}
-
-        {isScanStep && scanState === 'idle' && (
-          <TouchableOpacity style={styles.nextBtn} onPress={handleNext}>
-            <Text style={styles.nextBtnText}>Passer cette étape</Text>
-            <MaterialIcons name="arrow-forward" size={20} color="#fff" />
-          </TouchableOpacity>
-        )}
+        <TouchableOpacity style={styles.nextBtn} onPress={handleNext}>
+          <Text style={styles.nextBtnText}>
+            {currentIndex < pendingSteps.length - 1 ? 'Suivant' : 'Commencer'}
+          </Text>
+          <MaterialIcons name="arrow-forward" size={20} color="#fff" />
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -200,11 +176,23 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#999',
   },
-  content: {
+  scrollContent: {
+    flex: 1,
+  },
+  scrollInner: {
+    flexGrow: 1,
+  },
+  welcomeContent: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 40,
+  },
+  folderStepContent: {
+    flex: 1,
+    alignItems: 'center',
+    paddingHorizontal: 40,
+    paddingTop: 40,
   },
   iconContainer: {
     width: 120,
@@ -227,16 +215,40 @@ const styles = StyleSheet.create({
     color: '#666',
     textAlign: 'center',
     lineHeight: 24,
+    marginBottom: 20,
+  },
+  folderList: {
+    width: '100%',
+    marginBottom: 16,
+  },
+  selectedFolderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fafafa',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 8,
+    gap: 10,
+  },
+  selectedFolderName: {
+    flex: 1,
+    fontSize: 15,
+    color: '#333',
+  },
+  removeBtn: {
+    padding: 4,
   },
   actionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#F57C00',
     borderRadius: 12,
     paddingHorizontal: 24,
     paddingVertical: 14,
     gap: 10,
-    marginTop: 32,
+    width: '100%',
   },
   actionBtnText: {
     fontSize: 16,

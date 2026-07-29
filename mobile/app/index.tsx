@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { runOnJS } from 'react-native-reanimated';
 import { useAddTags, useMoveResources, useFolders, useFiles, useFreeLocalSpace } from '../hooks/useFiles';
 import { UnifiedFileItem, isFolder } from '../types';
 import { SearchBar, SearchFilters, MediaFilter } from '../components/SearchBar';
@@ -198,14 +199,18 @@ export function HomeScreen() {
     return map;
   }, [sortedFiles]);
 
+  const handlePinchEnd = useCallback((scale: number) => {
+    if (scale > 1.2) {
+      setNumColumns(prev => Math.max(2, prev - 1));
+    } else if (scale < 0.8) {
+      setNumColumns(prev => Math.min(6, prev + 1));
+    }
+  }, []);
+
   const pinchGesture = useMemo(() =>
     Gesture.Pinch()
       .onEnd((event) => {
-        if (event.scale > 1.2) {
-          setNumColumns(prev => Math.max(2, prev - 1));
-        } else if (event.scale < 0.8) {
-          setNumColumns(prev => Math.min(6, prev + 1));
-        }
+        runOnJS(handlePinchEnd)(event.scale);
       }),
     []
   );
@@ -466,6 +471,7 @@ export function HomeScreen() {
       <GestureDetector gesture={pinchGesture}>
         <View style={styles.listWrapper}>
           <FlatList
+            key={numColumns}
             data={sortedFiles}
             keyExtractor={(item) => item.id}
             numColumns={numColumns}
