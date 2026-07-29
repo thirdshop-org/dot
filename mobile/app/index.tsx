@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { runOnJS } from 'react-native-reanimated';
+import Animated, { runOnJS, useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 import { useAddTags, useMoveResources, useFolders, useFiles, useFreeLocalSpace } from '../hooks/useFiles';
 import { UnifiedFileItem, isFolder } from '../types';
 import { SearchBar, SearchFilters, MediaFilter } from '../components/SearchBar';
@@ -119,6 +119,12 @@ export function HomeScreen() {
   const { pendingCount, isSyncing } = useSyncQueue();
   useAutoSync();
 
+  const pinchScale = useSharedValue(1);
+
+  const gridAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: pinchScale.value }],
+  }));
+
   const itemSize = (SCREEN_WIDTH - PADDING_H * 2 - (numColumns - 1) * ITEM_GAP) / numColumns;
 
   const loadMore = useCallback(() => {
@@ -209,7 +215,14 @@ export function HomeScreen() {
 
   const pinchGesture = useMemo(() =>
     Gesture.Pinch()
+      .onBegin(() => {
+        pinchScale.value = 1;
+      })
+      .onChange((event) => {
+        pinchScale.value = event.scale;
+      })
       .onEnd((event) => {
+        pinchScale.value = withSpring(1);
         runOnJS(handlePinchEnd)(event.scale);
       }),
     []
@@ -469,7 +482,7 @@ export function HomeScreen() {
         </View>
       )}
       <GestureDetector gesture={pinchGesture}>
-        <View style={styles.listWrapper}>
+        <Animated.View style={[styles.listWrapper, gridAnimatedStyle]}>
           <FlatList
             key={numColumns}
             data={sortedFiles}
@@ -513,7 +526,7 @@ export function HomeScreen() {
             }
             renderItem={renderItem}
           />
-        </View>
+        </Animated.View>
       </GestureDetector>
 
       {!selectionMode && (
