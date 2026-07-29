@@ -318,7 +318,7 @@ export function HomeScreen() {
     if (!name) return;
     const ids = Array.from(selectedIds);
     try {
-      const newFolder = await createFolder.mutateAsync(name);
+      const newFolder = await createFolder.mutateAsync({ name });
       await moveFiles.mutateAsync({ resourceIds: ids, parentResourceId: newFolder.id });
       setTagModalVisible(false);
       setSelectedIds(new Set());

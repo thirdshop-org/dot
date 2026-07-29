@@ -335,14 +335,15 @@ func (h *ResourceHandler) CreateFolder(c *gin.Context) {
 	userID := c.GetString(auth.UserIDKey)
 
 	var body struct {
-		Name string `json:"name" binding:"required"`
+		Name             string  `json:"name" binding:"required"`
+		ParentResourceID *string `json:"parent_resource_id"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		api.Error(c, http.StatusBadRequest, "INVALID_BODY", "Body must contain 'name'")
 		return
 	}
 
-	folder, err := h.resources.CreateFolder(body.Name, userID)
+	folder, err := h.resources.CreateFolder(body.Name, userID, body.ParentResourceID)
 	if err != nil {
 		api.Error(c, http.StatusInternalServerError, "DB_ERROR", "Failed to create folder")
 		return

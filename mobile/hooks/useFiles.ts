@@ -76,6 +76,8 @@ export function useFiles(parentId?: string | null, page: number = 1, limit: numb
       const backendRes = await apiClient.get<PaginatedResponse<FileItem>>(
         `${ENDPOINTS.RESOURCES}?page=${page}&limit=${limit}&thumbnail=thumbnail_small`,
       );
+      const returnedIds = new Set(backendRes.data.map((f) => f.id));
+
       fileStore.mergeFromBackend(
         backendRes.data.map((f) => ({
           id: f.id,
@@ -94,8 +96,11 @@ export function useFiles(parentId?: string | null, page: number = 1, limit: numb
       );
 
       const cached = fileStore.getRootFiles();
+      const validFiles = cached.files.filter(
+        (f) => !f.backendId || returnedIds.has(f.backendId) || f.source === 'local',
+      );
       return {
-        data: cached.files.map((r) => recordToUnifiedItem(r)!).filter(Boolean),
+        data: validFiles.map((r) => recordToUnifiedItem(r)!).filter(Boolean),
         meta: { page, total: backendRes.meta?.total ?? cached.total },
       };
     },
@@ -164,7 +169,13 @@ export function useMoveResources() {
   return useMutation({
     mutationFn: ({ resourceIds, parentResourceId }: { resourceIds: string[]; parentResourceId: string | null }) =>
       apiClient.post(ENDPOINTS.MOVE, { resource_ids: resourceIds, parent_resource_id: parentResourceId }),
-    onSuccess: () => {
+    onSuccess: (_, { resourceIds, parentResourceId }) => {
+      for (const id of resourceIds) {
+        const record = fileStore.getById(id) ?? fileStore.getByBackendId(id);
+        if (record) {
+          fileStore.updatePartial(record.id, { parentResourceId: parentResourceId ?? null });
+        }
+      }
       queryClient.invalidateQueries({ queryKey: ['resources'] });
     },
   });
@@ -205,8 +216,8 @@ export function useCreateFolder() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (name: string) => {
-      const res = await apiClient.post<{ data: FileItem }>(ENDPOINTS.FOLDERS, { name });
+    mutationFn: async ({ name, parentResourceId }: { name: string; parentResourceId?: string }) => {
+      const res = await apiClient.post<{ data: FileItem }>(ENDPOINTS.FOLDERS, { name, parent_resource_id: parentResourceId });
       return res.data;
     },
     onSuccess: () => {

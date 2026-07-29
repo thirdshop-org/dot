@@ -271,7 +271,7 @@ func (s *ResourceService) MoveResources(resourceIDs []string, parentResourceID *
 	})
 }
 
-func (s *ResourceService) CreateFolder(name, ownerID string) (*model.Resource, error) {
+func (s *ResourceService) CreateFolder(name, ownerID string, parentResourceID *string) (*model.Resource, error) {
 	ownerUUID, _ := uuid.Parse(ownerID)
 	ctx := context.Background()
 
@@ -283,9 +283,16 @@ func (s *ResourceService) CreateFolder(name, ownerID string) (*model.Resource, e
 
 	qtx := s.queries.WithTx(tx)
 
+	parentID := uuid.NullUUID{Valid: false}
+	if parentResourceID != nil {
+		pid, _ := uuid.Parse(*parentResourceID)
+		parentID = uuid.NullUUID{UUID: pid, Valid: true}
+	}
+
 	r, err := qtx.CreateFolder(ctx, db.CreateFolderParams{
-		Name:    name,
-		OwnerID: ownerUUID,
+		Name:             name,
+		OwnerID:          ownerUUID,
+		ParentResourceID: parentID,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("create folder: %w", err)

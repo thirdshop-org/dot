@@ -213,13 +213,13 @@ export function FolderScreen() {
     if (!name) return;
     const ids = Array.from(selectedIds);
     try {
-      const newFolder = await createFolder.mutateAsync(name);
+      const newFolder = await createFolder.mutateAsync({ name, parentResourceId: folderId });
       await moveFiles.mutateAsync({ resourceIds: ids, parentResourceId: newFolder.id });
       setTagModalVisible(false);
       setSelectedIds(new Set());
       navigation.navigate('Folder', { folderId: newFolder.id, folderName: newFolder.name });
     } catch {}
-  }, [tagInput, selectedIds, createFolder, moveFiles, navigation]);
+  }, [tagInput, selectedIds, createFolder, moveFiles, navigation, folderId]);
 
   const handleMove = useCallback(async (folderId: string | null) => {
     const ids = Array.from(selectedIds);

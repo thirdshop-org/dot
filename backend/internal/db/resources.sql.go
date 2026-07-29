@@ -43,18 +43,19 @@ func (q *Queries) CountResourcesByParentAndOwner(ctx context.Context, arg CountR
 }
 
 const createFolder = `-- name: CreateFolder :one
-INSERT INTO resources (name, is_folder, owner_id, created_at, updated_at)
-VALUES ($1, true, $2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+INSERT INTO resources (name, is_folder, owner_id, parent_resource_id, created_at, updated_at)
+VALUES ($1, true, $2, $3, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 RETURNING id, name, mime_type, size, checksum, ocr_text, is_folder, parent_resource_id, owner_id, created_at, updated_at
 `
 
 type CreateFolderParams struct {
-	Name    string    `json:"name"`
-	OwnerID uuid.UUID `json:"owner_id"`
+	Name             string          `json:"name"`
+	OwnerID          uuid.UUID       `json:"owner_id"`
+	ParentResourceID uuid.NullUUID   `json:"parent_resource_id"`
 }
 
 func (q *Queries) CreateFolder(ctx context.Context, arg CreateFolderParams) (Resource, error) {
-	row := q.db.QueryRowContext(ctx, createFolder, arg.Name, arg.OwnerID)
+	row := q.db.QueryRowContext(ctx, createFolder, arg.Name, arg.OwnerID, arg.ParentResourceID)
 	var i Resource
 	err := row.Scan(
 		&i.ID,

@@ -23,8 +23,8 @@ VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 RETURNING *;
 
 -- name: CreateFolder :one
-INSERT INTO resources (name, is_folder, owner_id, created_at, updated_at)
-VALUES ($1, true, $2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+INSERT INTO resources (name, is_folder, owner_id, parent_resource_id, created_at, updated_at)
+VALUES ($1, true, $2, $3, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 RETURNING *;
 
 -- name: ListResourcesByParentID :many
