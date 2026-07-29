@@ -5,23 +5,63 @@ import {
   StyleSheet,
   TouchableOpacity,
   Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { ONBOARDING_STEPS, CURRENT_ONBOARDING_VERSION, type OnboardingStep } from '../config/onboarding';
 import { onboardingStorage } from '../services/onboardingStorage';
+import { scanSubdirectories } from '../hooks/useDeviceFiles';
+import { safDirectory } from '../services/safDirectory';
+import * as FileSystem from 'expo-file-system/legacy';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-const ICON_MAP: Record<string, keyof typeof MaterialIcons.glyphMap> = {
-  'waving-hand': 'waving-hand',
-  'folder-off': 'folder-off',
-  'create-new-folder': 'create-new-folder',
-};
+type ScanState = 'idle' | 'scanning' | 'done';
+
+function stepIcon(step: OnboardingStep): keyof typeof MaterialIcons.glyphMap {
+  if (step.icon === 'waving-hand') return 'waving-hand';
+  if (step.icon === 'create-new-folder') return 'create-new-folder';
+  if (step.icon === 'check-circle') return 'check-circle';
+  if (step.icon === 'folder-off') return 'folder-off';
+  return 'info';
+}
+
+function ScanProgressView() {
+  return (
+    <>
+      <View style={styles.iconContainer}>
+        <ActivityIndicator size={48} color="#1976D2" />
+      </View>
+      <Text style={styles.title}>Scan en cours...</Text>
+      <Text style={styles.description}>
+        Dot. explore les sous-dossiers de votre stockage. Cela peut prendre quelques secondes.
+      </Text>
+    </>
+  );
+}
+
+function ScanDoneView({ folderCount }: { folderCount: number }) {
+  return (
+    <>
+      <View style={[styles.iconContainer, { backgroundColor: '#E8F5E9' }]}>
+        <MaterialIcons name="check-circle" size={64} color="#43A047" />
+      </View>
+      <Text style={styles.title}>Scan terminé !</Text>
+      <Text style={styles.description}>
+        {folderCount > 1
+          ? `${folderCount} dossiers découverts et ajoutés à votre espace Dot.`
+          : '1 dossier ajouté à votre espace Dot.'}
+      </Text>
+    </>
+  );
+}
 
 export function OnboardingScreen() {
   const navigation = useNavigation();
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [scanState, setScanState] = useState<ScanState>('idle');
+  const [folderCount, setFolderCount] = useState(0);
   const pendingSteps = onboardingStorage.getPendingSteps();
 
   const step = pendingSteps[currentIndex];
@@ -31,19 +71,33 @@ export function OnboardingScreen() {
     navigation.reset({ index: 0, routes: [{ name: 'Home' as never }] });
   }, [navigation]);
 
-  const handlePickDirectory = useCallback(async () => {
-    const { safDirectory } = await import('../services/safDirectory');
-    const FileSystem = await import('expo-file-system/legacy');
-
+  const handleRecursiveScan = useCallback(async () => {
     try {
       const result = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
       if (!result.granted) return;
+
       const dirUri = result.directoryUri;
       const parts = dirUri.split('/');
-      const dirName = decodeURIComponent(parts[parts.length - 1] ?? 'Dossier');
+      const dirName = decodeURIComponent(parts[parts.length - 1] ?? 'Stockage');
+
+      setScanState('scanning');
+
       safDirectory.addFolder(dirUri, dirName);
+
+      const subdirs = await scanSubdirectories(dirUri);
+      if (subdirs.length > 0) {
+        safDirectory.addBatchFolders(
+          subdirs.map((d) => ({ uri: d.uri, name: d.name, source: 'recursive', parentUri: d.parentUri }))
+        );
+      }
+
+      setFolderCount(1 + subdirs.length);
+      setScanState('done');
+
+      safDirectory.setDiscovered();
     } catch (err) {
-      console.error('[Onboarding] pickDirectory error:', err);
+      console.error('[Onboarding] recursive scan error:', err);
+      setScanState('idle');
     }
   }, []);
 
@@ -53,6 +107,8 @@ export function OnboardingScreen() {
 
     if (currentIndex < pendingSteps.length - 1) {
       setCurrentIndex(currentIndex + 1);
+      setScanState('idle');
+      setFolderCount(0);
     } else {
       complete();
     }
@@ -67,6 +123,8 @@ export function OnboardingScreen() {
     return null;
   }
 
+  const isScanStep = step.action?.type === 'recursive_scan';
+
   return (
     <View style={styles.container}>
       <View style={styles.skipContainer}>
@@ -76,22 +134,25 @@ export function OnboardingScreen() {
       </View>
 
       <View style={styles.content}>
-        <View style={styles.iconContainer}>
-          <MaterialIcons
-            name={ICON_MAP[step.icon] ?? 'info'}
-            size={64}
-            color="#1976D2"
-          />
-        </View>
+        {scanState === 'scanning' && isScanStep ? (
+          <ScanProgressView />
+        ) : scanState === 'done' && isScanStep ? (
+          <ScanDoneView folderCount={folderCount} />
+        ) : (
+          <>
+            <View style={styles.iconContainer}>
+              <MaterialIcons name={stepIcon(step)} size={64} color="#1976D2" />
+            </View>
+            <Text style={styles.title}>{step.title}</Text>
+            <Text style={styles.description}>{step.description}</Text>
 
-        <Text style={styles.title}>{step.title}</Text>
-        <Text style={styles.description}>{step.description}</Text>
-
-        {step.action?.type === 'pick_directory' && (
-          <TouchableOpacity style={styles.actionBtn} onPress={handlePickDirectory}>
-            <MaterialIcons name="folder-open" size={20} color="#fff" />
-            <Text style={styles.actionBtnText}>{step.action.label}</Text>
-          </TouchableOpacity>
+            {isScanStep && scanState === 'idle' && (
+              <TouchableOpacity style={styles.actionBtn} onPress={handleRecursiveScan}>
+                <MaterialIcons name="folder-open" size={20} color="#fff" />
+                <Text style={styles.actionBtnText}>{step.action?.label ?? 'Choisir un dossier'}</Text>
+              </TouchableOpacity>
+            )}
+          </>
         )}
       </View>
 
@@ -105,12 +166,21 @@ export function OnboardingScreen() {
           ))}
         </View>
 
-        <TouchableOpacity style={styles.nextBtn} onPress={handleNext}>
-          <Text style={styles.nextBtnText}>
-            {currentIndex < pendingSteps.length - 1 ? 'Suivant' : 'Commencer'}
-          </Text>
-          <MaterialIcons name="arrow-forward" size={20} color="#fff" />
-        </TouchableOpacity>
+        {(!isScanStep || scanState === 'done') && (
+          <TouchableOpacity style={styles.nextBtn} onPress={handleNext}>
+            <Text style={styles.nextBtnText}>
+              {currentIndex < pendingSteps.length - 1 ? 'Suivant' : 'Commencer'}
+            </Text>
+            <MaterialIcons name="arrow-forward" size={20} color="#fff" />
+          </TouchableOpacity>
+        )}
+
+        {isScanStep && scanState === 'idle' && (
+          <TouchableOpacity style={styles.nextBtn} onPress={handleNext}>
+            <Text style={styles.nextBtnText}>Passer cette étape</Text>
+            <MaterialIcons name="arrow-forward" size={20} color="#fff" />
+          </TouchableOpacity>
+        )}
       </View>
     </View>
   );

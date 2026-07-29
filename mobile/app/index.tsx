@@ -118,10 +118,6 @@ export function HomeScreen() {
   const { pendingCount, isSyncing } = useSyncQueue();
   useAutoSync();
 
-  const handleUploadComplete = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: ['resources'] });
-  }, [queryClient]);
-
   const itemSize = (SCREEN_WIDTH - PADDING_H * 2 - (numColumns - 1) * ITEM_GAP) / numColumns;
 
   const loadMore = useCallback(() => {
@@ -659,7 +655,6 @@ export function HomeScreen() {
       <UploadModal
         visible={uploadModalVisible}
         onClose={() => setUploadModalVisible(false)}
-        onUploadComplete={handleUploadComplete}
       />
 
       <SettingsModal

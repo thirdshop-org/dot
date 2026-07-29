@@ -114,7 +114,7 @@ async function scanMediaAlbum(folder: StoredFolder): Promise<DeviceFile[]> {
   }
 }
 
-async function scanSubdirectories(
+export async function scanSubdirectories(
   baseUri: string,
   depth: number = 0,
   maxDepth: number = 3,
