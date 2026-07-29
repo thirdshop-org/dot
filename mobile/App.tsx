@@ -92,7 +92,7 @@ function AppNavigator() {
             <Stack.Screen
               name="FileDetail"
               component={FileDetailScreen}
-              options={{ title: 'Détails', headerTintColor: '#fff', headerStyle: { backgroundColor: '#000' } }}
+              options={{ title: 'Détails', headerTintColor: '#fff', headerStyle: { backgroundColor: '#000' }, animation: 'fade' }}
             />
             <Stack.Screen name="FileEdit" component={FileEditScreen} options={{ title: 'Édition' }} />
             <Stack.Screen name="Folder" component={FolderScreen} options={{ title: 'Dossier' }} />

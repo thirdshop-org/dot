@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, Image, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { Image } from 'expo-image';
 import { FileItem } from '../types';
 import { TagChip } from './TagChip';
 
@@ -21,7 +22,7 @@ export function FileCard({ file, onPress }: FileCardProps) {
     <TouchableOpacity style={styles.container} onPress={() => onPress?.(file)}>
       {imageUri && (
         <View style={styles.imageContainer}>
-          <Image source={{ uri: imageUri }} style={styles.image} resizeMode="cover" />
+          <Image source={{ uri: imageUri }} style={styles.image} contentFit="cover" cachePolicy="memory-disk" transition={200} />
         </View>
       )}
 
