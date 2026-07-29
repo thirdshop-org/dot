@@ -2,10 +2,13 @@ package service
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"hash"
+	"io"
 	"mime/multipart"
 	"os"
 	"path/filepath"
@@ -34,21 +37,11 @@ func (s *ResourceService) Upload(file *multipart.FileHeader, ownerID string) (*m
 		return nil, fmt.Errorf("create upload dir: %w", err)
 	}
 
-	if err := saveUploadedFile(file, dst); err != nil {
+	h := sha256.New()
+	checksum, err := saveUploadedFile(file, dst, h)
+	if err != nil {
 		return nil, fmt.Errorf("save file: %w", err)
 	}
-
-	data, err := os.ReadFile(dst)
-	if err != nil {
-		return nil, fmt.Errorf("read saved file: %w", err)
-	}
-
-	info, err := os.Stat(dst)
-	if err != nil {
-		return nil, fmt.Errorf("stat file: %w", err)
-	}
-
-	checksum := hex.EncodeToString(CreateSHA256Hash(data))
 
 	ownerUUID, err := uuid.Parse(ownerID)
 	if err != nil {
@@ -86,7 +79,7 @@ func (s *ResourceService) Upload(file *multipart.FileHeader, ownerID string) (*m
 	dbResource, err := qtx.CreateResource(ctx, db.CreateResourceParams{
 		Name:     file.Filename,
 		MimeType: file.Header.Get("Content-Type"),
-		Size:     info.Size(),
+		Size:     file.Size,
 		Checksum: checksum,
 		OwnerID:  ownerUUID,
 	})
@@ -438,30 +431,23 @@ func dbResourceToModel(r db.Resource, dbTags []db.Tag) model.Resource {
 	}
 }
 
-func saveUploadedFile(file *multipart.FileHeader, dst string) error {
+func saveUploadedFile(file *multipart.FileHeader, dst string, h hash.Hash) (string, error) {
 	src, err := file.Open()
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer src.Close()
 
 	out, err := os.Create(dst)
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer out.Close()
 
-	buf := make([]byte, 32*1024)
-	for {
-		n, readErr := src.Read(buf)
-		if n > 0 {
-			if _, writeErr := out.Write(buf[:n]); writeErr != nil {
-				return writeErr
-			}
-		}
-		if readErr != nil {
-			break
-		}
+	writer := io.MultiWriter(out, h)
+	if _, err := io.CopyN(writer, src, file.Size); err != nil {
+		return "", err
 	}
-	return nil
+
+	return hex.EncodeToString(h.Sum(nil)), nil
 }
