@@ -14,14 +14,18 @@ import Animated, {
 interface SyncStatusIconProps {
   isSyncing: boolean;
   pendingCount: number;
+  isUploading: boolean;
+  uploadPendingCount: number;
   onPress: () => void;
 }
 
-export function SyncStatusIcon({ isSyncing, pendingCount, onPress }: SyncStatusIconProps) {
+export function SyncStatusIcon({ isSyncing, pendingCount, isUploading, uploadPendingCount, onPress }: SyncStatusIconProps) {
   const rotation = useSharedValue(0);
+  const isActive = isSyncing || isUploading;
+  const totalPending = pendingCount + uploadPendingCount;
 
   useEffect(() => {
-    if (isSyncing) {
+    if (isActive) {
       rotation.value = withRepeat(
         withSequence(
           withTiming(360, { duration: 1000, easing: Easing.linear }),
@@ -33,7 +37,7 @@ export function SyncStatusIcon({ isSyncing, pendingCount, onPress }: SyncStatusI
       cancelAnimation(rotation);
       rotation.value = withTiming(0, { duration: 200 });
     }
-  }, [isSyncing, rotation]);
+  }, [isActive, rotation]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ rotate: `${rotation.value}deg` }],
@@ -45,13 +49,13 @@ export function SyncStatusIcon({ isSyncing, pendingCount, onPress }: SyncStatusI
         <MaterialIcons
           name="sync"
           size={22}
-          color={isSyncing ? '#1976D2' : pendingCount > 0 ? '#F57C00' : '#666'}
+          color={isActive ? '#1976D2' : totalPending > 0 ? '#F57C00' : '#666'}
         />
       </Animated.View>
-      {pendingCount > 0 && !isSyncing && (
+      {totalPending > 0 && !isActive && (
         <View style={styles.badge}>
           <Text style={styles.badgeText}>
-            {pendingCount > 99 ? '99+' : pendingCount}
+            {totalPending > 99 ? '99+' : totalPending}
           </Text>
         </View>
       )}

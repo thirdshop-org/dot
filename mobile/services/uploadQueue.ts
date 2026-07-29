@@ -236,6 +236,12 @@ class UploadQueue {
         fieldName: 'file',
         mimeType: task.file.type,
         headers,
+        onProgress: (progress) => {
+          if (progress.totalBytes > 0) {
+            task.progress = Math.round((progress.bytesSent / progress.totalBytes) * 100);
+            this.notify();
+          }
+        },
       });
 
       if (result.status >= 400) {

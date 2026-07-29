@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"log"
 	"net/http"
 	"os"
@@ -230,28 +231,33 @@ func (h *ResourceHandler) Get(c *gin.Context) {
 	}
 
 	api.Success(c, gin.H{
-		"id":           resource.ID,
-		"name":         resource.Name,
-		"url":          downloadURL,
-		"thumbnailUrl": thumbURL,
-		"size":         resource.Size,
-		"mimeType":     resource.MimeType,
-		"tags":         tags,
-		"createdAt":    resource.CreatedAt,
-		"updatedAt":    resource.UpdatedAt,
-		"ocrText":      resource.OcrText,
-		"isFolder":     resource.IsFolder,
+		"id":               resource.ID,
+		"name":             resource.Name,
+		"url":              downloadURL,
+		"thumbnailUrl":     thumbURL,
+		"size":             resource.Size,
+		"mimeType":         resource.MimeType,
+		"tags":             tags,
+		"createdAt":        resource.CreatedAt,
+		"updatedAt":        resource.UpdatedAt,
+		"ocrText":          resource.OcrText,
+		"isFolder":         resource.IsFolder,
 		"parentResourceId": resource.ParentResourceID,
-		"ownerId":      resource.OwnerID,
-		"variants":     variants,
+		"ownerId":          resource.OwnerID,
+		"variants":         variants,
 	})
 }
 
 func (h *ResourceHandler) Delete(c *gin.Context) {
+	userID := c.GetString(auth.UserIDKey)
 	id := c.Param("id")
 
-	result, err := h.resources.DeleteRecursive(id)
+	result, err := h.resources.DeleteRecursive(id, userID)
 	if err != nil {
+		if errors.Is(err, service.ErrForbidden) {
+			api.Error(c, http.StatusForbidden, "FORBIDDEN", "You do not own this resource")
+			return
+		}
 		api.Error(c, http.StatusInternalServerError, "DB_ERROR", "Failed to delete resource")
 		return
 	}

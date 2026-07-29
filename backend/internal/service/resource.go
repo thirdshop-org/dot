@@ -20,6 +20,8 @@ import (
 	"github.com/vaultdrop/backend/internal/model"
 )
 
+var ErrForbidden = errors.New("forbidden")
+
 type ResourceService struct {
 	db      *sql.DB
 	queries *db.Queries
@@ -200,12 +202,20 @@ func (s *ResourceService) Delete(id string) error {
 	return s.queries.DeleteResource(context.Background(), resourceUUID)
 }
 
-func (s *ResourceService) DeleteRecursive(id string) (*DeleteResult, error) {
+func (s *ResourceService) DeleteRecursive(id, userID string) (*DeleteResult, error) {
 	resourceUUID, _ := uuid.Parse(id)
+	ownerUUID, err := uuid.Parse(userID)
+	if err != nil {
+		return nil, ErrForbidden
+	}
 
 	r, err := s.queries.GetResource(context.Background(), resourceUUID)
 	if err != nil {
 		return nil, fmt.Errorf("get resource: %w", err)
+	}
+
+	if r.OwnerID != ownerUUID {
+		return nil, ErrForbidden
 	}
 
 	result := &DeleteResult{}
@@ -217,7 +227,7 @@ func (s *ResourceService) DeleteRecursive(id string) (*DeleteResult, error) {
 		}
 
 		for _, child := range children {
-			childResult, err := s.DeleteRecursive(child.ID.String())
+			childResult, err := s.DeleteRecursive(child.ID.String(), userID)
 			if err != nil {
 				return nil, fmt.Errorf("delete child %s: %w", child.ID, err)
 			}

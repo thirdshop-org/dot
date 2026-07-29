@@ -74,7 +74,7 @@ CREATE INDEX idx_refresh_tokens_token_hash ON refresh_tokens(token_hash);
 CREATE TABLE resource_tags (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tag_id UUID NOT NULL REFERENCES tags(id),
-    resource_id UUID NOT NULL REFERENCES resources(id),
+    resource_id UUID NOT NULL REFERENCES resources(id) ON DELETE CASCADE,
     UNIQUE(tag_id, resource_id)
 );
 

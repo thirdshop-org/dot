@@ -40,9 +40,11 @@ interface FileThumbnailProps {
   isLoading?: boolean;
   syncStatus?: SyncStatus;
   isFolder?: boolean;
+  isUploading?: boolean;
+  uploadProgress?: number;
 }
 
-export const FileThumbnail = React.memo(function FileThumbnail({ uri, thumbnailUrl, mimeType, fileName, size, isLoading, syncStatus, isFolder }: FileThumbnailProps) {
+export const FileThumbnail = React.memo(function FileThumbnail({ uri, thumbnailUrl, mimeType, fileName, size, isLoading, syncStatus, isFolder, isUploading, uploadProgress }: FileThumbnailProps) {
   const info = getFileInfo(mimeType, fileName);
   const ext = getExtension(fileName);
 
@@ -75,15 +77,32 @@ export const FileThumbnail = React.memo(function FileThumbnail({ uri, thumbnailU
           cachePolicy="memory-disk"
         />
         {syncStatus && <SyncStatusBadge status={syncStatus} />}
+        {isUploading && (
+          <View style={styles.uploadOverlay}>
+            <ActivityIndicator size="small" color="#fff" />
+            <Text style={styles.uploadProgressText}>{uploadProgress ?? 0}%</Text>
+            <View style={[styles.uploadProgressBar, { width: `${uploadProgress ?? 0}%` }]} />
+          </View>
+        )}
       </View>
     );
   }
 
   return (
-    <View style={[styles.container, { width: size, height: size, backgroundColor: info.bg }]}>
-      <MaterialIcons name={info.icon} size={size * 0.35} color={info.color} />
-      {ext.length <= 4 && (
-        <Text style={[styles.ext, { color: info.color }]}>{ext}</Text>
+    <View style={[styles.container, { width: size, height: size, backgroundColor: isUploading ? '#E3F2FD' : info.bg }]}>
+      {isUploading ? (
+        <View style={styles.uploadGhost}>
+          <MaterialIcons name="cloud-upload" size={size * 0.3} color="#1976D2" />
+          <ActivityIndicator size="small" color="#1976D2" />
+          <Text style={styles.uploadPercent}>{uploadProgress ?? 0}%</Text>
+        </View>
+      ) : (
+        <>
+          <MaterialIcons name={info.icon} size={size * 0.35} color={info.color} />
+          {ext.length <= 4 && (
+            <Text style={[styles.ext, { color: info.color }]}>{ext}</Text>
+          )}
+        </>
       )}
       {syncStatus && <SyncStatusBadge status={syncStatus} />}
     </View>
@@ -103,5 +122,35 @@ const styles = StyleSheet.create({
   ext: {
     fontSize: 11,
     fontWeight: '700',
+  },
+  uploadGhost: {
+    alignItems: 'center',
+    gap: 4,
+  },
+  uploadPercent: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#1976D2',
+  },
+  uploadOverlay: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    borderRadius: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 4,
+  },
+  uploadProgressText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  uploadProgressBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    height: 3,
+    backgroundColor: '#1976D2',
+    borderBottomLeftRadius: 6,
   },
 });

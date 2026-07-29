@@ -16,6 +16,7 @@ import { ConfirmModal, type ConfirmOption } from '../components/ConfirmModal';
 import { UploadModal } from '../components/UploadModal';
 import { SyncStatusIcon } from '../components/SyncStatusIcon';
 import { useSyncQueue } from '../hooks/useSyncQueue';
+import { useUploadQueue } from '../hooks/useUploadQueue';
 import { useAutoSync } from '../hooks/useAutoSync';
 import { safDirectory, SyncMode, SyncGlobalMode } from '../services/safDirectory';
 import { fileStore } from '../services/fileStore';
@@ -67,6 +68,8 @@ const FileGridItem = React.memo(function FileGridItem({ file, size, onPress, onL
         size={size}
         syncStatus={file.syncStatus}
         isFolder={file.isFolder}
+        isUploading={file.isUploading}
+        uploadProgress={file.uploadProgress}
       />
       {selected && (
         <View style={styles.selectedOverlay}>
@@ -123,6 +126,7 @@ export function HomeScreen() {
   const [confirmDeleteState, setConfirmDeleteState] = useState<{ message: string; options: ConfirmOption[] } | null>(null);
   const [removeFolderConfirmId, setRemoveFolderConfirmId] = useState<string | null>(null);
   const { pendingCount, isSyncing } = useSyncQueue();
+  const { tasks: uploadTasks } = useUploadQueue();
   useAutoSync();
 
   const pinchScale = useSharedValue(1);
@@ -159,6 +163,8 @@ export function HomeScreen() {
           <SyncStatusIcon
             isSyncing={isSyncing}
             pendingCount={pendingCount}
+            isUploading={uploadTasks.some(t => t.status === 'uploading')}
+            uploadPendingCount={uploadTasks.filter(t => t.status === 'pending' || t.status === 'uploading').length}
             onPress={() => navigation.navigate('SyncDetail')}
           />
           <TouchableOpacity onPress={() => setUploadModalVisible(true)} style={{ padding: 8 }}>
@@ -170,7 +176,8 @@ export function HomeScreen() {
         </View>
       ),
     });
-  }, [navigation, pendingCount, isSyncing]);
+    }, [navigation, pendingCount, isSyncing, uploadTasks]);
+
 
   const selectionMode = selectedIds.size > 0;
 
@@ -191,14 +198,40 @@ export function HomeScreen() {
     });
   }, [filteredFiles, mediaFilter]);
 
-  const sortedFiles = useMemo(() =>
-    [...mediaFilteredFiles].sort((a, b) => {
+  const uploadGhostItems = useMemo(() => {
+    return uploadTasks
+      .filter((t) => t.status === 'pending' || t.status === 'uploading')
+      .map((t) => ({
+        id: t.id,
+        name: t.file.name,
+        mimeType: t.file.type,
+        size: 0,
+        createdAt: new Date(t.createdAt).toISOString(),
+        source: 'local' as const,
+        syncStatus: 'local' as const,
+        localUri: t.file.uri,
+        tags: [],
+        isFolder: false,
+        isDeviceFile: false,
+        isUploading: true,
+        uploadProgress: t.progress,
+        uploadStatus: t.status,
+      }));
+  }, [uploadTasks]);
+
+  const sortedFiles = useMemo(() => {
+    const uploadedExistingIds = new Set(
+      mediaFilteredFiles.map((f) => f.localUri).filter(Boolean)
+    );
+    const ghosts = uploadGhostItems.filter(
+      (g) => g.localUri && !uploadedExistingIds.has(g.localUri)
+    );
+    return [...ghosts, ...mediaFilteredFiles].sort((a, b) => {
       const da = parseBackendDate(a.createdAt);
       const db = parseBackendDate(b.createdAt);
       return (db?.getTime() ?? 0) - (da?.getTime() ?? 0);
-    }),
-    [mediaFilteredFiles]
-  );
+    });
+  }, [mediaFilteredFiles, uploadGhostItems]);
 
   const fileIdToIndex = useMemo(() => {
     const map = new Map<string, number>();

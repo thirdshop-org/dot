@@ -28,6 +28,9 @@ export interface UnifiedFileItem {
   thumbnailUrl?: string;
   variants?: Variant[];
   isDeviceFile?: boolean;
+  isUploading?: boolean;
+  uploadProgress?: number;
+  uploadStatus?: 'pending' | 'uploading' | 'done' | 'error';
 }
 
 export type FileItem = UnifiedFileItem;
