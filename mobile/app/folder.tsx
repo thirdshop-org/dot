@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useCallback, useEffect } from 'react';
-import { View, FlatList, StyleSheet, TouchableOpacity, Text, Dimensions, Alert, Modal, TextInput } from 'react-native';
+import { View, FlatList, StyleSheet, TouchableOpacity, Text, Dimensions, Modal, TextInput } from 'react-native';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -9,6 +9,7 @@ import {
   useAddTags, useMoveResources, useFolders, useCreateFolder,
 } from '../hooks/useFiles';
 import { SelectionPanel } from '../components/SelectionPanel';
+import { ConfirmModal, type ConfirmOption } from '../components/ConfirmModal';
 import { UnifiedFileItem } from '../types';
 import { isFolder } from '../types';
 import { FileThumbnail } from '../components/FileThumbnail';
@@ -104,6 +105,7 @@ export function FolderScreen() {
   const [tagModalMode, setTagModalMode] = useState<'tag' | 'folder'>('tag');
   const [tagInput, setTagInput] = useState('');
   const [moveModalVisible, setMoveModalVisible] = useState(false);
+  const [confirmDeleteState, setConfirmDeleteState] = useState<{ message: string; options: ConfirmOption[] } | null>(null);
 
   const selectionMode = selectedIds.size > 0;
 
@@ -142,12 +144,10 @@ export function FolderScreen() {
       return f?.syncStatus === 'synced';
     });
     const label = ids.length === 1 ? 'ce fichier' : `ces ${ids.length} fichiers`;
-    const options: Array<{ text: string; style?: 'default' | 'cancel' | 'destructive'; onPress?: () => void }> = [
-      { text: 'Annuler', style: 'cancel' },
-    ];
+    const options: ConfirmOption[] = [];
     if (hasSynced) {
       options.push({
-        text: 'Du device uniquement',
+        label: 'Du device uniquement',
         onPress: async () => {
           const syncedIds = ids.filter((id) => {
             const f = files.find((fi) => fi.id === id);
@@ -161,8 +161,8 @@ export function FolderScreen() {
       });
     }
     options.push({
-      text: 'Du device + serveur',
-      style: 'destructive',
+      label: 'Du device + serveur',
+      destructive: true,
       onPress: async () => {
         for (const id of ids) {
           const f = files.find((fi) => fi.id === id);
@@ -177,11 +177,12 @@ export function FolderScreen() {
           }
           downloadRegistry.remove(id);
         }
-        await queryClient.invalidateQueries({ queryKey: ['files'] });
+        await queryClient.invalidateQueries({ queryKey: ['resources'] });
         setSelectedIds(new Set());
       },
     });
-    Alert.alert('Supprimer', `Supprimer ${label} ?`, options);
+    options.push({ label: 'Annuler' });
+    setConfirmDeleteState({ message: `Supprimer ${label} ?`, options });
   }, [selectedIds, files, deleteFile, freeLocalSpace, queryClient]);
 
   const handleEdit = useCallback(() => {
@@ -358,6 +359,14 @@ export function FolderScreen() {
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
+
+      <ConfirmModal
+        visible={confirmDeleteState !== null}
+        title="Supprimer"
+        message={confirmDeleteState?.message}
+        options={confirmDeleteState?.options ?? []}
+        onClose={() => setConfirmDeleteState(null)}
+      />
     </View>
   );
 }

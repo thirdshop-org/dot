@@ -6,10 +6,10 @@ import {
   TouchableOpacity,
   Modal,
   ScrollView,
-  Alert,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { StoredFolder, SyncMode, SyncGlobalMode, type FolderSource } from '../services/safDirectory';
+import { ConfirmModal } from './ConfirmModal';
 
 type SettingsView = 'menu' | 'folders' | 'sync';
 
@@ -57,6 +57,7 @@ export function SettingsModal({
   onSetGlobalSyncCellular,
 }: SettingsModalProps) {
   const [view, setView] = useState<SettingsView>('menu');
+  const [confirmRemoveFolder, setConfirmRemoveFolder] = useState<StoredFolder | null>(null);
 
   const handleClose = useCallback(() => {
     setView('menu');
@@ -65,21 +66,17 @@ export function SettingsModal({
 
   const handleRemoveFolder = useCallback(
     (folder: StoredFolder) => {
-      Alert.alert(
-        'Supprimer le dossier',
-        'Le dossier sera retiré de la liste. Les fichiers resteront sur votre appareil.',
-        [
-          { text: 'Annuler', style: 'cancel' },
-          {
-            text: 'Supprimer',
-            style: 'destructive',
-            onPress: () => onRemoveFolder(folder.id),
-          },
-        ]
-      );
+      setConfirmRemoveFolder(folder);
     },
-    [onRemoveFolder]
+    []
   );
+
+  const handleRemoveFolderConfirm = useCallback(() => {
+    if (confirmRemoveFolder) {
+      onRemoveFolder(confirmRemoveFolder.id);
+    }
+    setConfirmRemoveFolder(null);
+  }, [confirmRemoveFolder, onRemoveFolder]);
 
   return (
     <Modal
@@ -128,6 +125,17 @@ export function SettingsModal({
           )}
         </TouchableOpacity>
       </TouchableOpacity>
+
+      <ConfirmModal
+        visible={confirmRemoveFolder !== null}
+        title="Supprimer le dossier"
+        message="Le dossier sera retiré de la liste. Les fichiers resteront sur votre appareil."
+        options={[
+          { label: 'Annuler' },
+          { label: 'Supprimer', destructive: true, onPress: handleRemoveFolderConfirm },
+        ]}
+        onClose={() => setConfirmRemoveFolder(null)}
+      />
     </Modal>
   );
 }

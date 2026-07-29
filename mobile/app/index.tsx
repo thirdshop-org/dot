@@ -12,6 +12,7 @@ import { UnifiedFileItem, isFolder } from '../types';
 import { SearchBar, SearchFilters, MediaFilter } from '../components/SearchBar';
 import { FileThumbnail } from '../components/FileThumbnail';
 import { SettingsModal } from '../components/SettingsModal';
+import { ConfirmModal, type ConfirmOption } from '../components/ConfirmModal';
 import { UploadModal } from '../components/UploadModal';
 import { SyncStatusIcon } from '../components/SyncStatusIcon';
 import { useSyncQueue } from '../hooks/useSyncQueue';
@@ -119,6 +120,8 @@ export function HomeScreen() {
   const [uploadModalVisible, setUploadModalVisible] = useState(false);
   const [globalSyncMode, setGlobalSyncMode] = useState<SyncGlobalMode>(() => safDirectory.getGlobalSyncMode());
   const [globalSyncCellular, setGlobalSyncCellular] = useState(() => safDirectory.getGlobalSyncCellular());
+  const [confirmDeleteState, setConfirmDeleteState] = useState<{ message: string; options: ConfirmOption[] } | null>(null);
+  const [removeFolderConfirmId, setRemoveFolderConfirmId] = useState<string | null>(null);
   const { pendingCount, isSyncing } = useSyncQueue();
   useAutoSync();
 
@@ -247,12 +250,10 @@ export function HomeScreen() {
       return f?.syncStatus === 'synced';
     });
     const label = ids.length === 1 ? 'ce fichier' : `ces ${ids.length} fichiers`;
-    const options: Array<{ text: string; style?: 'default' | 'cancel' | 'destructive'; onPress?: () => void }> = [
-      { text: 'Annuler', style: 'cancel' },
-    ];
+    const options: ConfirmOption[] = [];
     if (hasSynced) {
       options.push({
-        text: 'Du device uniquement',
+        label: 'Du device uniquement',
         onPress: async () => {
           const syncedIds = ids.filter((id) => {
             const f = files.find((fi) => fi.id === id);
@@ -266,8 +267,8 @@ export function HomeScreen() {
       });
     }
     options.push({
-      text: 'Du device + serveur',
-      style: 'destructive',
+      label: 'Du device + serveur',
+      destructive: true,
       onPress: async () => {
         for (const id of ids) {
           const f = files.find((fi) => fi.id === id);
@@ -282,11 +283,12 @@ export function HomeScreen() {
           }
           downloadRegistry.remove(id);
         }
-        await queryClient.invalidateQueries({ queryKey: ['files'] });
+        await queryClient.invalidateQueries({ queryKey: ['resources'] });
         setSelectedIds(new Set());
       },
     });
-    Alert.alert('Supprimer', `Supprimer ${label} ?`, options);
+    options.push({ label: 'Annuler' });
+    setConfirmDeleteState({ message: `Supprimer ${label} ?`, options });
   }, [selectedIds, files, freeLocalSpace, queryClient]);
 
   const handleEdit = useCallback(() => {
@@ -339,22 +341,16 @@ export function HomeScreen() {
   }, [refreshFolders]);
 
   const handleRemoveFolder = useCallback((folderId: string) => {
-    Alert.alert(
-      'Supprimer le dossier',
-      'Le dossier sera retiré de la liste. Les fichiers resteront sur votre appareil.',
-      [
-        { text: 'Annuler', style: 'cancel' },
-        {
-          text: 'Supprimer',
-          style: 'destructive',
-          onPress: () => {
-            safDirectory.removeFolder(folderId);
-            refreshFolders();
-          },
-        },
-      ]
-    );
-  }, [refreshFolders]);
+    setRemoveFolderConfirmId(folderId);
+  }, []);
+
+  const handleRemoveFolderConfirm = useCallback(() => {
+    if (removeFolderConfirmId) {
+      safDirectory.removeFolder(removeFolderConfirmId);
+      refreshFolders();
+    }
+    setRemoveFolderConfirmId(null);
+  }, [removeFolderConfirmId, refreshFolders]);
 
   const handleAddFolder = useCallback(async () => {
     setSettingsModalVisible(false);
@@ -649,6 +645,25 @@ export function HomeScreen() {
         onSetGlobalSyncMode={handleSetGlobalSyncMode}
         globalSyncCellular={globalSyncCellular}
         onSetGlobalSyncCellular={handleSetGlobalSyncCellular}
+      />
+
+      <ConfirmModal
+        visible={confirmDeleteState !== null}
+        title="Supprimer"
+        message={confirmDeleteState?.message}
+        options={confirmDeleteState?.options ?? []}
+        onClose={() => setConfirmDeleteState(null)}
+      />
+
+      <ConfirmModal
+        visible={removeFolderConfirmId !== null}
+        title="Supprimer le dossier"
+        message="Le dossier sera retiré de la liste. Les fichiers resteront sur votre appareil."
+        options={[
+          { label: 'Annuler' },
+          { label: 'Supprimer', destructive: true, onPress: handleRemoveFolderConfirm },
+        ]}
+        onClose={() => setRemoveFolderConfirmId(null)}
       />
     </KeyboardAvoidingView>
   );

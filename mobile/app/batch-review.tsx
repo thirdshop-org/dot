@@ -1,9 +1,10 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useBatchStore } from '../hooks/useBatchStore';
 import { usePdfGeneration } from '../hooks/usePdfGeneration';
+import { ConfirmModal } from '../components/ConfirmModal';
 
 type RootStackParamList = {
   Home: undefined;
@@ -22,6 +23,7 @@ export function BatchReviewScreen() {
   const batch = getBatch(route.params.batchId);
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [confirmDeleteVisible, setConfirmDeleteVisible] = useState(false);
 
   if (!batch) {
     return (
@@ -44,22 +46,12 @@ export function BatchReviewScreen() {
 
   const handleDelete = () => {
     if (selectedCount === 0) return;
-    const label = selectedCount === 1 ? 'cette photo' : `ces ${selectedCount} photos`;
-    Alert.alert(
-      'Supprimer',
-      `Retirer ${label} du lot ?`,
-      [
-        { text: 'Annuler', style: 'cancel' },
-        {
-          text: 'Supprimer',
-          style: 'destructive',
-          onPress: () => {
-            selectedIds.forEach((id) => removePhotoFromBatch(batch.id, id));
-            setSelectedIds(new Set());
-          },
-        },
-      ]
-    );
+    setConfirmDeleteVisible(true);
+  };
+
+  const handleDeleteConfirm = () => {
+    selectedIds.forEach((id) => removePhotoFromBatch(batch.id, id));
+    setSelectedIds(new Set());
   };
 
   const handleGroup = () => {
@@ -131,6 +123,17 @@ export function BatchReviewScreen() {
           </TouchableOpacity>
         </View>
       </View>
+
+      <ConfirmModal
+        visible={confirmDeleteVisible}
+        title="Supprimer"
+        message={`Retirer ${selectedCount === 1 ? 'cette photo' : `ces ${selectedCount} photos`} du lot ?`}
+        options={[
+          { label: 'Annuler' },
+          { label: 'Supprimer', destructive: true, onPress: handleDeleteConfirm },
+        ]}
+        onClose={() => setConfirmDeleteVisible(false)}
+      />
     </View>
   );
 }

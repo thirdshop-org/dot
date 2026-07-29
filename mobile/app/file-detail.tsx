@@ -10,7 +10,6 @@ import {
   Pressable,
   TouchableOpacity,
   Share,
-  Alert,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -20,6 +19,7 @@ import { useFile, useDownloadFile } from '../hooks/useFiles';
 import { fileStore } from '../services/fileStore';
 import { TagChip } from '../components/TagChip';
 import { FileThumbnail } from '../components/FileThumbnail';
+import { ConfirmModal } from '../components/ConfirmModal';
 import { SyncStatusBadge } from '../components/SyncStatusBadge';
 import { GestureHandlerRootView, Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring, runOnJS } from 'react-native-reanimated';
@@ -100,6 +100,7 @@ function DetailItem({ fileId, deviceFile, onSelectImage }: { fileId: string; dev
 
   const [optionsVisible, setOptionsVisible] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [confirmDeleteVisible, setConfirmDeleteVisible] = useState(false);
   const panelOffset = useSharedValue(PANEL_HEIGHT - PANEL_HEADER_VISIBLE);
   const panelStartY = useSharedValue(0);
   const isPanelExpanded = useSharedValue(false);
@@ -136,39 +137,30 @@ function DetailItem({ fileId, deviceFile, onSelectImage }: { fileId: string; dev
     }
   }, [uri, fileName, file?.url]);
 
+  const handleDeleteConfirm = useCallback(async () => {
+    setDeleting(true);
+    try {
+      const bid = localEntry?.backendId ?? (file as any)?.backendResourceId;
+      if (bid) {
+        await apiClient.delete(`${ENDPOINTS.RESOURCES}/${bid}`);
+        fileStore.deleteByBackendId(bid);
+      } else {
+        fileStore.deleteById(fileId);
+      }
+      if (localEntry?.localUri) {
+        await deleteAsync(localEntry.localUri, { idempotent: true });
+      }
+      downloadRegistry.remove(fileId);
+      navigation.goBack();
+    } catch {} finally {
+      setDeleting(false);
+    }
+  }, [fileName, fileId, localEntry, file, navigation]);
+
   const handleDelete = useCallback(() => {
     setOptionsVisible(false);
-    Alert.alert(
-      'Supprimer',
-      `Supprimer "${fileName}" définitivement ?`,
-      [
-        { text: 'Annuler', style: 'cancel' },
-        {
-          text: 'Supprimer',
-          style: 'destructive',
-          onPress: async () => {
-            setDeleting(true);
-            try {
-              const bid = localEntry?.backendId ?? (file as any)?.backendResourceId;
-              if (bid) {
-                await apiClient.delete(`${ENDPOINTS.RESOURCES}/${bid}`);
-                fileStore.deleteByBackendId(bid);
-              } else {
-                fileStore.deleteById(fileId);
-              }
-              if (localEntry?.localUri) {
-                await deleteAsync(localEntry.localUri, { idempotent: true });
-              }
-              downloadRegistry.remove(fileId);
-              navigation.goBack();
-            } catch {} finally {
-              setDeleting(false);
-            }
-          },
-        },
-      ],
-    );
-  }, [fileName, fileId, localEntry, file, navigation]);
+    setConfirmDeleteVisible(true);
+  }, []);
 
   const togglePanelJS = useCallback(() => {
     if (isPanelExpanded.value) {
@@ -387,6 +379,17 @@ function DetailItem({ fileId, deviceFile, onSelectImage }: { fileId: string; dev
           </View>
         </TouchableOpacity>
       </Modal>
+
+      <ConfirmModal
+        visible={confirmDeleteVisible}
+        title="Supprimer"
+        message={`Supprimer "${fileName}" définitivement ?`}
+        options={[
+          { label: 'Annuler' },
+          { label: 'Supprimer', destructive: true, onPress: handleDeleteConfirm },
+        ]}
+        onClose={() => setConfirmDeleteVisible(false)}
+      />
     </View>
   );
 }
