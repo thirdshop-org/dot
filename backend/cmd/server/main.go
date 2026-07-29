@@ -51,7 +51,7 @@ func main() {
 	conversionSvc.Start(cfg.ConversionWorkers)
 	defer conversionSvc.Stop()
 
-	h := handler.New(resourceSvc, ocrSvc, urlSvc, auth.NewAuthHandler(authSvc), conversionSvc, rebacSvc, placementSvc, syncSvc, eventBroker)
+	h := handler.New(database, resourceSvc, ocrSvc, urlSvc, auth.NewAuthHandler(authSvc), conversionSvc, rebacSvc, placementSvc, syncSvc, eventBroker)
 
 	r := gin.Default()
 	handler.SetupRoutes(r, h, authSvc)

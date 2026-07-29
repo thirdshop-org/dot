@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"database/sql"
+
 	"github.com/vaultdrop/backend/internal/auth"
 	"github.com/vaultdrop/backend/internal/service"
 )
@@ -17,6 +19,7 @@ type Handler struct {
 }
 
 func New(
+	database *sql.DB,
 	resourceSvc *service.ResourceService,
 	ocrSvc *service.OCRService,
 	urlSvc *service.URLService,
@@ -36,7 +39,7 @@ func New(
 			broker:     eventBroker,
 		},
 		OCR:    &OCRHandler{ocr: ocrSvc, resources: resourceSvc},
-		Health: &HealthHandler{ocr: ocrSvc},
+		Health: &HealthHandler{db: database, ocr: ocrSvc},
 		Auth:   authHandler,
 		Share:  &ShareHandler{rebac: rebacSvc},
 		Device: &DeviceHandler{placement: placementSvc},

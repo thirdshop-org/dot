@@ -7,6 +7,9 @@ import { ApiError, UploadError } from '../types';
 export type UploadFile = { uri: string; type: string; name: string };
 export type UploadResult = { name: string; id: string };
 
+export const UPLOAD_MAX_RETRIES = 3;
+const BASE_RETRY_DELAY_MS = 1000;
+
 export type UploadTaskStatus = 'pending' | 'uploading' | 'done' | 'error';
 
 export type UploadTask = {
@@ -16,6 +19,7 @@ export type UploadTask = {
   progress: number;
   result?: UploadResult;
   error?: string;
+  retryCount: number;
   createdAt: number;
   updatedAt: number;
 };
@@ -33,6 +37,7 @@ function serialize(task: UploadTask): unknown {
     progress: task.progress,
     result: task.result ?? null,
     error: task.error ?? null,
+    retryCount: task.retryCount,
     createdAt: task.createdAt,
     updatedAt: task.updatedAt,
   };
@@ -50,6 +55,7 @@ function deserialize(data: unknown): UploadTask | null {
     progress: d.progress as number,
     result: d.result ? (d.result as UploadResult) : undefined,
     error: d.error ? (d.error as string) : undefined,
+    retryCount: (d.retryCount as number) ?? 0,
     createdAt: d.createdAt as number,
     updatedAt: d.updatedAt as number,
   };
@@ -147,6 +153,7 @@ class UploadQueue {
         file,
         status: 'pending',
         progress: 0,
+        retryCount: 0,
         createdAt: now,
         updatedAt: now,
       });
@@ -171,6 +178,7 @@ class UploadQueue {
     if (!task || task.status !== 'error') return;
     task.status = 'pending';
     task.progress = 0;
+    task.retryCount = 0;
     task.error = undefined;
     task.result = undefined;
     task.updatedAt = Date.now();
@@ -184,6 +192,7 @@ class UploadQueue {
       if (task.status === 'error') {
         task.status = 'pending';
         task.progress = 0;
+        task.retryCount = 0;
         task.error = undefined;
         task.result = undefined;
         task.updatedAt = Date.now();
@@ -212,6 +221,7 @@ class UploadQueue {
   }
 
   private async runTask(task: UploadTask) {
+    let willRetry = false;
     try {
       const fsFile = new File(task.file.uri);
       const headers: Record<string, string> = {};
@@ -251,20 +261,36 @@ class UploadQueue {
       this.notify();
       this.scheduleCleanup();
     } catch (err) {
-      task.status = 'error';
-      task.error =
-        err instanceof UploadError
-          ? `${err.fileName} : ${err.message}`
-          : err instanceof Error
-            ? err.message
-            : 'Erreur inconnue';
-      task.updatedAt = Date.now();
-      this.persist();
-      this.notify();
+      task.retryCount++;
+      if (task.retryCount <= UPLOAD_MAX_RETRIES) {
+        willRetry = true;
+        task.status = 'pending';
+        task.progress = 0;
+        task.error = undefined;
+        task.updatedAt = Date.now();
+        this.persist();
+        this.notify();
+        const delay = BASE_RETRY_DELAY_MS * Math.pow(2, task.retryCount - 1);
+        setTimeout(() => this.processNext(), delay);
+      } else {
+        task.status = 'error';
+        task.error =
+          err instanceof UploadError
+            ? `${err.fileName} : ${err.message}`
+            : err instanceof Error
+              ? err.message
+              : 'Erreur inconnue';
+        task.error += ` (${task.retryCount} tentative(s))`;
+        task.updatedAt = Date.now();
+        this.persist();
+        this.notify();
+      }
     } finally {
       this.active--;
       this.notify();
-      this.processNext();
+      if (!willRetry) {
+        this.processNext();
+      }
     }
   }
 

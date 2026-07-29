@@ -56,12 +56,22 @@ SELECT * FROM resources
 WHERE checksum = $1 AND is_folder = false AND owner_id = $2
 LIMIT 1;
 
+-- name: CountResourcesByOwner :one
+SELECT COUNT(*) FROM resources
+WHERE owner_id = $1 AND parent_resource_id IS NULL;
+
 -- name: ListResourcesByOwner :many
 SELECT * FROM resources
 WHERE owner_id = $1 AND parent_resource_id IS NULL
-ORDER BY created_at DESC;
+ORDER BY created_at DESC
+LIMIT $2 OFFSET $3;
+
+-- name: CountResourcesByParentAndOwner :one
+SELECT COUNT(*) FROM resources
+WHERE parent_resource_id = $1 AND owner_id = $2;
 
 -- name: ListResourcesByParentAndOwner :many
 SELECT * FROM resources
 WHERE parent_resource_id = $1 AND owner_id = $2
-ORDER BY is_folder DESC, created_at DESC;
+ORDER BY is_folder DESC, created_at DESC
+LIMIT $3 OFFSET $4;

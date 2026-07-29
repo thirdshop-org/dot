@@ -65,11 +65,31 @@ func (h *ResourceHandler) Upload(c *gin.Context) {
 	api.Success(c, results)
 }
 
+func parsePagination(c *gin.Context) (page, limit int) {
+	page = 1
+	limit = 20
+	if p := c.Query("page"); p != "" {
+		if n, err := strconv.Atoi(p); err == nil && n > 0 {
+			page = n
+		}
+	}
+	if l := c.Query("limit"); l != "" {
+		if n, err := strconv.Atoi(l); err == nil && n > 0 {
+			if n > 100 {
+				n = 100
+			}
+			limit = n
+		}
+	}
+	return
+}
+
 func (h *ResourceHandler) List(c *gin.Context) {
 	userID := c.GetString(auth.UserIDKey)
 	thumbnailQuality := c.Query("thumbnail")
+	page, limit := parsePagination(c)
 
-	resources, err := h.resources.List(userID)
+	resources, total, err := h.resources.List(userID, page, limit)
 	if err != nil {
 		log.Printf("ERROR List resources: %v", err)
 		api.Error(c, http.StatusInternalServerError, "DB_ERROR", "Failed to list resources")
@@ -132,7 +152,7 @@ func (h *ResourceHandler) List(c *gin.Context) {
 		}
 	}
 
-	api.Paginated(c, resp, 1, len(resp))
+	api.Paginated(c, resp, page, total)
 }
 
 func (h *ResourceHandler) Download(c *gin.Context) {
@@ -335,8 +355,9 @@ func (h *ResourceHandler) ListByParent(c *gin.Context) {
 	userID := c.GetString(auth.UserIDKey)
 	parentID := c.Param("id")
 	thumbnailQuality := c.Query("thumbnail")
+	page, limit := parsePagination(c)
 
-	resources, err := h.resources.ListResourcesByParentID(parentID, userID)
+	resources, total, err := h.resources.ListResourcesByParentID(parentID, userID, page, limit)
 	if err != nil {
 		api.Error(c, http.StatusInternalServerError, "DB_ERROR", "Failed to list resources in folder")
 		return
@@ -396,7 +417,7 @@ func (h *ResourceHandler) ListByParent(c *gin.Context) {
 		}
 	}
 
-	api.Success(c, resp)
+	api.Paginated(c, resp, page, total)
 }
 
 func (h *ResourceHandler) GetVariants(c *gin.Context) {

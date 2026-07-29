@@ -19,7 +19,10 @@ export function usePullSync() {
     try {
       setIsSyncing(true);
 
-      const res = await apiClient.get<{ data: Array<{
+      let page = 1;
+      const limit = 100;
+      let total = 0;
+      const backendResources: Array<{
         id: string;
         name: string;
         mimeType: string;
@@ -28,9 +31,17 @@ export function usePullSync() {
         url?: string;
         thumbnailUrl?: string;
         ownerId?: string;
-      }> }>(`${ENDPOINTS.RESOURCES}?page=1&limit=100&thumbnail=thumbnail_small`);
+      }> = [];
 
-      const backendResources = res.data ?? [];
+      do {
+        const res = await apiClient.get<{ data: Array<typeof backendResources[number]>; meta?: { total: number } }>(
+          `${ENDPOINTS.RESOURCES}?page=${page}&limit=${limit}&thumbnail=thumbnail_small`,
+        );
+        backendResources.push(...(res.data ?? []));
+        total = res.meta?.total ?? res.data.length;
+        page++;
+      } while (backendResources.length < total);
+
       const registry = fileStore.getAllSynced();
       const existingBackendIds = new Set(
         registry.filter((e) => e.backendId).map((e) => e.backendId)

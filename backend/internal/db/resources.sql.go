@@ -13,6 +13,35 @@ import (
 	"github.com/lib/pq"
 )
 
+const countResourcesByOwner = `-- name: CountResourcesByOwner :one
+SELECT COUNT(*) FROM resources
+WHERE owner_id = $1 AND parent_resource_id IS NULL
+`
+
+func (q *Queries) CountResourcesByOwner(ctx context.Context, ownerID uuid.UUID) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countResourcesByOwner, ownerID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countResourcesByParentAndOwner = `-- name: CountResourcesByParentAndOwner :one
+SELECT COUNT(*) FROM resources
+WHERE parent_resource_id = $1 AND owner_id = $2
+`
+
+type CountResourcesByParentAndOwnerParams struct {
+	ParentResourceID uuid.NullUUID `json:"parent_resource_id"`
+	OwnerID          uuid.UUID     `json:"owner_id"`
+}
+
+func (q *Queries) CountResourcesByParentAndOwner(ctx context.Context, arg CountResourcesByParentAndOwnerParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countResourcesByParentAndOwner, arg.ParentResourceID, arg.OwnerID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createFolder = `-- name: CreateFolder :one
 INSERT INTO resources (name, is_folder, owner_id, created_at, updated_at)
 VALUES ($1, true, $2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
@@ -323,10 +352,17 @@ const listResourcesByOwner = `-- name: ListResourcesByOwner :many
 SELECT id, name, mime_type, size, checksum, ocr_text, is_folder, parent_resource_id, owner_id, created_at, updated_at FROM resources
 WHERE owner_id = $1 AND parent_resource_id IS NULL
 ORDER BY created_at DESC
+LIMIT $2 OFFSET $3
 `
 
-func (q *Queries) ListResourcesByOwner(ctx context.Context, ownerID uuid.UUID) ([]Resource, error) {
-	rows, err := q.db.QueryContext(ctx, listResourcesByOwner, ownerID)
+type ListResourcesByOwnerParams struct {
+	OwnerID uuid.UUID `json:"owner_id"`
+	Limit   int32     `json:"limit"`
+	Offset  int32     `json:"offset"`
+}
+
+func (q *Queries) ListResourcesByOwner(ctx context.Context, arg ListResourcesByOwnerParams) ([]Resource, error) {
+	rows, err := q.db.QueryContext(ctx, listResourcesByOwner, arg.OwnerID, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}
@@ -364,15 +400,23 @@ const listResourcesByParentAndOwner = `-- name: ListResourcesByParentAndOwner :m
 SELECT id, name, mime_type, size, checksum, ocr_text, is_folder, parent_resource_id, owner_id, created_at, updated_at FROM resources
 WHERE parent_resource_id = $1 AND owner_id = $2
 ORDER BY is_folder DESC, created_at DESC
+LIMIT $3 OFFSET $4
 `
 
 type ListResourcesByParentAndOwnerParams struct {
 	ParentResourceID uuid.NullUUID `json:"parent_resource_id"`
 	OwnerID          uuid.UUID     `json:"owner_id"`
+	Limit            int32         `json:"limit"`
+	Offset           int32         `json:"offset"`
 }
 
 func (q *Queries) ListResourcesByParentAndOwner(ctx context.Context, arg ListResourcesByParentAndOwnerParams) ([]Resource, error) {
-	rows, err := q.db.QueryContext(ctx, listResourcesByParentAndOwner, arg.ParentResourceID, arg.OwnerID)
+	rows, err := q.db.QueryContext(ctx, listResourcesByParentAndOwner,
+		arg.ParentResourceID,
+		arg.OwnerID,
+		arg.Limit,
+		arg.Offset,
+	)
 	if err != nil {
 		return nil, err
 	}

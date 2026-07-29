@@ -22,6 +22,7 @@ import { deleteAsync } from 'expo-file-system/legacy';
 const NUM_COLUMNS = 3;
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const ITEM_SIZE = (SCREEN_WIDTH - 16 * 2 - (NUM_COLUMNS - 1) * 6) / NUM_COLUMNS;
+const PAGE_SIZE = 100;
 
 type RootStackParamList = {
   Folder: { folderId: string; folderName: string };
@@ -75,7 +76,8 @@ export function FolderScreen() {
   const route = useRoute<FolderRouteProp>();
   const navigation = useNavigation<NavigationProp>();
   const { folderId, folderName } = route.params;
-  const { data, isLoading } = useFiles(folderId);
+  const [page, setPage] = useState(1);
+  const { data, isLoading, isFetching } = useFiles(folderId, page, PAGE_SIZE);
   const deleteFile = useDeleteFile();
   const freeLocalSpace = useFreeLocalSpace();
   const queryClient = useQueryClient();
@@ -86,6 +88,17 @@ export function FolderScreen() {
   const createFolder = useCreateFolder();
   const { data: foldersData } = useFolders();
   const insets = useSafeAreaInsets();
+
+  const loadMore = useCallback(() => {
+    if (isFetching) return;
+    const total = data?.meta?.total ?? 0;
+    const loaded = data?.data?.length ?? 0;
+    if (loaded < total) {
+      setPage((p) => p + 1);
+    }
+  }, [isFetching, data?.meta?.total, data?.data?.length]);
+
+  const hasMore = (data?.data?.length ?? 0) > 0 && (data?.data?.length ?? 0) < (data?.meta?.total ?? 0);
 
   const [tagModalVisible, setTagModalVisible] = useState(false);
   const [tagModalMode, setTagModalMode] = useState<'tag' | 'folder'>('tag');
@@ -246,11 +259,24 @@ export function FolderScreen() {
         data={files}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.list}
+        onEndReached={loadMore}
+        onEndReachedThreshold={0.5}
         ListEmptyComponent={
           <View style={styles.empty}>
             <MaterialIcons name="folder-open" size={48} color="#ccc" />
             <Text style={styles.emptyText}>Dossier vide</Text>
           </View>
+        }
+        ListFooterComponent={
+          isFetching ? (
+            <View style={styles.footer}>
+              <Text style={styles.footerText}>Chargement...</Text>
+            </View>
+          ) : hasMore ? (
+            <TouchableOpacity style={styles.footer} onPress={loadMore}>
+              <Text style={styles.footerLink}>Charger plus</Text>
+            </TouchableOpacity>
+          ) : null
         }
         renderItem={({ item: file }) => (
           <FolderGridItem
@@ -495,5 +521,18 @@ const styles = StyleSheet.create({
   folderOptionText: {
     fontSize: 16,
     color: '#333',
+  },
+  footer: {
+    paddingVertical: 20,
+    alignItems: 'center',
+  },
+  footerText: {
+    fontSize: 14,
+    color: '#999',
+  },
+  footerLink: {
+    fontSize: 14,
+    color: '#1976D2',
+    fontWeight: '600',
   },
 });

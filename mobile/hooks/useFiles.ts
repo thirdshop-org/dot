@@ -39,15 +39,15 @@ function recordsToUnifiedItems(records: ReturnType<typeof fileStore.getRootFiles
 
 export function useFiles(parentId?: string | null, page: number = 1, limit: number = 100) {
   const queryKey = parentId
-    ? ['resources', parentId]
+    ? ['resources', parentId, page, limit]
     : ['resources', 'root', page, limit];
 
   return useQuery({
     queryKey,
     queryFn: async () => {
       if (parentId) {
-        const backendRes = await apiClient.get<{ data: FileItem[] }>(
-          `${ENDPOINTS.RESOURCES}/folders/${parentId}/resources?thumbnail=thumbnail_small`,
+        const backendRes = await apiClient.get<PaginatedResponse<FileItem>>(
+          `${ENDPOINTS.RESOURCES}/folders/${parentId}/resources?page=${page}&limit=${limit}&thumbnail=thumbnail_small`,
         );
         fileStore.mergeFromBackend(
           backendRes.data.map((f) => ({
@@ -69,7 +69,7 @@ export function useFiles(parentId?: string | null, page: number = 1, limit: numb
         const children = fileStore.getChildrenByParent(parentId);
         return {
           data: children.map((r) => recordToUnifiedItem(r)!).filter(Boolean),
-          meta: { page: 0, total: children.length },
+          meta: { page, total: backendRes.meta?.total ?? children.length },
         };
       }
 

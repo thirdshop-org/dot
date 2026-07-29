@@ -147,22 +147,33 @@ func (s *ResourceService) ensureServerPlacementQtx(q *db.Queries, resourceID, ow
 	return placement, nil
 }
 
-func (s *ResourceService) List(ownerID string) ([]model.Resource, error) {
+func (s *ResourceService) List(ownerID string, page, limit int) ([]model.Resource, int, error) {
 	ownerUUID, _ := uuid.Parse(ownerID)
-	dbResources, err := s.queries.ListResourcesByOwner(context.Background(), ownerUUID)
+
+	total, err := s.queries.CountResourcesByOwner(context.Background(), ownerUUID)
 	if err != nil {
-		return nil, fmt.Errorf("list resources: %w", err)
+		return nil, 0, fmt.Errorf("count resources: %w", err)
+	}
+
+	offset := (page - 1) * limit
+	dbResources, err := s.queries.ListResourcesByOwner(context.Background(), db.ListResourcesByOwnerParams{
+		OwnerID: ownerUUID,
+		Limit:   int32(limit),
+		Offset:  int32(offset),
+	})
+	if err != nil {
+		return nil, 0, fmt.Errorf("list resources: %w", err)
 	}
 
 	resources := make([]model.Resource, len(dbResources))
 	for i, r := range dbResources {
 		tags, err := s.queries.GetTagsByResourceID(context.Background(), r.ID)
 		if err != nil {
-			return nil, fmt.Errorf("get tags for resource %s: %w", r.ID, err)
+			return nil, 0, fmt.Errorf("get tags for resource %s: %w", r.ID, err)
 		}
 		resources[i] = dbResourceToModel(r, tags)
 	}
-	return resources, nil
+	return resources, int(total), nil
 }
 
 func (s *ResourceService) Get(id string) (*model.Resource, error) {
@@ -309,25 +320,37 @@ func (s *ResourceService) ListFolders(ownerID string) ([]model.Resource, error) 
 	return folders, nil
 }
 
-func (s *ResourceService) ListResourcesByParentID(parentID, ownerID string) ([]model.Resource, error) {
+func (s *ResourceService) ListResourcesByParentID(parentID, ownerID string, page, limit int) ([]model.Resource, int, error) {
 	parentUUID, _ := uuid.Parse(parentID)
 	ownerUUID, _ := uuid.Parse(ownerID)
-	dbResources, err := s.queries.ListResourcesByParentAndOwner(context.Background(), db.ListResourcesByParentAndOwnerParams{
+
+	total, err := s.queries.CountResourcesByParentAndOwner(context.Background(), db.CountResourcesByParentAndOwnerParams{
 		ParentResourceID: uuid.NullUUID{UUID: parentUUID, Valid: true},
 		OwnerID:          ownerUUID,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("list resources by parent: %w", err)
+		return nil, 0, fmt.Errorf("count resources by parent: %w", err)
+	}
+
+	offset := (page - 1) * limit
+	dbResources, err := s.queries.ListResourcesByParentAndOwner(context.Background(), db.ListResourcesByParentAndOwnerParams{
+		ParentResourceID: uuid.NullUUID{UUID: parentUUID, Valid: true},
+		OwnerID:          ownerUUID,
+		Limit:            int32(limit),
+		Offset:           int32(offset),
+	})
+	if err != nil {
+		return nil, 0, fmt.Errorf("list resources by parent: %w", err)
 	}
 	resources := make([]model.Resource, len(dbResources))
 	for i, r := range dbResources {
 		tags, err := s.queries.GetTagsByResourceID(context.Background(), r.ID)
 		if err != nil {
-			return nil, fmt.Errorf("get tags for resource %s: %w", r.ID, err)
+			return nil, 0, fmt.Errorf("get tags for resource %s: %w", r.ID, err)
 		}
 		resources[i] = dbResourceToModel(r, tags)
 	}
-	return resources, nil
+	return resources, int(total), nil
 }
 
 func (s *ResourceService) GetVariantsByResourceID(resourceID string) ([]model.Variant, error) {
