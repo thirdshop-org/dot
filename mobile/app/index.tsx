@@ -4,15 +4,17 @@ import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useDeleteFile, useAddTags, useMoveResources, useFolders, useFiles, useFreeLocalSpace } from '../hooks/useFiles';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { useAddTags, useMoveResources, useFolders, useFiles, useFreeLocalSpace } from '../hooks/useFiles';
 import { UnifiedFileItem, isFolder } from '../types';
-import { SearchBar, SearchFilters } from '../components/SearchBar';
+import { SearchBar, SearchFilters, MediaFilter } from '../components/SearchBar';
 import { FileThumbnail } from '../components/FileThumbnail';
 import { SettingsModal } from '../components/SettingsModal';
+import { UploadModal } from '../components/UploadModal';
 import { SyncStatusIcon } from '../components/SyncStatusIcon';
 import { useSyncQueue } from '../hooks/useSyncQueue';
 import { useAutoSync } from '../hooks/useAutoSync';
-import { safDirectory, StoredFolder, SyncMode, SyncGlobalMode } from '../services/safDirectory';
+import { safDirectory, SyncMode, SyncGlobalMode } from '../services/safDirectory';
 import { fileStore } from '../services/fileStore';
 import { downloadRegistry } from '../services/downloadRegistry';
 import { useQueryClient } from '@tanstack/react-query';
@@ -22,9 +24,9 @@ import { useLocalFiles } from '../hooks/useLocalFiles';
 import { deleteAsync } from 'expo-file-system/legacy';
 import { useDebounce } from '../hooks/useDebounce';
 
-const NUM_COLUMNS = 3;
 const SCREEN_WIDTH = Dimensions.get('window').width;
-const ITEM_SIZE = (SCREEN_WIDTH - 16 * 2 - (NUM_COLUMNS - 1) * 6) / NUM_COLUMNS;
+const PADDING_H = 15;
+const ITEM_GAP = 6;
 
 type RootStackParamList = {
   Home: undefined;
@@ -38,8 +40,6 @@ type RootStackParamList = {
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
-type GroupedFiles = Record<string, UnifiedFileItem[]>;
-
 function parseBackendDate(dateStr: string): Date | null {
   if (!dateStr) return null;
   const match = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})/);
@@ -47,53 +47,10 @@ function parseBackendDate(dateStr: string): Date | null {
   return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]), Number(match[4]), Number(match[5]), Number(match[6]));
 }
 
-function groupByDate(files: UnifiedFileItem[]): GroupedFiles {
-  const groups: GroupedFiles = {};
-  for (const file of files) {
-    const d = parseBackendDate(file.createdAt);
-    if (!d) continue;
-    const key = d.toLocaleDateString('fr-FR', {
-      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-    });
-    if (!groups[key]) groups[key] = [];
-    groups[key].push(file);
-  }
-  return groups;
-}
-
-function groupByTag(files: UnifiedFileItem[]): GroupedFiles {
-  const groups: GroupedFiles = {};
-  for (const file of files) {
-    const tags = file.tags ?? [];
-    if (tags.length === 0) {
-      if (!groups['Sans tag']) groups['Sans tag'] = [];
-      groups['Sans tag'].push(file);
-    } else {
-      for (const tag of tags) {
-        const name = typeof tag === 'string' ? tag : tag.tag_name;
-        if (!name) continue;
-        if (!groups[name]) groups[name] = [];
-        groups[name].push(file);
-      }
-    }
-  }
-  return groups;
-}
-
-function formatDateLabel(key: string): string {
-  const d = new Date();
-  const today = d.toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-  d.setDate(d.getDate() - 1);
-  const yesterday = d.toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-  if (key === today) return "Aujourd'hui";
-  if (key === yesterday) return 'Hier';
-  return key.charAt(0).toUpperCase() + key.slice(1);
-}
-
-const FileGridItem = React.memo(function FileGridItem({ file, onPress, onLongPress, selected }: { file: UnifiedFileItem; onPress?: (f: UnifiedFileItem) => void; onLongPress?: (f: UnifiedFileItem) => void; selected?: boolean }) {
+const FileGridItem = React.memo(function FileGridItem({ file, size, onPress, onLongPress, selected }: { file: UnifiedFileItem; size: number; onPress?: (f: UnifiedFileItem) => void; onLongPress?: (f: UnifiedFileItem) => void; selected?: boolean }) {
   return (
     <TouchableOpacity
-      style={[styles.gridItem, selected && styles.gridItemSelected]}
+      style={[styles.gridItem, { width: size }, selected && styles.gridItemSelected]}
       onPress={() => onPress?.(file)}
       onLongPress={() => onLongPress?.(file)}
       delayLongPress={400}
@@ -104,7 +61,7 @@ const FileGridItem = React.memo(function FileGridItem({ file, onPress, onLongPre
         thumbnailUrl={file.thumbnailUrl}
         mimeType={file.mimeType}
         fileName={file.name}
-        size={ITEM_SIZE}
+        size={size}
         syncStatus={file.syncStatus}
       />
       {selected && (
@@ -114,29 +71,7 @@ const FileGridItem = React.memo(function FileGridItem({ file, onPress, onLongPre
           </View>
         </View>
       )}
-      <Text style={styles.fileName} numberOfLines={1}>{file.name}</Text>
     </TouchableOpacity>
-  );
-});
-
-const FileGroup = React.memo(function FileGroup({ groupFiles, selectedIds, onItemPress, onItemLongPress }: {
-  groupFiles: UnifiedFileItem[];
-  selectedIds: Set<string>;
-  onItemPress: (file: UnifiedFileItem) => void;
-  onItemLongPress: (file: UnifiedFileItem) => void;
-}) {
-  return (
-    <View style={styles.grid}>
-      {groupFiles.map((file) => (
-        <FileGridItem
-          key={file.id}
-          file={file}
-          selected={selectedIds.has(file.id)}
-          onPress={onItemPress}
-          onLongPress={onItemLongPress}
-        />
-      ))}
-    </View>
   );
 });
 
@@ -145,17 +80,9 @@ function matchesQuery(file: UnifiedFileItem, query: string, filters: SearchFilte
   const q = query.toLowerCase();
   if (filters.name && file.name.toLowerCase().includes(q)) return true;
   if (filters.ocrText && file.ocrText?.toLowerCase().includes(q)) return true;
-  if (filters.tags && file.tags?.some((t) => {
-    const tagName = typeof t === 'string' ? t : t.tag_name;
-    return tagName?.toLowerCase().includes(q);
-  })) return true;
-  if (!filters.name && !filters.ocrText && !filters.tags) {
+  if (!filters.name && !filters.ocrText) {
     if (file.name.toLowerCase().includes(q)) return true;
     if (file.ocrText?.toLowerCase().includes(q)) return true;
-    if (file.tags?.some((t) => {
-      const tagName = typeof t === 'string' ? t : t.tag_name;
-      return tagName?.toLowerCase().includes(q);
-    })) return true;
   }
   return false;
 }
@@ -168,15 +95,15 @@ export function HomeScreen() {
   const [page, setPage] = useState(1);
   const { data, isLoading, error, isFetching, refetch } = useFiles(null, page, PAGE_SIZE);
   const { hasPermission, requestPermission, pickDirectory, folders, refreshFolders } = useLocalFiles();
-  const deleteFile = useDeleteFile();
   const freeLocalSpace = useFreeLocalSpace();
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
   const debouncedSearch = useDebounce(searchQuery, 250);
-  const [filters, setFilters] = useState<SearchFilters>({ name: true, ocrText: true, tags: true });
+  const [filters, setFilters] = useState<SearchFilters>({ name: true, ocrText: true });
+  const [mediaFilter, setMediaFilter] = useState<MediaFilter>('all');
   const [keyboardOpen, setKeyboardOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [groupByTags, setGroupByTags] = useState(false);
+  const [numColumns, setNumColumns] = useState(3);
   const [tagModalVisible, setTagModalVisible] = useState(false);
   const [tagModalMode, setTagModalMode] = useState<'tag' | 'folder'>('tag');
   const [tagInput, setTagInput] = useState('');
@@ -185,10 +112,17 @@ export function HomeScreen() {
   const { data: foldersData } = useFolders();
   const [moveModalVisible, setMoveModalVisible] = useState(false);
   const [settingsModalVisible, setSettingsModalVisible] = useState(false);
+  const [uploadModalVisible, setUploadModalVisible] = useState(false);
   const [globalSyncMode, setGlobalSyncMode] = useState<SyncGlobalMode>(() => safDirectory.getGlobalSyncMode());
   const [globalSyncCellular, setGlobalSyncCellular] = useState(() => safDirectory.getGlobalSyncCellular());
   const { pendingCount, isSyncing } = useSyncQueue();
   useAutoSync();
+
+  const handleUploadComplete = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ['resources'] });
+  }, [queryClient]);
+
+  const itemSize = (SCREEN_WIDTH - PADDING_H * 2 - (numColumns - 1) * ITEM_GAP) / numColumns;
 
   const loadMore = useCallback(() => {
     if (isFetching) return;
@@ -223,6 +157,9 @@ export function HomeScreen() {
             pendingCount={pendingCount}
             onPress={() => navigation.navigate('SyncDetail')}
           />
+          <TouchableOpacity onPress={() => setUploadModalVisible(true)} style={{ padding: 8 }}>
+            <MaterialIcons name="add-circle-outline" size={22} color="#1976D2" />
+          </TouchableOpacity>
           <TouchableOpacity onPress={() => setSettingsModalVisible(true)} style={{ marginRight: 4, padding: 8 }}>
             <MaterialIcons name="settings" size={22} color="#666" />
           </TouchableOpacity>
@@ -240,18 +177,42 @@ export function HomeScreen() {
     [files, debouncedSearch, filters]
   );
 
-  const groups = useMemo(
-    () => groupByTags ? groupByTag(filteredFiles) : groupByDate(filteredFiles),
-    [filteredFiles, groupByTags]
-  );
+  const mediaFilteredFiles = useMemo(() => {
+    if (mediaFilter === 'all') return filteredFiles;
+    return filteredFiles.filter((f) => {
+      const mt = (f.mimeType ?? '').toLowerCase();
+      if (mediaFilter === 'documents') return mt.startsWith('application/') || mt.startsWith('text/');
+      if (mediaFilter === 'photos-videos') return mt.startsWith('image/') || mt.startsWith('video/');
+      return true;
+    });
+  }, [filteredFiles, mediaFilter]);
 
-  const groupKeys = useMemo(() => Object.keys(groups), [groups]);
+  const sortedFiles = useMemo(() =>
+    [...mediaFilteredFiles].sort((a, b) => {
+      const da = parseBackendDate(a.createdAt);
+      const db = parseBackendDate(b.createdAt);
+      return (db?.getTime() ?? 0) - (da?.getTime() ?? 0);
+    }),
+    [mediaFilteredFiles]
+  );
 
   const fileIdToIndex = useMemo(() => {
     const map = new Map<string, number>();
-    filteredFiles.forEach((f, i) => map.set(f.id, i));
+    sortedFiles.forEach((f, i) => map.set(f.id, i));
     return map;
-  }, [filteredFiles]);
+  }, [sortedFiles]);
+
+  const pinchGesture = useMemo(() =>
+    Gesture.Pinch()
+      .onEnd((event) => {
+        if (event.scale > 1.2) {
+          setNumColumns(prev => Math.max(2, prev - 1));
+        } else if (event.scale < 0.8) {
+          setNumColumns(prev => Math.min(6, prev + 1));
+        }
+      }),
+    []
+  );
 
   const toggleSelection = useCallback((id: string) => {
     setSelectedIds((prev) => {
@@ -314,7 +275,7 @@ export function HomeScreen() {
       },
     });
     Alert.alert('Supprimer', `Supprimer ${label} ?`, options);
-  }, [selectedIds, files, deleteFile, freeLocalSpace, queryClient]);
+  }, [selectedIds, files, freeLocalSpace, queryClient]);
 
   const handleEdit = useCallback(() => {
     const ids = Array.from(selectedIds);
@@ -402,18 +363,18 @@ export function HomeScreen() {
       navigation.navigate('Folder', { folderId: file.id, folderName: file.name });
     } else {
       const deviceFilesMap: Record<string, { localUri: string; name: string; mimeType: string; createdAt: string }> = {};
-      for (const f of filteredFiles) {
+      for (const f of sortedFiles) {
         if (f.isDeviceFile && f.localUri) {
           deviceFilesMap[f.id] = { localUri: f.localUri, name: f.name, mimeType: f.mimeType, createdAt: f.createdAt };
         }
       }
       navigation.navigate('FileDetail', {
-        fileIds: filteredFiles.map((f) => f.id),
+        fileIds: sortedFiles.map((f) => f.id),
         initialIndex: fileIdToIndex.get(file.id) ?? 0,
         deviceFiles: Object.keys(deviceFilesMap).length > 0 ? deviceFilesMap : undefined,
       });
     }
-  }, [selectionMode, toggleSelection, navigation, filteredFiles, fileIdToIndex]);
+  }, [selectionMode, toggleSelection, navigation, sortedFiles, fileIdToIndex]);
 
   const handleItemLongPress = useCallback((file: UnifiedFileItem) => {
     if (!selectionMode) {
@@ -421,26 +382,15 @@ export function HomeScreen() {
     }
   }, [selectionMode, toggleSelection]);
 
-  const renderSection = useCallback(({ item: groupKey }: { item: string }) => {
-    const groupFiles = groups[groupKey];
-    if (!groupFiles) return null;
-    const label = groupByTags ? groupKey : formatDateLabel(groupKey);
-    return (
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          {groupByTags && <MaterialIcons name="label" size={16} color="#1976D2" style={styles.sectionIcon} />}
-          <Text style={styles.sectionTitle}>{label}</Text>
-          <Text style={styles.sectionCount}>{groupFiles.length}</Text>
-        </View>
-        <FileGroup
-          groupFiles={groupFiles}
-          selectedIds={selectedIds}
-          onItemPress={handleItemPress}
-          onItemLongPress={handleItemLongPress}
-        />
-      </View>
-    );
-  }, [groups, groupByTags, selectedIds, handleItemPress, handleItemLongPress]);
+  const renderItem = useCallback(({ item }: { item: UnifiedFileItem }) => (
+    <FileGridItem
+      file={item}
+      size={itemSize}
+      selected={selectedIds.has(item.id)}
+      onPress={handleItemPress}
+      onLongPress={handleItemLongPress}
+    />
+  ), [itemSize, selectedIds, handleItemPress, handleItemLongPress]);
 
   if (isLoading) {
     return (
@@ -495,46 +445,52 @@ export function HomeScreen() {
           </Text>
         </TouchableOpacity>
       )}
-      <FlatList
-        data={groupKeys}
-        keyExtractor={(item) => item}
-        contentContainerStyle={styles.list}
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
-        refreshControl={
-          <RefreshControl
-            refreshing={isFetching && page === 1}
-            onRefresh={onRefresh}
-            tintColor="#1976D2"
-            colors={['#1976D2']}
-          />
-        }
-        onEndReached={loadMore}
-        onEndReachedThreshold={0.5}
-        ListFooterComponent={
-          hasMore ? (
-            <TouchableOpacity style={styles.loadMoreBtn} onPress={loadMore} disabled={isFetching}>
-              {isFetching ? (
-                <ActivityIndicator size="small" color="#1976D2" />
-              ) : (
-                <Text style={styles.loadMoreText}>
-                  Charger plus ({loadedFiles}/{totalFiles})
+      <GestureDetector gesture={pinchGesture}>
+        <View style={styles.listWrapper}>
+          <FlatList
+            data={sortedFiles}
+            keyExtractor={(item) => item.id}
+            numColumns={numColumns}
+            columnWrapperStyle={{ gap: ITEM_GAP }}
+            contentContainerStyle={styles.list}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+            refreshControl={
+              <RefreshControl
+                refreshing={isFetching && page === 1}
+                onRefresh={onRefresh}
+                tintColor="#1976D2"
+                colors={['#1976D2']}
+              />
+            }
+            onEndReached={loadMore}
+            onEndReachedThreshold={0.5}
+            ListFooterComponent={
+              hasMore ? (
+                <TouchableOpacity style={styles.loadMoreBtn} onPress={loadMore} disabled={isFetching}>
+                  {isFetching ? (
+                    <ActivityIndicator size="small" color="#1976D2" />
+                  ) : (
+                    <Text style={styles.loadMoreText}>
+                      Charger plus ({loadedFiles}/{totalFiles})
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              ) : loadedFiles > 0 ? (
+                <Text style={styles.loadedAllText}>{loadedFiles} fichier{loadedFiles > 1 ? 's' : ''}</Text>
+              ) : null
+            }
+            ListEmptyComponent={
+              <View style={styles.empty}>
+                <Text style={styles.emptyText}>
+                  {debouncedSearch ? 'Aucun résultat' : 'Aucun fichier'}
                 </Text>
-              )}
-            </TouchableOpacity>
-          ) : loadedFiles > 0 ? (
-            <Text style={styles.loadedAllText}>{loadedFiles} fichier{loadedFiles > 1 ? 's' : ''}</Text>
-          ) : null
-        }
-        ListEmptyComponent={
-          <View style={styles.empty}>
-            <Text style={styles.emptyText}>
-              {debouncedSearch ? 'Aucun résultat' : 'Aucun fichier'}
-            </Text>
-          </View>
-        }
-        renderItem={renderSection}
-      />
+              </View>
+            }
+            renderItem={renderItem}
+          />
+        </View>
+      </GestureDetector>
 
       {!selectionMode && (
         <SearchBar
@@ -543,8 +499,8 @@ export function HomeScreen() {
           onClear={() => setSearchQuery('')}
           filters={filters}
           onFiltersChange={setFilters}
-          groupByTags={groupByTags}
-          onGroupToggle={() => setGroupByTags(!groupByTags)}
+          mediaFilter={mediaFilter}
+          onMediaFilterChange={setMediaFilter}
           bottomPadding={keyboardOpen ? insets.bottom+8 : 0}
         />
       )}
@@ -613,14 +569,6 @@ export function HomeScreen() {
 
           <TouchableOpacity
             style={styles.navButton}
-            onPress={() => navigation.navigate('Upload')}
-          >
-            <MaterialIcons name="cloud-upload" size={24} color="#1976D2" />
-            <Text style={styles.navText}>Upload</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.navButton}
             onPress={() => navigation.navigate('Scan')}
           >
             <MaterialIcons name="document-scanner" size={24} color="#1976D2" />
@@ -685,6 +633,12 @@ export function HomeScreen() {
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
+
+      <UploadModal
+        visible={uploadModalVisible}
+        onClose={() => setUploadModalVisible(false)}
+        onUploadComplete={handleUploadComplete}
+      />
 
       <SettingsModal
         visible={settingsModalVisible}
@@ -770,8 +724,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
   },
+  listWrapper: {
+    flex: 1,
+  },
   list: {
-    padding: 15,
+    padding: PADDING_H,
     paddingBottom: 80,
   },
   empty: {
@@ -782,35 +739,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#999',
   },
-  section: {
-    marginBottom: 24,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#333',
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-    gap: 6,
-  },
-  sectionIcon: {
-    marginTop: 2,
-  },
-  sectionCount: {
-    fontSize: 14,
-    color: '#999',
-    fontWeight: '400',
-  },
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
   gridItem: {
-    width: ITEM_SIZE,
+    marginBottom: ITEM_GAP,
   },
   gridItemSelected: {
     opacity: 0.85,
@@ -820,7 +750,7 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    bottom: 18,
+    bottom: 0,
     justifyContent: 'flex-start',
     alignItems: 'flex-end',
     padding: 4,
@@ -832,12 +762,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#1976D2',
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  fileName: {
-    fontSize: 11,
-    color: '#666',
-    marginTop: 4,
-    textAlign: 'center',
   },
   bottomNav: {
     flexDirection: 'row',

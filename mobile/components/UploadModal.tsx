@@ -1,13 +1,20 @@
-import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import React, { useState, useCallback, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, Alert } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { useUpload, UploadFile } from '../hooks/useUpload';
 import { usePollOcr } from '../hooks/usePollOcr';
-import { UploadProgress } from '../components/UploadProgress';
-import { UploadError, HttpError } from '../types';
+import { UploadProgress } from './UploadProgress';
+import { UploadError } from '../types';
 import { apiClient } from '../api/client';
 import { ENDPOINTS } from '../constants/api';
+
+interface UploadModalProps {
+  visible: boolean;
+  onClose: () => void;
+  onUploadComplete?: () => void;
+}
 
 function getUploadErrorMessage(err: UploadError): string {
   switch (err.status) {
@@ -26,13 +33,15 @@ function getUploadErrorMessage(err: UploadError): string {
   }
 }
 
-export function UploadScreen() {
-  const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'processing' | 'success' | 'error'>('idle');
+export function UploadModal({ visible, onClose, onUploadComplete }: UploadModalProps) {
+  const [status, setStatus] = useState<'idle' | 'uploading' | 'processing' | 'success' | 'error'>('idle');
   const [error, setError] = useState<string>();
   const [uploadedCount, setUploadedCount] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
   const upload = useUpload();
   const { pollOcr } = usePollOcr();
+
+  const canClose = status === 'idle' || status === 'success' || status === 'error';
 
   const checkDupBeforeUpload = useCallback(async (files: UploadFile[]): Promise<UploadFile[]> => {
     const toUpload: UploadFile[] = [];
@@ -68,7 +77,7 @@ export function UploadScreen() {
   }, []);
 
   const doUpload = async (files: UploadFile[]) => {
-    setUploadStatus('uploading');
+    setStatus('uploading');
     setUploadedCount(0);
     setTotalCount(files.length);
     setError(undefined);
@@ -76,7 +85,7 @@ export function UploadScreen() {
     try {
       const deduped = await checkDupBeforeUpload(files);
       if (deduped.length === 0) {
-        setUploadStatus('success');
+        setStatus('success');
         setUploadedCount(files.length);
         return;
       }
@@ -86,7 +95,7 @@ export function UploadScreen() {
       setUploadedCount(response.uploaded.length);
 
       if (response.uploaded.length > 0) {
-        setUploadStatus('processing');
+        setStatus('processing');
         const results = await Promise.allSettled(
           response.uploaded.map((f) => pollOcr(f.id)),
         );
@@ -94,21 +103,21 @@ export function UploadScreen() {
           (r) => r.status === 'fulfilled' && r.value.status === 'completed',
         ).length;
         if (completed > 0) {
-          setUploadStatus('success');
+          setStatus('success');
         }
       }
 
       if (response.errors.length > 0) {
-        setUploadStatus('error');
+        setStatus('error');
         const messages = response.errors.map((e) => getUploadErrorMessage(e));
         setError(
           `${response.uploaded.length}/${totalCount} uploadés.\n${messages.join('\n')}`
         );
       } else {
-        setUploadStatus('success');
+        setStatus('success');
       }
     } catch (err) {
-      setUploadStatus('error');
+      setStatus('error');
       if (err instanceof UploadError) {
         setError(getUploadErrorMessage(err));
       } else if (err instanceof Error) {
@@ -121,8 +130,8 @@ export function UploadScreen() {
 
   const pickImages = async () => {
     try {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
+      const { status: perm } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (perm !== 'granted') {
         Alert.alert('Permission requise', "L'accès à la galerie est nécessaire pour sélectionner des photos.");
         return;
       }
@@ -168,46 +177,143 @@ export function UploadScreen() {
     }
   };
 
+  const handleClose = useCallback(() => {
+    if (!canClose) return;
+    setStatus('idle');
+    setError(undefined);
+    setUploadedCount(0);
+    setTotalCount(0);
+    if (status === 'success') {
+      onUploadComplete?.();
+    }
+    onClose();
+  }, [canClose, status, onClose, onUploadComplete]);
+
+  useEffect(() => {
+    if (status === 'success') {
+      const timer = setTimeout(() => {
+        setStatus('idle');
+        setError(undefined);
+        setUploadedCount(0);
+        setTotalCount(0);
+        onUploadComplete?.();
+        onClose();
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [status, onClose, onUploadComplete]);
+
   return (
-    <View style={styles.container}>
-      <UploadProgress
-        status={uploadStatus}
-        error={error}
-        uploadedCount={uploadedCount}
-        totalCount={totalCount}
-      />
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={handleClose}
+    >
+      <TouchableOpacity
+        style={styles.overlay}
+        activeOpacity={1}
+        onPress={canClose ? handleClose : undefined}
+      >
+        <TouchableOpacity activeOpacity={1} style={styles.container} onPress={() => {}}>
+          <View style={styles.handle} />
 
-      <TouchableOpacity style={styles.uploadButton} onPress={pickImages}>
-        <Text style={styles.uploadText}>Sélectionner des photos</Text>
-      </TouchableOpacity>
+          <View style={styles.header}>
+            <Text style={styles.title}>Ajouter des fichiers</Text>
+            {canClose && (
+              <TouchableOpacity onPress={handleClose} style={styles.closeBtn}>
+                <MaterialIcons name="close" size={22} color="#999" />
+              </TouchableOpacity>
+            )}
+          </View>
 
-      <TouchableOpacity style={styles.docButton} onPress={pickDocuments}>
-        <Text style={styles.uploadText}>Sélectionner des documents</Text>
+          <UploadProgress
+            status={status}
+            error={error}
+            uploadedCount={uploadedCount}
+            totalCount={totalCount}
+          />
+
+          <TouchableOpacity
+            style={styles.photoButton}
+            onPress={pickImages}
+            disabled={status === 'uploading' || status === 'processing'}
+          >
+            <MaterialIcons name="photo-library" size={20} color="#fff" />
+            <Text style={styles.buttonText}>Sélectionner des photos</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.docButton}
+            onPress={pickDocuments}
+            disabled={status === 'uploading' || status === 'processing'}
+          >
+            <MaterialIcons name="description" size={20} color="#fff" />
+            <Text style={styles.buttonText}>Sélectionner des documents</Text>
+          </TouchableOpacity>
+        </TouchableOpacity>
       </TouchableOpacity>
-    </View>
+    </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  overlay: {
     flex: 1,
-    padding: 16,
-    backgroundColor: '#fff',
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  uploadButton: {
+  container: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 20,
+    width: '85%',
+  },
+  handle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#ddd',
+    alignSelf: 'center',
+    marginBottom: 16,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  title: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#333',
+  },
+  closeBtn: {
+    padding: 4,
+  },
+  photoButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#1976D2',
     padding: 16,
     borderRadius: 8,
-    alignItems: 'center',
     marginBottom: 12,
+    gap: 8,
   },
   docButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#4CAF50',
     padding: 16,
     borderRadius: 8,
-    alignItems: 'center',
+    gap: 8,
   },
-  uploadText: {
+  buttonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',

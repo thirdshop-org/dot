@@ -8,8 +8,9 @@ type IconName = ComponentProps<typeof MaterialIcons>['name'];
 export interface SearchFilters {
   name: boolean;
   ocrText: boolean;
-  tags: boolean;
 }
+
+export type MediaFilter = 'all' | 'documents' | 'photos-videos';
 
 interface SearchBarProps {
   query: string;
@@ -17,18 +18,41 @@ interface SearchBarProps {
   onClear: () => void;
   filters: SearchFilters;
   onFiltersChange: (f: SearchFilters) => void;
-  groupByTags: boolean;
-  onGroupToggle: () => void;
+  mediaFilter: MediaFilter;
+  onMediaFilterChange: (f: MediaFilter) => void;
   bottomPadding?: number;
 }
 
 const FILTER_OPTIONS: { key: keyof SearchFilters; label: string; icon: IconName }[] = [
   { key: 'name', label: 'Nom', icon: 'drive-file-rename-outline' },
   { key: 'ocrText', label: 'Texte OCR', icon: 'document-scanner' },
-  { key: 'tags', label: 'Tags', icon: 'label-outline' },
 ];
 
-export function SearchBar({ query, onQueryChange, onClear, filters, onFiltersChange, groupByTags, onGroupToggle, bottomPadding = 0 }: SearchBarProps) {
+const MEDIA_OPTIONS: { key: MediaFilter; label: string; icon: IconName }[] = [
+  { key: 'all', label: 'Tous', icon: 'filter-none' },
+  { key: 'documents', label: 'Documents', icon: 'description' },
+  { key: 'photos-videos', label: 'Photos', icon: 'photo-library' },
+];
+
+const MEDIA_ICONS: Record<MediaFilter, IconName> = {
+  all: 'filter-none',
+  documents: 'description',
+  'photos-videos': 'photo-library',
+};
+
+const MEDIA_LABELS: Record<MediaFilter, string> = {
+  all: 'Tous',
+  documents: 'Documents',
+  'photos-videos': 'Photos',
+};
+
+function cycleMediaFilter(current: MediaFilter): MediaFilter {
+  if (current === 'all') return 'documents';
+  if (current === 'documents') return 'photos-videos';
+  return 'all';
+}
+
+export function SearchBar({ query, onQueryChange, onClear, filters, onFiltersChange, mediaFilter, onMediaFilterChange, bottomPadding = 0 }: SearchBarProps) {
   const animatedHeight = useRef(new Animated.Value(0)).current;
   const [panelOpen, setPanelOpen] = React.useState(false);
 
@@ -43,14 +67,14 @@ export function SearchBar({ query, onQueryChange, onClear, filters, onFiltersCha
 
   const panelMaxHeight = animatedHeight.interpolate({
     inputRange: [0, 1],
-    outputRange: [0, 100],
+    outputRange: [0, 120],
   });
 
   const toggleFilter = (key: keyof SearchFilters) => {
     onFiltersChange({ ...filters, [key]: !filters[key] });
   };
 
-  const hasActiveFilter = filters.name || filters.ocrText || filters.tags;
+  const hasActiveFilter = filters.name || filters.ocrText;
 
   return (
     <View style={[styles.wrapper, { paddingBottom: bottomPadding }]}>
@@ -74,7 +98,7 @@ export function SearchBar({ query, onQueryChange, onClear, filters, onFiltersCha
         </View>
 
         <TouchableOpacity
-          style={[styles.filterBtn, hasActiveFilter && styles.filterBtnActive]}
+          style={[styles.iconBtn, hasActiveFilter && styles.iconBtnActive]}
           onPress={() => setPanelOpen(!panelOpen)}
         >
           <MaterialIcons
@@ -85,13 +109,13 @@ export function SearchBar({ query, onQueryChange, onClear, filters, onFiltersCha
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.groupBtn, groupByTags && styles.groupBtnActive]}
-          onPress={onGroupToggle}
+          style={[styles.iconBtn, mediaFilter !== 'all' && styles.iconBtnActive]}
+          onPress={() => onMediaFilterChange(cycleMediaFilter(mediaFilter))}
         >
           <MaterialIcons
-            name="folder-special"
+            name={MEDIA_ICONS[mediaFilter]}
             size={22}
-            color={groupByTags ? '#fff' : '#1976D2'}
+            color={mediaFilter !== 'all' ? '#fff' : '#1976D2'}
           />
         </TouchableOpacity>
       </View>
@@ -109,6 +133,23 @@ export function SearchBar({ query, onQueryChange, onClear, filters, onFiltersCha
               color={filters[opt.key] ? '#fff' : '#1976D2'}
             />
             <Text style={[styles.filterChipText, filters[opt.key] && styles.filterChipTextActive]}>
+              {opt.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+        <View style={styles.mediaDivider} />
+        {MEDIA_OPTIONS.map((opt) => (
+          <TouchableOpacity
+            key={opt.key}
+            style={[styles.filterChip, mediaFilter === opt.key && styles.filterChipActive]}
+            onPress={() => onMediaFilterChange(opt.key)}
+          >
+            <MaterialIcons
+              name={opt.icon}
+              size={16}
+              color={mediaFilter === opt.key ? '#fff' : '#1976D2'}
+            />
+            <Text style={[styles.filterChipText, mediaFilter === opt.key && styles.filterChipTextActive]}>
               {opt.label}
             </Text>
           </TouchableOpacity>
@@ -151,7 +192,7 @@ const styles = StyleSheet.create({
   clearBtn: {
     padding: 4,
   },
-  filterBtn: {
+  iconBtn: {
     width: 40,
     height: 40,
     borderRadius: 10,
@@ -161,28 +202,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#fff',
   },
-  filterBtnActive: {
-    backgroundColor: '#1976D2',
-  },
-  groupBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#1976D2',
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-  },
-  groupBtnActive: {
+  iconBtnActive: {
     backgroundColor: '#1976D2',
   },
   filterPanel: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     paddingHorizontal: 12,
     paddingBottom: 10,
     gap: 8,
     overflow: 'hidden',
+  },
+  mediaDivider: {
+    width: '100%',
+    height: 1,
+    backgroundColor: '#e0e0e0',
+    marginVertical: 4,
   },
   filterChip: {
     flexDirection: 'row',

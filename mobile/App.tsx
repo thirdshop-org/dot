@@ -11,7 +11,6 @@ import { DeviceProvider, useDevice } from './contexts/DeviceContext';
 import { LoginScreen } from './app/login';
 import { RegisterScreen } from './app/register';
 import { HomeScreen } from './app/index';
-import { UploadScreen } from './app/upload';
 import { ScanScreen } from './app/scan';
 import { SearchScreen } from './app/search';
 import { BatchReviewScreen } from './app/batch-review';
@@ -77,7 +76,6 @@ function AppNavigator() {
                 headerTitleStyle: { fontSize: 18 },
               }}
             />
-            <Stack.Screen name="Upload" component={UploadScreen} options={{ title: 'Upload' }} />
             <Stack.Screen name="Scan" component={ScanScreen} options={{ title: 'Scan' }} />
             <Stack.Screen name="Search" component={SearchScreen} options={{ title: 'Recherche' }} />
             <Stack.Screen name="BatchReview" component={BatchReviewScreen} options={{ title: 'Revue du lot' }} />
