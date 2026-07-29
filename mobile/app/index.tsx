@@ -1,12 +1,13 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { View, FlatList, StyleSheet, TouchableOpacity, Text, Dimensions, KeyboardAvoidingView, Platform, Keyboard, Alert, Modal, TextInput, ScrollView, RefreshControl, ActivityIndicator } from 'react-native';
+import { View, FlatList, StyleSheet, TouchableOpacity, Text, Dimensions, KeyboardAvoidingView, Platform, Keyboard, Alert, Modal, TextInput, ActivityIndicator } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { runOnJS, useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
-import { useAddTags, useMoveResources, useFolders, useFiles, useFreeLocalSpace } from '../hooks/useFiles';
+import { useAddTags, useMoveResources, useFolders, useFiles, useFreeLocalSpace, useCreateFolder } from '../hooks/useFiles';
+import { SelectionPanel } from '../components/SelectionPanel';
 import { UnifiedFileItem, isFolder } from '../types';
 import { SearchBar, SearchFilters, MediaFilter } from '../components/SearchBar';
 import { FileThumbnail } from '../components/FileThumbnail';
@@ -64,6 +65,7 @@ const FileGridItem = React.memo(function FileGridItem({ file, size, onPress, onL
         fileName={file.name}
         size={size}
         syncStatus={file.syncStatus}
+        isFolder={file.isFolder}
       />
       {selected && (
         <View style={styles.selectedOverlay}>
@@ -110,6 +112,7 @@ export function HomeScreen() {
   const [tagInput, setTagInput] = useState('');
   const addTags = useAddTags();
   const moveFiles = useMoveResources();
+  const createFolder = useCreateFolder();
   const { data: foldersData } = useFolders();
   const [moveModalVisible, setMoveModalVisible] = useState(false);
   const [settingsModalVisible, setSettingsModalVisible] = useState(false);
@@ -135,11 +138,6 @@ export function HomeScreen() {
       setPage((p) => p + 1);
     }
   }, [isFetching, data?.meta?.total, data?.data?.length]);
-
-  const onRefresh = useCallback(() => {
-    setPage(1);
-    refetch();
-  }, [refetch]);
 
   const totalFiles = data?.meta?.total ?? 0;
   const loadedFiles = data?.data?.length ?? 0;
@@ -313,7 +311,20 @@ export function HomeScreen() {
     }
     setTagModalVisible(false);
     setSelectedIds(new Set());
-  }, [tagInput, selectedIds, tagModalMode, addTags]);
+  }, [tagInput, selectedIds, addTags]);
+
+  const handleCreateFolderFromModal = useCallback(async () => {
+    const name = tagInput.trim();
+    if (!name) return;
+    const ids = Array.from(selectedIds);
+    try {
+      const newFolder = await createFolder.mutateAsync(name);
+      await moveFiles.mutateAsync({ resourceIds: ids, parentResourceId: newFolder.id });
+      setTagModalVisible(false);
+      setSelectedIds(new Set());
+      navigation.navigate('Folder', { folderId: newFolder.id, folderName: newFolder.name });
+    } catch {}
+  }, [tagInput, selectedIds, createFolder, moveFiles, navigation]);
 
   const handleMove = useCallback(async (folderId: string | null) => {
     const ids = Array.from(selectedIds);
@@ -492,14 +503,6 @@ export function HomeScreen() {
             contentContainerStyle={styles.list}
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="on-drag"
-            refreshControl={
-              <RefreshControl
-                refreshing={isFetching && page === 1}
-                onRefresh={onRefresh}
-                tintColor="#1976D2"
-                colors={['#1976D2']}
-              />
-            }
             onEndReached={loadMore}
             onEndReachedThreshold={0.5}
             ListFooterComponent={
@@ -543,60 +546,16 @@ export function HomeScreen() {
       )}
 
       {selectionMode ? (
-        <View style={[styles.selectionBar, { paddingBottom: insets.bottom + 8 }]}>
-          <View style={styles.selectionHeader}>
-            <TouchableOpacity onPress={clearSelection} style={styles.cancelBtn}>
-              <MaterialIcons name="close" size={22} color="#333" />
-            </TouchableOpacity>
-            <Text style={styles.selectionCount}>
-              {selectedIds.size} sélectionnée{selectedIds.size > 1 ? 's' : ''}
-            </Text>
-            <TouchableOpacity onPress={clearSelection} style={styles.selectAllBtn}>
-              <Text style={styles.selectAllText}>Tout</Text>
-            </TouchableOpacity>
-          </View>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.selectionActions}
-          >
-            <TouchableOpacity
-              style={[styles.selectionChip, styles.deleteChip]}
-              onPress={handleDelete}
-            >
-              <MaterialIcons name="delete" size={18} color="#E53935" />
-              <Text style={[styles.chipText, { color: '#E53935' }]}>Supprimer</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.selectionChip, styles.editChip]}
-              onPress={handleEdit}
-            >
-              <MaterialIcons name="edit" size={18} color="#1E88E5" />
-              <Text style={[styles.chipText, { color: '#1E88E5' }]}>Éditer</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.selectionChip, styles.tagChip]}
-              onPress={() => openTagModal('tag')}
-            >
-              <MaterialIcons name="label" size={18} color="#8E24AA" />
-              <Text style={[styles.chipText, { color: '#8E24AA' }]}>Tags</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.selectionChip, styles.folderChip]}
-              onPress={() => openTagModal('folder')}
-            >
-              <MaterialIcons name="create-new-folder" size={18} color="#F57C00" />
-              <Text style={[styles.chipText, { color: '#F57C00' }]}>Folder</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.selectionChip, styles.moveChip]}
-              onPress={() => setMoveModalVisible(true)}
-            >
-              <MaterialIcons name="drive-file-move" size={18} color="#00897B" />
-              <Text style={[styles.chipText, { color: '#00897B' }]}>Déplacer</Text>
-            </TouchableOpacity>
-          </ScrollView>
-        </View>
+        <SelectionPanel
+          selectedCount={selectedIds.size}
+          onClose={clearSelection}
+          onDelete={handleDelete}
+          onEdit={handleEdit}
+          onTags={() => openTagModal('tag')}
+          onFolder={() => openTagModal('folder')}
+          onMove={() => setMoveModalVisible(true)}
+          insetsBottom={insets.bottom}
+        />
       ) : (
         <View style={styles.bottomNav}>
           <TouchableOpacity style={styles.navButton} onPress={() => {}}>
@@ -636,10 +595,10 @@ export function HomeScreen() {
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modalConfirmBtn, !tagInput.trim() && styles.modalConfirmDisabled]}
-                onPress={handleAddTag}
+                onPress={tagModalMode === 'folder' ? handleCreateFolderFromModal : handleAddTag}
                 disabled={!tagInput.trim()}
               >
-                <Text style={styles.modalConfirmText}>Ajouter</Text>
+                <Text style={styles.modalConfirmText}>{tagModalMode === 'folder' ? 'Créer' : 'Ajouter'}</Text>
               </TouchableOpacity>
             </View>
           </TouchableOpacity>

@@ -10,6 +10,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { DeviceProvider, useDevice } from './contexts/DeviceContext';
 import { SseProvider } from './contexts/SseContext';
 import { SseOcrListener } from './hooks/usePollOcr';
+import { SseResourceListener } from './hooks/useSSEResource';
 import { registerBackgroundUpload } from './services/backgroundUpload';
 import { LoginScreen } from './app/login';
 import { RegisterScreen } from './app/register';
@@ -114,6 +115,7 @@ function AppContent() {
     <AuthProvider>
       <SseProvider>
         <SseOcrListener />
+        <SseResourceListener />
         <DeviceProvider>
           <AppNavigator />
           <StatusBar style="auto" />

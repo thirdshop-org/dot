@@ -1,9 +1,14 @@
 import React, { useMemo, useState, useCallback, useEffect } from 'react';
-import { View, FlatList, StyleSheet, TouchableOpacity, Text, Dimensions, Alert } from 'react-native';
+import { View, FlatList, StyleSheet, TouchableOpacity, Text, Dimensions, Alert, Modal, TextInput } from 'react-native';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useDeleteFile, useFiles, useFreeLocalSpace } from '../hooks/useFiles';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import {
+  useDeleteFile, useFiles, useFreeLocalSpace,
+  useAddTags, useMoveResources, useFolders, useCreateFolder,
+} from '../hooks/useFiles';
+import { SelectionPanel } from '../components/SelectionPanel';
 import { UnifiedFileItem } from '../types';
 import { isFolder } from '../types';
 import { FileThumbnail } from '../components/FileThumbnail';
@@ -21,6 +26,7 @@ const ITEM_SIZE = (SCREEN_WIDTH - 16 * 2 - (NUM_COLUMNS - 1) * 6) / NUM_COLUMNS;
 type RootStackParamList = {
   Folder: { folderId: string; folderName: string };
   FileDetail: { fileIds: string[]; initialIndex: number };
+  FileEdit: { fileIds: string[] };
 };
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -51,6 +57,7 @@ function FolderGridItem({ file, onPress, onLongPress, selected, onFolderPress }:
         fileName={file.name}
         size={ITEM_SIZE}
         syncStatus={file.syncStatus}
+        isFolder={file.isFolder}
       />
       {selected && (
         <View style={styles.selectedOverlay}>
@@ -73,6 +80,17 @@ export function FolderScreen() {
   const freeLocalSpace = useFreeLocalSpace();
   const queryClient = useQueryClient();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  const addTags = useAddTags();
+  const moveFiles = useMoveResources();
+  const createFolder = useCreateFolder();
+  const { data: foldersData } = useFolders();
+  const insets = useSafeAreaInsets();
+
+  const [tagModalVisible, setTagModalVisible] = useState(false);
+  const [tagModalMode, setTagModalMode] = useState<'tag' | 'folder'>('tag');
+  const [tagInput, setTagInput] = useState('');
+  const [moveModalVisible, setMoveModalVisible] = useState(false);
 
   const selectionMode = selectedIds.size > 0;
 
@@ -153,6 +171,50 @@ export function FolderScreen() {
     Alert.alert('Supprimer', `Supprimer ${label} ?`, options);
   }, [selectedIds, files, deleteFile, freeLocalSpace, queryClient]);
 
+  const handleEdit = useCallback(() => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    navigation.navigate('FileEdit', { fileIds: ids });
+    setSelectedIds(new Set());
+  }, [selectedIds, navigation]);
+
+  const openTagModal = useCallback((mode: 'tag' | 'folder') => {
+    setTagModalMode(mode);
+    setTagInput('');
+    setTagModalVisible(true);
+  }, []);
+
+  const handleAddTag = useCallback(async () => {
+    const name = tagInput.trim();
+    if (!name) return;
+    const ids = Array.from(selectedIds);
+    for (const id of ids) {
+      await addTags.mutateAsync({ fileId: id, tags: [name] });
+    }
+    setTagModalVisible(false);
+    setSelectedIds(new Set());
+  }, [tagInput, selectedIds, addTags]);
+
+  const handleCreateFolderFromModal = useCallback(async () => {
+    const name = tagInput.trim();
+    if (!name) return;
+    const ids = Array.from(selectedIds);
+    try {
+      const newFolder = await createFolder.mutateAsync(name);
+      await moveFiles.mutateAsync({ resourceIds: ids, parentResourceId: newFolder.id });
+      setTagModalVisible(false);
+      setSelectedIds(new Set());
+      navigation.navigate('Folder', { folderId: newFolder.id, folderName: newFolder.name });
+    } catch {}
+  }, [tagInput, selectedIds, createFolder, moveFiles, navigation]);
+
+  const handleMove = useCallback(async (folderId: string | null) => {
+    const ids = Array.from(selectedIds);
+    await moveFiles.mutateAsync({ resourceIds: ids, parentResourceId: folderId });
+    setMoveModalVisible(false);
+    setSelectedIds(new Set());
+  }, [selectedIds, moveFiles]);
+
   const handleItemPress = useCallback((file: UnifiedFileItem) => {
     if (selectionMode) {
       toggleSelection(file.id);
@@ -202,21 +264,74 @@ export function FolderScreen() {
       />
 
       {selectionMode && (
-        <View style={styles.selectionBar}>
-          <View style={styles.selectionHeader}>
-            <TouchableOpacity onPress={clearSelection} style={styles.cancelBtn}>
-              <MaterialIcons name="close" size={22} color="#333" />
-            </TouchableOpacity>
-            <Text style={styles.selectionCount}>
-              {selectedIds.size} sélectionnée{selectedIds.size > 1 ? 's' : ''}
-            </Text>
-          </View>
-          <TouchableOpacity style={styles.deleteBtn} onPress={handleDelete}>
-            <MaterialIcons name="delete" size={20} color="#F44336" />
-            <Text style={styles.deleteText}>Supprimer</Text>
-          </TouchableOpacity>
-        </View>
+        <SelectionPanel
+          selectedCount={selectedIds.size}
+          onClose={clearSelection}
+          onDelete={handleDelete}
+          onEdit={handleEdit}
+          onTags={() => openTagModal('tag')}
+          onFolder={() => openTagModal('folder')}
+          onMove={() => setMoveModalVisible(true)}
+          insetsBottom={insets.bottom}
+        />
       )}
+
+      <Modal visible={tagModalVisible} transparent animationType="fade" onRequestClose={() => setTagModalVisible(false)}>
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setTagModalVisible(false)}>
+          <TouchableOpacity activeOpacity={1} style={styles.modalContent} onPress={() => {}}>
+            <Text style={styles.modalTitle}>
+              {tagModalMode === 'folder' ? 'Créer un dossier' : 'Ajouter un tag'}
+            </Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder={tagModalMode === 'folder' ? 'Nom du dossier...' : 'Nom du tag...'}
+              placeholderTextColor="#999"
+              value={tagInput}
+              onChangeText={setTagInput}
+              autoFocus
+              returnKeyType="done"
+              onSubmitEditing={tagModalMode === 'folder' ? handleCreateFolderFromModal : handleAddTag}
+            />
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setTagModalVisible(false)}>
+                <Text style={styles.modalCancelText}>Annuler</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalConfirmBtn, !tagInput.trim() && styles.modalConfirmDisabled]}
+                onPress={tagModalMode === 'folder' ? handleCreateFolderFromModal : handleAddTag}
+                disabled={!tagInput.trim()}
+              >
+                <Text style={styles.modalConfirmText}>{tagModalMode === 'folder' ? 'Créer' : 'Ajouter'}</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      <Modal visible={moveModalVisible} transparent animationType="fade" onRequestClose={() => setMoveModalVisible(false)}>
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setMoveModalVisible(false)}>
+          <TouchableOpacity activeOpacity={1} style={styles.modalContent} onPress={() => {}}>
+            <Text style={styles.modalTitle}>Déplacer vers...</Text>
+            <TouchableOpacity
+              style={styles.folderOption}
+              onPress={() => handleMove(null)}
+            >
+              <MaterialIcons name="home" size={20} color="#666" />
+              <Text style={styles.folderOptionText}>Racine</Text>
+            </TouchableOpacity>
+            {(foldersData ?? []).map((folder) => (
+              <TouchableOpacity
+                key={folder.id}
+                style={styles.folderOption}
+                onPress={() => handleMove(folder.id)}
+              >
+                <MaterialIcons name="folder" size={20} color="#F57C00" />
+                <Text style={styles.folderOptionText}>{folder.name}</Text>
+              </TouchableOpacity>
+            ))}
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
@@ -312,5 +427,73 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: '#F44336',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 20,
+    width: '80%',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#333',
+    marginBottom: 16,
+  },
+  modalInput: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 16,
+    color: '#333',
+    marginBottom: 16,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 12,
+  },
+  modalCancelBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  modalCancelText: {
+    fontSize: 15,
+    color: '#666',
+  },
+  modalConfirmBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: '#1976D2',
+    borderRadius: 8,
+  },
+  modalConfirmDisabled: {
+    backgroundColor: '#ccc',
+  },
+  modalConfirmText: {
+    fontSize: 15,
+    color: '#fff',
+    fontWeight: '600',
+  },
+  folderOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    gap: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  folderOptionText: {
+    fontSize: 16,
+    color: '#333',
   },
 });

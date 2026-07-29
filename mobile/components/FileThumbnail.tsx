@@ -39,11 +39,20 @@ interface FileThumbnailProps {
   size: number;
   isLoading?: boolean;
   syncStatus?: SyncStatus;
+  isFolder?: boolean;
 }
 
-export const FileThumbnail = React.memo(function FileThumbnail({ uri, thumbnailUrl, mimeType, fileName, size, isLoading, syncStatus }: FileThumbnailProps) {
+export const FileThumbnail = React.memo(function FileThumbnail({ uri, thumbnailUrl, mimeType, fileName, size, isLoading, syncStatus, isFolder }: FileThumbnailProps) {
   const info = getFileInfo(mimeType, fileName);
   const ext = getExtension(fileName);
+
+  if (isFolder) {
+    return (
+      <View style={[styles.container, { width: size, height: size, backgroundColor: '#FFF3E0' }]}>
+        <MaterialIcons name="folder" size={size * 0.45} color="#F57C00" />
+      </View>
+    );
+  }
 
   if (isLoading) {
     return (

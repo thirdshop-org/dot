@@ -33,6 +33,7 @@ func New(
 			urls:       urlSvc,
 			ocr:        ocrSvc,
 			conversion: conversionSvc,
+			broker:     eventBroker,
 		},
 		OCR:    &OCRHandler{ocr: ocrSvc, resources: resourceSvc},
 		Health: &HealthHandler{ocr: ocrSvc},

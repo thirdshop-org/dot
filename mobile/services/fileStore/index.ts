@@ -308,12 +308,12 @@ export const fileStore = {
     const d = getDb();
     const countRow = d.select({ count: sql<number>`count(*)` })
       .from(files)
-      .where(and(isNull(files.parentResourceId), eq(files.isFolder, 0)))
+      .where(isNull(files.parentResourceId))
       .get();
     const total = countRow?.count ?? 0;
     const rows = d.select().from(files)
-      .where(and(isNull(files.parentResourceId), eq(files.isFolder, 0)))
-      .orderBy(desc(files.createdAt))
+      .where(isNull(files.parentResourceId))
+      .orderBy(desc(files.isFolder), desc(files.createdAt))
       .all() as FileRow[];
     return {
       files: rows.map((r) => rowToRecord(r, getTagsForFile(r.id))),
@@ -327,13 +327,13 @@ export const fileStore = {
 
     const countRow = d.select({ count: sql<number>`count(*)` })
       .from(files)
-      .where(and(isNull(files.parentResourceId), eq(files.isFolder, 0)))
+      .where(isNull(files.parentResourceId))
       .get();
     const total = countRow?.count ?? 0;
 
     const rows = d.select().from(files)
-      .where(and(isNull(files.parentResourceId), eq(files.isFolder, 0)))
-      .orderBy(desc(files.createdAt))
+      .where(isNull(files.parentResourceId))
+      .orderBy(desc(files.isFolder), desc(files.createdAt))
       .limit(limit)
       .offset(offset)
       .all() as FileRow[];

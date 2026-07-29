@@ -18,6 +18,7 @@ type ResourceHandler struct {
 	urls       *service.URLService
 	ocr        *service.OCRService
 	conversion *service.ConversionService
+	broker     *service.EventBroker
 }
 
 func (h *ResourceHandler) Upload(c *gin.Context) {
@@ -57,6 +58,8 @@ func (h *ResourceHandler) Upload(c *gin.Context) {
 			"id":   result.ID,
 			"name": result.Name,
 		})
+
+		h.broker.Publish("resource.created", result.ID)
 	}
 
 	api.Success(c, results)

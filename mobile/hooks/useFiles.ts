@@ -101,11 +101,19 @@ export function useFiles(parentId?: string | null, page: number = 1, limit: numb
     },
     placeholderData: keepPreviousData,
     initialData: () => {
-      const cached = fileStore.getRootFiles();
-      if (cached.files.length === 0) return undefined;
+      if (!parentId) {
+        const cached = fileStore.getRootFiles();
+        if (cached.files.length === 0) return undefined;
+        return {
+          data: cached.files.map((r) => recordToUnifiedItem(r)!).filter(Boolean),
+          meta: { page: 0, total: cached.total },
+        };
+      }
+      const children = fileStore.getChildrenByParent(parentId);
+      if (children.length === 0) return undefined;
       return {
-        data: cached.files.map((r) => recordToUnifiedItem(r)!).filter(Boolean),
-        meta: { page: 0, total: cached.total },
+        data: children.map((r) => recordToUnifiedItem(r)!).filter(Boolean),
+        meta: { page: 0, total: children.length },
       };
     },
     staleTime: 30_000,
@@ -115,7 +123,10 @@ export function useFiles(parentId?: string | null, page: number = 1, limit: numb
 export function useFile(id: string) {
   return useQuery({
     queryKey: ['resources', id],
-    queryFn: () => apiClient.get<FileItem>(`${ENDPOINTS.RESOURCES}/${id}?thumbnail=thumbnail_small`),
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: FileItem }>(`${ENDPOINTS.RESOURCES}/${id}?thumbnail=thumbnail_small`);
+      return res.data;
+    },
     enabled: !!id,
   });
 }
@@ -187,6 +198,21 @@ export function useFolders() {
       return folders.length > 0 ? folders : undefined;
     },
     staleTime: 60_000,
+  });
+}
+
+export function useCreateFolder() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (name: string) => {
+      const res = await apiClient.post<{ data: FileItem }>(ENDPOINTS.FOLDERS, { name });
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['resources'] });
+      queryClient.invalidateQueries({ queryKey: ['folders'] });
+    },
   });
 }
 

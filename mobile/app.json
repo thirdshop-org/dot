@@ -47,7 +47,8 @@
       ],
       "expo-image",
       "expo-sqlite",
-      "expo-background-task"
+      "expo-background-task",
+      "expo-status-bar"
     ]
   }
 }
