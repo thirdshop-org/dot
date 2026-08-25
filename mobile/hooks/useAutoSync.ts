@@ -5,6 +5,7 @@ import { File, UploadType } from 'expo-file-system';
 import NetInfo, { NetInfoState } from '@react-native-community/netinfo';
 import { safDirectory, StoredFolder } from '../services/safDirectory';
 import { fileStore } from '../services/fileStore';
+import { activeUploadUris } from '../services/uploadQueue';
 import { apiClient } from '../api/client';
 import { API_BASE_URL, ENDPOINTS } from '../constants/api';
 import { ApiError } from '../types';
@@ -113,9 +114,12 @@ export function useAutoSync() {
       setIsSyncing(true);
 
       for (const entry of pendingFiles) {
+        const uri = entry.localUri;
+        if (!uri || activeUploadUris.has(uri)) continue;
+        activeUploadUris.add(uri);
         try {
           const uploaded = await uploadFile({
-            uri: entry.localUri!,
+            uri,
             type: entry.mimeType,
             name: entry.name,
           });
@@ -134,6 +138,8 @@ export function useAutoSync() {
             });
             resetRetry(entry.id);
           }
+        } finally {
+          activeUploadUris.delete(uri);
         }
       }
 

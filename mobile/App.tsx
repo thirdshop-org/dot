@@ -28,9 +28,11 @@ import { onboardingStorage } from './services/onboardingStorage';
 import { initDB } from './services/fileStore';
 import { migrateFromLegacy } from './services/fileStore/migrate';
 import { createMMKVPersister } from './services/mmkvPersister';
+import { setIsSyncing } from './hooks/useSyncQueue';
 
 initDB();
 migrateFromLegacy();
+setIsSyncing(false);
 
 const Stack = createNativeStackNavigator();
 const queryClient = new QueryClient({

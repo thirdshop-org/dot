@@ -286,6 +286,13 @@ export const fileStore = {
     return rowToRecord(row, getTagsForFile(row.id));
   },
 
+  getByLocalUri(localUri: string): FileRecord | null {
+    const d = getDb();
+    const row = d.select().from(files).where(eq(files.localUri, localUri)).get() as FileRow | undefined;
+    if (!row) return null;
+    return rowToRecord(row, getTagsForFile(row.id));
+  },
+
   getRootFolders(): FileRecord[] {
     const d = getDb();
     const rows = d.select().from(files)

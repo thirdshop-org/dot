@@ -107,7 +107,7 @@ export function HomeScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const debouncedSearch = useDebounce(searchQuery, 250);
   const [filters, setFilters] = useState<SearchFilters>({ name: true, ocrText: true });
-  const [mediaFilter, setMediaFilter] = useState<MediaFilter>('all');
+  const [mediaFilter, setMediaFilter] = useState<MediaFilter>('documents');
   const [keyboardOpen, setKeyboardOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [numColumns, setNumColumns] = useState(3);
@@ -149,6 +149,7 @@ export function HomeScreen() {
   const totalFiles = data?.meta?.total ?? 0;
   const loadedFiles = data?.data?.length ?? 0;
   const hasMore = loadedFiles > 0 && loadedFiles < totalFiles;
+  const isFiltering = mediaFilter !== 'all' || !!debouncedSearch.trim();
 
   useEffect(() => {
     const show = Keyboard.addListener('keyboardDidShow', () => setKeyboardOpen(true));
@@ -232,6 +233,8 @@ export function HomeScreen() {
       return (db?.getTime() ?? 0) - (da?.getTime() ?? 0);
     });
   }, [mediaFilteredFiles, uploadGhostItems]);
+
+  const displayedCount = sortedFiles.length;
 
   const fileIdToIndex = useMemo(() => {
     const map = new Map<string, number>();
@@ -541,12 +544,12 @@ export function HomeScreen() {
                     <ActivityIndicator size="small" color="#1976D2" />
                   ) : (
                     <Text style={styles.loadMoreText}>
-                      Charger plus ({loadedFiles}/{totalFiles})
+                      Charger plus ({displayedCount}{!isFiltering && `/${totalFiles}`})
                     </Text>
                   )}
                 </TouchableOpacity>
-              ) : loadedFiles > 0 ? (
-                <Text style={styles.loadedAllText}>{loadedFiles} fichier{loadedFiles > 1 ? 's' : ''}</Text>
+              ) : displayedCount > 0 ? (
+                <Text style={styles.loadedAllText}>{displayedCount} fichier{displayedCount > 1 ? 's' : ''}</Text>
               ) : null
             }
             ListEmptyComponent={

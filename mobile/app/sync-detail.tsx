@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo, useCallback, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -45,11 +45,28 @@ export function SyncDetailScreen() {
   const { push } = useSyncPush();
   const { tasks: uploadTasks, retry, retryAll } = useUploadQueue();
 
+  const [listVersion, setListVersion] = useState(0);
+  const bumpList = useCallback(() => setListVersion((v) => v + 1), []);
+
+  useEffect(() => {
+    const interval = setInterval(bumpList, 5000);
+    return () => clearInterval(interval);
+  }, [bumpList]);
+
   const pendingFiles = useMemo(() => {
     return fileStore.getPendingSync();
-  }, []);
+  }, [listVersion]);
+
+  const errorFiles = useMemo(() => {
+    return fileStore.getErrorFiles();
+  }, [listVersion]);
+
+  const uploadErrors = uploadTasks.filter((t) => t.status === 'error');
 
   const handleSyncAll = useCallback(async () => {
+    for (const f of fileStore.getErrorFiles()) {
+      fileStore.resetSyncError(f.id);
+    }
     await triggerSync();
     try {
       const { getStoredDeviceServerId } = await import('../hooks/useDeviceRegistration');
@@ -59,7 +76,35 @@ export function SyncDetailScreen() {
       }
     } catch { }
     refresh();
-  }, [triggerSync, push, refresh]);
+    bumpList();
+  }, [triggerSync, push, refresh, bumpList]);
+
+  const handleSyncButtonPress = useCallback(async () => {
+    if (uploadErrors.length > 0) {
+      retryAll();
+    }
+    await handleSyncAll();
+  }, [uploadErrors.length, retryAll, handleSyncAll]);
+
+  const handleErrorFilePress = useCallback((file: FileRecord) => {
+    Alert.alert(
+      'Fichier en erreur',
+      'Réessayer la synchronisation de ce fichier ?',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Réessayer',
+          onPress: () => {
+            fileStore.resetSyncError(file.id);
+            triggerSync().finally(() => {
+              refresh();
+              bumpList();
+            });
+          },
+        },
+      ],
+    );
+  }, [triggerSync, refresh, bumpList]);
 
   const handleTaskPress = useCallback((task: UploadTask) => {
     if (task.status !== 'error') return;
@@ -75,16 +120,15 @@ export function SyncDetailScreen() {
 
   const hasUploads = uploadTasks.length > 0;
   const hasPending = pendingFiles.length > 0;
-  const hasContent = hasUploads || hasPending;
-
-  const uploadErrors = uploadTasks.filter((t) => t.status === 'error');
+  const hasErrors = errorFiles.length > 0;
+  const hasContent = hasUploads || hasPending || hasErrors;
 
   return (
     <View style={styles.container}>
-      {(hasPending || uploadErrors.length > 0) && (
+      {(hasPending || hasErrors || uploadErrors.length > 0) && (
         <TouchableOpacity
           style={[styles.syncBtn, isSyncing && styles.syncBtnDisabled]}
-          onPress={uploadErrors.length > 0 && hasPending ? retryAll : handleSyncAll}
+          onPress={handleSyncButtonPress}
           disabled={isSyncing}
         >
           {isSyncing ? (
@@ -98,11 +142,9 @@ export function SyncDetailScreen() {
           )}
           <Text style={styles.syncBtnText}>
             {isSyncing ? 'Synchronisation...'
-              : uploadErrors.length > 0 && hasPending
-                ? 'Tout réessayer'
-                : hasPending
-                  ? `Synchroniser (${pendingCount})`
-                  : `Réessayer (${uploadErrors.length})`}
+              : uploadErrors.length > 0
+                ? `Tout réessayer (${uploadErrors.length + (hasPending ? pendingCount : 0)})`
+                : `Synchroniser (${pendingCount})`}
           </Text>
         </TouchableOpacity>
       )}
@@ -120,13 +162,13 @@ export function SyncDetailScreen() {
           data={[
             ...(hasUploads ? [{ type: 'section', label: 'Uploads en cours' } as const] : []),
             ...uploadTasks.map((t) => ({ type: 'upload' as const, data: t })),
+            ...(hasErrors ? [{ type: 'section', label: 'Fichiers en erreur' } as const] : []),
+            ...errorFiles.map((f) => ({ type: 'error' as const, data: f })),
             ...(hasPending ? [{ type: 'section', label: 'Fichiers locaux à synchroniser' } as const] : []),
             ...pendingFiles.map((f) => ({ type: 'file' as const, data: f })),
           ]}
           keyExtractor={(item) =>
-            item.type === 'section' ? item.label
-              : item.type === 'upload' ? item.data.id
-                : item.data.id
+            item.type === 'section' ? item.label : item.data.id
           }
           renderItem={({ item }) => {
             if (item.type === 'section') {
@@ -158,6 +200,25 @@ export function SyncDetailScreen() {
                       <Text style={styles.pendingText}>En attente</Text>
                     )}
                   </View>
+                </TouchableOpacity>
+              );
+            }
+            if (item.type === 'error') {
+              const file = item.data;
+              return (
+                <TouchableOpacity
+                  style={[styles.fileRow, styles.fileRowError]}
+                  onPress={() => handleErrorFilePress(file)}
+                  activeOpacity={0.6}
+                >
+                  <MaterialIcons name="error" size={20} color="#E53935" />
+                  <View style={styles.fileInfo}>
+                    <Text style={styles.fileName} numberOfLines={1}>{file.name}</Text>
+                    <Text style={styles.errorText}>
+                      Échec de synchronisation · toucher pour réessayer
+                    </Text>
+                  </View>
+                  <MaterialIcons name="refresh" size={18} color="#E53935" />
                 </TouchableOpacity>
               );
             }

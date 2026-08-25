@@ -28,19 +28,23 @@ export function useSyncQueue() {
       return;
     }
 
-    const registry = fileStore.getPendingSync();
+    const allFolders = safDirectory.getAll();
+    const autoFolderIds = new Set(
+      allFolders.filter((f) => f.syncMode === 'auto').map((f) => f.id)
+    );
+
+    const registry = fileStore.getAllLocal();
     let count = 0;
 
     for (const entry of registry) {
+      if (entry.backendId || !entry.localUri) continue;
+      if (entry.syncStatus !== 'local' && entry.syncStatus !== 'error') continue;
       if (globalMode === 'auto') {
         count++;
       } else {
         // mode manuel : uniquement les fichiers des dossiers en mode auto
-        if (!entry.parentResourceId) continue;
-        const folder = safDirectory.getAll().find((f) => f.id === entry.parentResourceId);
-        if (folder && folder.syncMode === 'auto') {
-          count++;
-        }
+        if (!entry.parentResourceId || !autoFolderIds.has(entry.parentResourceId)) continue;
+        count++;
       }
     }
 

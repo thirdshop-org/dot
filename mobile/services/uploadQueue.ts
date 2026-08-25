@@ -3,12 +3,15 @@ import { createMMKV } from 'react-native-mmkv';
 import { apiClient } from '../api/client';
 import { API_BASE_URL, ENDPOINTS } from '../constants/api';
 import { ApiError, UploadError } from '../types';
+import { fileStore } from './fileStore';
 
 export type UploadFile = { uri: string; type: string; name: string };
 export type UploadResult = { name: string; id: string };
 
 export const UPLOAD_MAX_RETRIES = 3;
 const BASE_RETRY_DELAY_MS = 1000;
+
+export const activeUploadUris = new Set<string>();
 
 export type UploadTaskStatus = 'pending' | 'uploading' | 'done' | 'error';
 
@@ -222,6 +225,7 @@ class UploadQueue {
 
   private async runTask(task: UploadTask) {
     let willRetry = false;
+    activeUploadUris.add(task.file.uri);
     try {
       const fsFile = new File(task.file.uri);
       const headers: Record<string, string> = {};
@@ -263,6 +267,7 @@ class UploadQueue {
       task.progress = 100;
       task.result = item as UploadResult;
       task.updatedAt = Date.now();
+      this.linkResultToStore(task);
       this.persist();
       this.notify();
       this.scheduleCleanup();
@@ -293,11 +298,26 @@ class UploadQueue {
       }
     } finally {
       this.active--;
+      activeUploadUris.delete(task.file.uri);
       this.notify();
       if (!willRetry) {
         this.processNext();
       }
     }
+  }
+
+  private linkResultToStore(task: UploadTask) {
+    try {
+      const backendId = task.result?.id;
+      if (!backendId) return;
+      const entry = fileStore.getByLocalUri(task.file.uri);
+      if (!entry || entry.backendId) return;
+      fileStore.updatePartial(entry.id, {
+        backendId,
+        syncStatus: 'synced',
+        source: 'synced',
+      });
+    } catch {}
   }
 
   private scheduleCleanup() {

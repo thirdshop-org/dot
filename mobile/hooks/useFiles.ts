@@ -27,16 +27,6 @@ function recordToUnifiedItem(record: ReturnType<typeof fileStore.getById>): Unif
   };
 }
 
-function recordsToUnifiedItems(records: ReturnType<typeof fileStore.getRootFiles>): {
-  data: UnifiedFileItem[];
-  meta: { page: number; total: number };
-} {
-  return {
-    data: records.files.map((r) => recordToUnifiedItem(r)!).filter(Boolean),
-    meta: { page: 0, total: records.total },
-  };
-}
-
 export function useFiles(parentId?: string | null, page: number = 1, limit: number = 100) {
   const queryKey = parentId
     ? ['resources', parentId, page, limit]
@@ -65,7 +55,6 @@ export function useFiles(parentId?: string | null, page: number = 1, limit: numb
             thumbnailUrl: f.thumbnailUrl,
           })),
         );
-
         const children = fileStore.getChildrenByParent(parentId);
         return {
           data: children.map((r) => recordToUnifiedItem(r)!).filter(Boolean),
