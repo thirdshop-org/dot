@@ -19,8 +19,7 @@ interface SettingsModalProps {
   folders: StoredFolder[];
   onToggleVisibility: (folderId: string) => void;
   onRemoveFolder: (folderId: string) => void;
-  onAddFolder: () => void;
-  onAddFolderRecursive?: () => void;
+  onAddFolderRecursive: () => void;
   onUpdateSyncMode: (folderId: string, mode: SyncMode) => void;
   onUpdateSyncCellular: (folderId: string, enabled: boolean) => void;
   globalSyncMode: SyncGlobalMode;
@@ -47,7 +46,6 @@ export function SettingsModal({
   folders,
   onToggleVisibility,
   onRemoveFolder,
-  onAddFolder,
   onAddFolderRecursive,
   onUpdateSyncMode,
   onUpdateSyncCellular,
@@ -106,7 +104,6 @@ export function SettingsModal({
               onBack={() => setView('menu')}
               onToggleVisibility={onToggleVisibility}
               onRemoveFolder={handleRemoveFolder}
-              onAddFolder={onAddFolder}
               onAddFolderRecursive={onAddFolderRecursive}
             />
           )}
@@ -190,15 +187,13 @@ function FoldersView({
   onBack,
   onToggleVisibility,
   onRemoveFolder,
-  onAddFolder,
   onAddFolderRecursive,
 }: {
   folders: StoredFolder[];
   onBack: () => void;
   onToggleVisibility: (id: string) => void;
   onRemoveFolder: (folder: StoredFolder) => void;
-  onAddFolder: () => void;
-  onAddFolderRecursive?: () => void;
+  onAddFolderRecursive: () => void;
 }) {
   return (
     <ScrollView style={styles.viewContainer} showsVerticalScrollIndicator={false}>
@@ -241,17 +236,10 @@ function FoldersView({
         })
       )}
 
-      <TouchableOpacity style={styles.addBtn} onPress={onAddFolder}>
+      <TouchableOpacity style={styles.addBtn} onPress={onAddFolderRecursive}>
         <MaterialIcons name="add" size={20} color="#fff" />
         <Text style={styles.addBtnText}>Ajouter un dossier</Text>
       </TouchableOpacity>
-
-      {onAddFolderRecursive && (
-        <TouchableOpacity style={styles.scanRootBtn} onPress={onAddFolderRecursive}>
-          <MaterialIcons name="linear-scale" size={20} color="#fff" />
-          <Text style={styles.addBtnText}>Ajouter (scan récursif)</Text>
-        </TouchableOpacity>
-      )}
     </ScrollView>
   );
 }
@@ -536,16 +524,6 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     paddingVertical: 12,
     marginTop: 16,
-    gap: 8,
-  },
-  scanRootBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#8E24AA',
-    borderRadius: 10,
-    paddingVertical: 12,
-    marginTop: 10,
     gap: 8,
   },
   addBtnText: {

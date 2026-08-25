@@ -101,7 +101,7 @@ export function HomeScreen() {
   const insets = useSafeAreaInsets();
   const [page, setPage] = useState(1);
   const { data, isLoading, error, isFetching, refetch } = useFiles(null, page, PAGE_SIZE);
-  const { hasPermission, requestPermission, pickDirectory, pickAndScanRecursive, folders, refreshFolders, discovered } = useLocalFiles();
+  const { hasPermission, requestPermission, pickAndScanRecursive, folders, refreshFolders, discovered } = useLocalFiles();
   const freeLocalSpace = useFreeLocalSpace();
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
@@ -388,11 +388,6 @@ export function HomeScreen() {
     setRemoveFolderConfirmId(null);
   }, [removeFolderConfirmId, refreshFolders]);
 
-  const handleAddFolder = useCallback(async () => {
-    setSettingsModalVisible(false);
-    await pickDirectory();
-  }, [pickDirectory]);
-
   const handleAddFolderRecursive = useCallback(async () => {
     setSettingsModalVisible(false);
     await pickAndScanRecursive();
@@ -673,7 +668,6 @@ export function HomeScreen() {
         folders={folders}
         onToggleVisibility={handleToggleFolderVisibility}
         onRemoveFolder={handleRemoveFolder}
-        onAddFolder={handleAddFolder}
         onAddFolderRecursive={handleAddFolderRecursive}
         onUpdateSyncMode={handleUpdateSyncMode}
         onUpdateSyncCellular={handleUpdateSyncCellular}

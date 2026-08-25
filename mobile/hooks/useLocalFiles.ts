@@ -4,7 +4,7 @@ import { fileStore } from '../services/fileStore';
 import { UnifiedFileItem } from '../types';
 
 export function useLocalFiles() {
-  const { files: deviceFiles, isLoading: deviceLoading, hasPermission, requestPermission, rescan, pickDirectory, pickAndScanRecursive, folders, refreshFolders, discovered, discoverMediaAlbums } = useDeviceFiles();
+  const { files: deviceFiles, isLoading: deviceLoading, hasPermission, requestPermission, rescan, pickAndScanRecursive, folders, refreshFolders, discovered, discoverMediaAlbums } = useDeviceFiles();
   const lastDeviceCount = useRef(0);
 
   useEffect(() => {
@@ -75,7 +75,6 @@ export function useLocalFiles() {
     hasPermission,
     requestPermission,
     rescan,
-    pickDirectory,
     pickAndScanRecursive,
     folders,
     refreshFolders,

@@ -251,31 +251,6 @@ export function useDeviceFiles() {
     });
   }, []);
 
-  const pickDirectory = useCallback(async () => {
-    try {
-      const result = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
-      if (!result.granted) return false;
-      const dirUri = result.directoryUri;
-      const parts = dirUri.split('/');
-      const dirName = decodeURIComponent(parts[parts.length - 1] ?? 'Dossier');
-      safDirectory.addFolder(dirUri, dirName);
-      setFolders(safDirectory.getAll());
-
-      const folderFiles = await scanSafFolder({ id: 'new', uri: dirUri, name: dirName, visible: true, syncMode: 'none', syncCellular: false, source: 'saf' });
-      setFiles((prev) => {
-        const existing = new Set(prev.map((f) => f.id));
-        const merged = [...prev];
-        for (const f of folderFiles) {
-          if (!existing.has(f.id)) merged.push(f);
-        }
-        return merged;
-      });
-      return true;
-    } catch (err) {
-      return false;
-    }
-  }, []);
-
   const pickAndScanRecursive = useCallback(async (): Promise<{ addedFolders: number }> => {
     try {
       const result = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
@@ -371,7 +346,7 @@ export function useDeviceFiles() {
   return {
     files, isLoading, hasPermission,
     requestPermission, rescan,
-    pickDirectory, pickAndScanRecursive,
+    pickAndScanRecursive,
     folders, refreshFolders,
     discovered, discoverMediaAlbums,
   };
