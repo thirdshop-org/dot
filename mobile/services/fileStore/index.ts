@@ -562,6 +562,15 @@ export const fileStore = {
     return rows.map((r) => rowToRecord(r, getTagsForFile(r.id)));
   },
 
+  getLocalDeviceFiles(): FileRecord[] {
+    const d = getDb();
+    const rows = d.select().from(files)
+      .where(and(eq(files.source, 'local'), isNull(files.backendId)))
+      .orderBy(desc(files.createdAt))
+      .all() as FileRow[];
+    return rows.map((r) => rowToRecord(r, getTagsForFile(r.id)));
+  },
+
   getAllSynced(): FileRecord[] {
     const d = getDb();
     const rows = d.select().from(files)

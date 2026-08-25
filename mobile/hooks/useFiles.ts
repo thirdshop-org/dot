@@ -85,22 +85,30 @@ export function useFiles(parentId?: string | null, page: number = 1, limit: numb
       );
 
       const cached = fileStore.getRootFiles();
+      const localDeviceFiles = fileStore.getLocalDeviceFiles();
       const validFiles = cached.files.filter(
         (f) => !f.backendId || returnedIds.has(f.backendId) || f.source === 'local',
       );
+      const validIds = new Set(validFiles.map((f) => f.id));
+      const extraLocal = localDeviceFiles.filter((f) => !validIds.has(f.id));
+      const mergedFiles = [...validFiles, ...extraLocal];
       return {
-        data: validFiles.map((r) => recordToUnifiedItem(r)!).filter(Boolean),
-        meta: { page, total: backendRes.meta?.total ?? cached.total },
+        data: mergedFiles.map((r) => recordToUnifiedItem(r)!).filter(Boolean),
+        meta: { page, total: (backendRes.meta?.total ?? cached.total) + extraLocal.length },
       };
     },
     placeholderData: keepPreviousData,
     initialData: () => {
       if (!parentId) {
         const cached = fileStore.getRootFiles();
-        if (cached.files.length === 0) return undefined;
+        const localDeviceFiles = fileStore.getLocalDeviceFiles();
+        const validIds = new Set(cached.files.map((f) => f.id));
+        const extraLocal = localDeviceFiles.filter((f) => !validIds.has(f.id));
+        const allFiles = [...cached.files, ...extraLocal];
+        if (allFiles.length === 0) return undefined;
         return {
-          data: cached.files.map((r) => recordToUnifiedItem(r)!).filter(Boolean),
-          meta: { page: 0, total: cached.total },
+          data: allFiles.map((r) => recordToUnifiedItem(r)!).filter(Boolean),
+          meta: { page: 0, total: cached.total + extraLocal.length },
         };
       }
       const children = fileStore.getChildrenByParent(parentId);
