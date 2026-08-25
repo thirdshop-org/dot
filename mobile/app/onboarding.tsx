@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -108,8 +108,13 @@ export function OnboardingScreen() {
     complete();
   }, [complete]);
 
+  useEffect(() => {
+    if (!step) {
+      complete();
+    }
+  }, [step, complete]);
+
   if (!step) {
-    complete();
     return null;
   }
 
