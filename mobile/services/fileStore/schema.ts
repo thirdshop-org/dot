@@ -54,3 +54,21 @@ export const deviceInfo = sqliteTable('device_info', {
   platform: text('platform').notNull().default(''),
   registeredAt: text('registered_at'),
 });
+
+export const pendingActions = sqliteTable(
+  'pending_actions',
+  {
+    id: text('id').primaryKey(),
+    type: text('type').notNull(),
+    payload: text('payload').notNull(),
+    status: text('status').notNull().default('pending'),
+    attempts: integer('attempts').notNull().default(0),
+    lastError: text('last_error'),
+    resourceId: text('resource_id'),
+    createdAt: text('created_at').notNull(),
+  },
+  (t) => [
+    index('idx_pending_actions_status').on(t.status),
+    index('idx_pending_actions_type').on(t.type),
+  ],
+);

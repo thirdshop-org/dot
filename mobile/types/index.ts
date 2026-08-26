@@ -164,3 +164,17 @@ export interface ResourcePlacement {
   storageKey: string | null;
   syncedAt: string | null;
 }
+
+export type PendingActionType = 'tag_add' | 'delete' | 'move' | 'create_folder';
+export type PendingActionStatus = 'pending' | 'done' | 'error' | 'obsolete';
+
+export interface PendingAction {
+  id: string;
+  type: PendingActionType;
+  payload: Record<string, unknown>;
+  status: PendingActionStatus;
+  attempts: number;
+  lastError: string | null;
+  resourceId: string | null;
+  createdAt: string;
+}

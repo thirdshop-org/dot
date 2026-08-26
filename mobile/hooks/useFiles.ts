@@ -3,6 +3,7 @@ import { apiClient } from '../api/client';
 import { ENDPOINTS } from '../constants/api';
 import type { UnifiedFileItem, PaginatedResponse, FileItem, Tag } from '../types';
 import { fileStore } from '../services/fileStore';
+import { actionQueue } from '../services/actionQueue';
 
 function recordToUnifiedItem(record: ReturnType<typeof fileStore.getById>): UnifiedFileItem | null {
   if (!record) return null;
@@ -138,9 +139,12 @@ export function useDeleteFile() {
 
   return useMutation({
     mutationFn: async (id: string) => {
-      const result = await apiClient.delete(`${ENDPOINTS.RESOURCES}/${id}`);
+      const record = fileStore.getByBackendId(id) ?? fileStore.getById(id);
+
+      if (record?.backendId) {
+        actionQueue.enqueue('delete', { backendId: record.backendId }, record.backendId);
+      }
       fileStore.deleteByBackendId(id);
-      return result;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['resources'] });
@@ -152,8 +156,17 @@ export function useAddTags() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ fileId, tags }: { fileId: string; tags: string[] }) =>
-      apiClient.post(`${ENDPOINTS.RESOURCES}/${fileId}/tags`, { tags }),
+    mutationFn: ({ fileId, tags }: { fileId: string; tags: string[] }) => {
+      const record = fileStore.getById(fileId) ?? fileStore.getByBackendId(fileId);
+      if (record) {
+        const existingTags = record.tags ?? [];
+        const newTags = [...existingTags, ...tags.map((t) => ({ id: t, tag_name: t }))];
+        const uniqueTags = newTags.filter((t, i, arr) => arr.findIndex((x) => x.tag_name === t.tag_name) === i);
+        fileStore.updatePartial(record.id, {});
+        actionQueue.enqueue('tag_add', { fileId: record.backendId ?? record.id, tags }, record.backendId ?? record.id);
+      }
+      return Promise.resolve();
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['resources'] });
     },
@@ -164,15 +177,21 @@ export function useMoveResources() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ resourceIds, parentResourceId }: { resourceIds: string[]; parentResourceId: string | null }) =>
-      apiClient.post(ENDPOINTS.MOVE, { resource_ids: resourceIds, parent_resource_id: parentResourceId }),
-    onSuccess: (_, { resourceIds, parentResourceId }) => {
+    mutationFn: ({ resourceIds, parentResourceId }: { resourceIds: string[]; parentResourceId: string | null }) => {
+      const backendIds: string[] = [];
       for (const id of resourceIds) {
         const record = fileStore.getById(id) ?? fileStore.getByBackendId(id);
-        if (record) {
+        if (record?.backendId) {
+          backendIds.push(record.backendId);
           fileStore.updatePartial(record.id, { parentResourceId: parentResourceId ?? null });
         }
       }
+      if (backendIds.length > 0) {
+        actionQueue.enqueue('move', { resourceIds: backendIds, parentResourceId });
+      }
+      return Promise.resolve();
+    },
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['resources'] });
     },
   });
@@ -214,8 +233,28 @@ export function useCreateFolder() {
 
   return useMutation({
     mutationFn: async ({ name, parentResourceId }: { name: string; parentResourceId?: string }) => {
-      const res = await apiClient.post<{ data: FileItem }>(ENDPOINTS.FOLDERS, { name, parent_resource_id: parentResourceId });
-      return res.data;
+      const now = new Date().toISOString();
+      const localId = `local_folder_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      fileStore.upsert({
+        id: localId,
+        backendId: null,
+        name,
+        mimeType: 'inode/directory',
+        size: 0,
+        source: 'local',
+        localUri: null,
+        syncStatus: 'local',
+        parentResourceId: parentResourceId ?? null,
+        isFolder: 1,
+        ocrText: null,
+        thumbnailUrl: null,
+        ownerId: null,
+        createdAt: now,
+        updatedAt: now,
+        lastSyncedAt: null,
+      });
+      actionQueue.enqueue('create_folder', { name, parentResourceId }, localId);
+      return { id: localId, name };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['resources'] });

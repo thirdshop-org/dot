@@ -6,11 +6,13 @@ const BACKGROUND_UPLOAD_TASK = 'BACKGROUND_UPLOAD';
 TaskManager.defineTask(BACKGROUND_UPLOAD_TASK, async () => {
   try {
     const { uploadQueue } = await import('./uploadQueue');
+    const { actionQueue } = await import('./actionQueue');
     const { apiClient } = await import('../api/client');
     const { tokenStorage } = await import('../api/secureStorage');
 
-    const pending = uploadQueue.getPendingCount();
-    if (pending === 0) {
+    const pendingUploads = uploadQueue.getPendingCount();
+    const pendingActions = actionQueue.getPendingCount();
+    if (pendingUploads === 0 && pendingActions === 0) {
       return BackgroundTask.BackgroundTaskResult.Success;
     }
 
@@ -20,11 +22,16 @@ TaskManager.defineTask(BACKGROUND_UPLOAD_TASK, async () => {
     }
     apiClient.setAccessToken(token);
 
-    uploadQueue.retryAll();
+    if (pendingUploads > 0) {
+      uploadQueue.retryAll();
+    }
+    if (pendingActions > 0) {
+      actionQueue.processAll();
+    }
 
     await new Promise<void>((resolve) => {
       const check = setInterval(() => {
-        if (uploadQueue.getPendingCount() === 0) {
+        if (uploadQueue.getPendingCount() === 0 && actionQueue.getPendingCount() === 0) {
           clearInterval(check);
           resolve();
         }

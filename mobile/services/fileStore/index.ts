@@ -1,12 +1,12 @@
 import { drizzle } from 'drizzle-orm/expo-sqlite';
 import * as SQLite from 'expo-sqlite';
 import { eq, like, or, and, desc, asc, sql, isNull } from 'drizzle-orm';
-import { files, fileTags, deletedFiles } from './schema';
-import type { Tag } from '../../types';
+import { files, fileTags, deletedFiles, pendingActions } from './schema';
+import type { Tag, PendingAction, PendingActionType, PendingActionStatus } from '../../types';
 
 const DB_NAME = 'vaultdrop-v3.db';
 const SCHEMA_VERSION_KEY = 'schema_version';
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 
 let _db: ReturnType<typeof drizzle> | null = null;
 let _sqliteDb: SQLite.SQLiteDatabase | null = null;
@@ -46,6 +46,7 @@ function dropAllTables(db: SQLite.SQLiteDatabase) {
   db.execSync(`DROP TABLE IF EXISTS deleted_files;`);
   db.execSync(`DROP TABLE IF EXISTS device_info;`);
   db.execSync(`DROP TABLE IF EXISTS resources_fts;`);
+  db.execSync(`DROP TABLE IF EXISTS pending_actions;`);
   db.execSync(`DROP TABLE IF EXISTS schema_version;`);
 }
 
@@ -103,6 +104,21 @@ function createSchema(db: SQLite.SQLiteDatabase) {
       registered_at TEXT
     );
   `);
+
+  db.execSync(`
+    CREATE TABLE IF NOT EXISTS pending_actions (
+      id TEXT PRIMARY KEY,
+      type TEXT NOT NULL,
+      payload TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      attempts INTEGER NOT NULL DEFAULT 0,
+      last_error TEXT,
+      resource_id TEXT,
+      created_at TEXT NOT NULL
+    );
+  `);
+  db.execSync(`CREATE INDEX IF NOT EXISTS idx_pending_actions_status ON pending_actions(status);`);
+  db.execSync(`CREATE INDEX IF NOT EXISTS idx_pending_actions_type ON pending_actions(type);`);
 
   db.execSync(`
     CREATE VIRTUAL TABLE IF NOT EXISTS resources_fts USING fts5(
@@ -598,4 +614,111 @@ export const fileStore = {
   resetSyncError(id: string) {
     this.updatePartial(id, { syncStatus: 'local' });
   },
+
+  // --- Pending Actions ---
+
+  insertPendingAction(action: PendingAction) {
+    const d = getDb();
+    d.insert(pendingActions).values({
+      id: action.id,
+      type: action.type,
+      payload: JSON.stringify(action.payload),
+      status: action.status,
+      attempts: action.attempts,
+      lastError: action.lastError,
+      resourceId: action.resourceId,
+      createdAt: action.createdAt,
+    }).run();
+  },
+
+  getPendingActions(): PendingAction[] {
+    const d = getDb();
+    const rows = d.select().from(pendingActions)
+      .where(eq(pendingActions.status, 'pending'))
+      .orderBy(asc(pendingActions.createdAt))
+      .all();
+    return rows.map(rowToAction);
+  },
+
+  getPendingActionById(id: string): PendingAction | null {
+    const d = getDb();
+    const row = d.select().from(pendingActions)
+      .where(eq(pendingActions.id, id))
+      .get();
+    return row ? rowToAction(row) : null;
+  },
+
+  getPendingActionsCount(): number {
+    const d = getDb();
+    const row = d.select({ count: sql<number>`count(*)` })
+      .from(pendingActions)
+      .where(eq(pendingActions.status, 'pending'))
+      .get();
+    return row?.count ?? 0;
+  },
+
+  markPendingActionDone(id: string) {
+    const d = getDb();
+    d.update(pendingActions)
+      .set({ status: 'done' })
+      .where(eq(pendingActions.id, id))
+      .run();
+  },
+
+  markPendingActionError(id: string, error: string) {
+    const d = getDb();
+    const row = d.select().from(pendingActions)
+      .where(eq(pendingActions.id, id))
+      .get();
+    if (!row) return;
+    d.update(pendingActions)
+      .set({
+        status: 'error',
+        attempts: row.attempts + 1,
+        lastError: error,
+      })
+      .where(eq(pendingActions.id, id))
+      .run();
+  },
+
+  markPendingActionObsolete(id: string) {
+    const d = getDb();
+    d.update(pendingActions)
+      .set({ status: 'obsolete' })
+      .where(eq(pendingActions.id, id))
+      .run();
+  },
+
+  deletePendingAction(id: string) {
+    const d = getDb();
+    d.delete(pendingActions).where(eq(pendingActions.id, id)).run();
+  },
+
+  clearDonePendingActions() {
+    const d = getDb();
+    d.delete(pendingActions).where(eq(pendingActions.status, 'done')).run();
+    d.delete(pendingActions).where(eq(pendingActions.status, 'obsolete')).run();
+  },
 };
+
+function rowToAction(row: {
+  id: string;
+  type: string;
+  payload: string;
+  status: string;
+  attempts: number;
+  lastError: string | null;
+  resourceId: string | null;
+  createdAt: string;
+}): PendingAction {
+  return {
+    id: row.id,
+    type: row.type as PendingActionType,
+    payload: JSON.parse(row.payload),
+    status: row.status as PendingActionStatus,
+    attempts: row.attempts,
+    lastError: row.lastError,
+    resourceId: row.resourceId,
+    createdAt: row.createdAt,
+  };
+}
