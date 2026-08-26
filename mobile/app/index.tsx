@@ -15,6 +15,7 @@ import { SettingsModal } from '../components/SettingsModal';
 import { ConfirmModal, type ConfirmOption } from '../components/ConfirmModal';
 import { UploadModal } from '../components/UploadModal';
 import { SyncStatusIcon } from '../components/SyncStatusIcon';
+import { NetworkStatusBar } from '../components/NetworkStatusBar';
 import { useSyncQueue } from '../hooks/useSyncQueue';
 import { useUploadQueue } from '../hooks/useUploadQueue';
 import { useAutoSync } from '../hooks/useAutoSync';
@@ -161,6 +162,7 @@ export function HomeScreen() {
     navigation.setOptions({
       headerRight: () => (
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <NetworkStatusBar />
           <SyncStatusIcon
             isSyncing={isSyncing}
             pendingCount={pendingCount}
