@@ -86,6 +86,9 @@ export function HomeScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const debouncedSearch = useDebounce(searchQuery, 250);
   const [filters, setFilters] = useState<SearchFilters>({ name: true, ocrText: true });
+  const toggleFilter = useCallback((key: keyof SearchFilters) => {
+    setFilters((prev) => ({ ...prev, [key]: !prev[key] }));
+  }, []);
   const [sort, setSort] = useState<SortState>({ key: 'date', direction: 'desc' });
   const listRef = useRef<FlatList<UnifiedFileItem>>(null);
   const [keyboardOpen, setKeyboardOpen] = useState(false);
@@ -99,6 +102,7 @@ export function HomeScreen() {
   const { data: foldersData } = useFolders();
   const [moveModalVisible, setMoveModalVisible] = useState(false);
   const [settingsModalVisible, setSettingsModalVisible] = useState(false);
+  const [filterModalVisible, setFilterModalVisible] = useState(false);
   const [uploadModalVisible, setUploadModalVisible] = useState(false);
   const [globalSyncMode, setGlobalSyncMode] = useState<SyncGlobalMode>(() => safDirectory.getGlobalSyncMode());
   const [globalSyncCellular, setGlobalSyncCellular] = useState(() => safDirectory.getGlobalSyncCellular());
@@ -524,7 +528,7 @@ export function HomeScreen() {
           filters={filters}
           onFiltersChange={setFilters}
           sort={sort}
-          onSortChange={setSort}
+          onSettingsPress={() => setFilterModalVisible(true)}
           bottomPadding={keyboardOpen ? insets.bottom+8 : 0}
         />
       )}
@@ -610,6 +614,34 @@ export function HomeScreen() {
                 <Text style={styles.folderOptionText}>{folder.name}</Text>
               </TouchableOpacity>
             ))}
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      <Modal visible={filterModalVisible} transparent animationType="fade" onRequestClose={() => setFilterModalVisible(false)}>
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setFilterModalVisible(false)}>
+          <TouchableOpacity activeOpacity={1} style={styles.modalContent} onPress={() => {}}>
+            <Text style={styles.modalTitle}>Rechercher dans</Text>
+            <TouchableOpacity
+              style={styles.folderOption}
+              onPress={() => toggleFilter('name')}
+            >
+              <MaterialIcons name="drive-file-rename-outline" size={20} color="#666" />
+              <Text style={styles.folderOptionText}>Nom</Text>
+              <View style={styles.filterCheck}>
+                {filters.name && <MaterialIcons name="check" size={18} color="#1976D2" />}
+              </View>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.folderOption}
+              onPress={() => toggleFilter('ocrText')}
+            >
+              <MaterialIcons name="document-scanner" size={20} color="#666" />
+              <Text style={styles.folderOptionText}>Texte OCR</Text>
+              <View style={styles.filterCheck}>
+                {filters.ocrText && <MaterialIcons name="check" size={18} color="#1976D2" />}
+              </View>
+            </TouchableOpacity>
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
@@ -806,6 +838,11 @@ const styles = StyleSheet.create({
   folderOptionText: {
     fontSize: 16,
     color: '#333',
+    flex: 1,
+  },
+  filterCheck: {
+    width: 24,
+    alignItems: 'flex-end',
   },
   modalOverlay: {
     flex: 1,

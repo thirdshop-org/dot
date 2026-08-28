@@ -1,5 +1,5 @@
-import React, { useRef, useEffect } from 'react';
-import { View, TextInput, TouchableOpacity, Text, StyleSheet, Animated } from 'react-native';
+import React from 'react';
+import { View, TextInput, TouchableOpacity, Text, StyleSheet } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import type { ComponentProps } from 'react';
 
@@ -24,38 +24,12 @@ interface SearchBarProps {
   onClear: () => void;
   filters: SearchFilters;
   onFiltersChange: (f: SearchFilters) => void;
+  onSettingsPress: () => void;
   sort: SortState;
-  onSortChange: (s: SortState) => void;
   bottomPadding?: number;
 }
 
-const FILTER_OPTIONS: { key: keyof SearchFilters; label: string; icon: IconName }[] = [
-  { key: 'name', label: 'Nom', icon: 'drive-file-rename-outline' },
-  { key: 'ocrText', label: 'Texte OCR', icon: 'document-scanner' },
-];
-
-export function SearchBar({ query, onQueryChange, onClear, filters, onFiltersChange, sort, bottomPadding = 0 }: SearchBarProps) {
-  const animatedHeight = useRef(new Animated.Value(0)).current;
-  const [panelOpen, setPanelOpen] = React.useState(false);
-
-  useEffect(() => {
-    Animated.spring(animatedHeight, {
-      toValue: panelOpen ? 1 : 0,
-      useNativeDriver: false,
-      tension: 60,
-      friction: 8,
-    }).start();
-  }, [panelOpen]);
-
-  const panelMaxHeight = animatedHeight.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, 150],
-  });
-
-  const toggleFilter = (key: keyof SearchFilters) => {
-    onFiltersChange({ ...filters, [key]: !filters[key] });
-  };
-
+export function SearchBar({ query, onQueryChange, onClear, filters, onSettingsPress, sort, bottomPadding = 0 }: SearchBarProps) {
   const hasActiveFilter = filters.name || filters.ocrText || sort.key !== 'date';
 
   return (
@@ -81,7 +55,7 @@ export function SearchBar({ query, onQueryChange, onClear, filters, onFiltersCha
 
         <TouchableOpacity
           style={[styles.iconBtn, hasActiveFilter && styles.iconBtnActive]}
-          onPress={() => setPanelOpen(!panelOpen)}
+          onPress={onSettingsPress}
         >
           <MaterialIcons
             name="tune"
@@ -90,26 +64,6 @@ export function SearchBar({ query, onQueryChange, onClear, filters, onFiltersCha
           />
         </TouchableOpacity>
       </View>
-
-      <Animated.View style={[styles.filterPanel, { maxHeight: panelMaxHeight, opacity: animatedHeight }]}>
-        <Text style={styles.sectionLabel}>Rechercher dans</Text>
-        {FILTER_OPTIONS.map((opt) => (
-          <TouchableOpacity
-            key={opt.key}
-            style={[styles.filterChip, filters[opt.key] && styles.filterChipActive]}
-            onPress={() => toggleFilter(opt.key)}
-          >
-            <MaterialIcons
-              name={opt.icon}
-              size={16}
-              color={filters[opt.key] ? '#fff' : '#1976D2'}
-            />
-            <Text style={[styles.filterChipText, filters[opt.key] && styles.filterChipTextActive]}>
-              {opt.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </Animated.View>
     </View>
   );
 }
@@ -159,43 +113,5 @@ const styles = StyleSheet.create({
   },
   iconBtnActive: {
     backgroundColor: '#1976D2',
-  },
-  filterPanel: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingBottom: 10,
-    gap: 8,
-    overflow: 'hidden',
-  },
-  sectionLabel: {
-    width: '100%',
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#666',
-    marginTop: 4,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  filterChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#1976D2',
-    gap: 4,
-  },
-  filterChipActive: {
-    backgroundColor: '#1976D2',
-  },
-  filterChipText: {
-    fontSize: 12,
-    color: '#1976D2',
-  },
-  filterChipTextActive: {
-    color: '#fff',
   },
 });
