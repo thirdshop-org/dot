@@ -10,7 +10,13 @@ export interface SearchFilters {
   ocrText: boolean;
 }
 
-export type MediaFilter = 'all' | 'documents' | 'photos-videos';
+export type SortKey = 'date' | 'name' | 'size';
+export type SortDirection = 'asc' | 'desc';
+
+export interface SortState {
+  key: SortKey;
+  direction: SortDirection;
+}
 
 interface SearchBarProps {
   query: string;
@@ -18,8 +24,8 @@ interface SearchBarProps {
   onClear: () => void;
   filters: SearchFilters;
   onFiltersChange: (f: SearchFilters) => void;
-  mediaFilter: MediaFilter;
-  onMediaFilterChange: (f: MediaFilter) => void;
+  sort: SortState;
+  onSortChange: (s: SortState) => void;
   bottomPadding?: number;
 }
 
@@ -28,31 +34,19 @@ const FILTER_OPTIONS: { key: keyof SearchFilters; label: string; icon: IconName 
   { key: 'ocrText', label: 'Texte OCR', icon: 'document-scanner' },
 ];
 
-const MEDIA_OPTIONS: { key: MediaFilter; label: string; icon: IconName }[] = [
-  { key: 'all', label: 'Tous', icon: 'filter-none' },
-  { key: 'documents', label: 'Documents', icon: 'description' },
-  { key: 'photos-videos', label: 'Photos', icon: 'photo-library' },
+const SORT_OPTIONS: { key: SortKey; label: string; icon: IconName }[] = [
+  { key: 'date', label: 'Date', icon: 'schedule' },
+  { key: 'name', label: 'Nom', icon: 'sort-by-alpha' },
+  { key: 'size', label: 'Taille', icon: 'data-usage' },
 ];
 
-const MEDIA_ICONS: Record<MediaFilter, IconName> = {
-  all: 'filter-none',
-  documents: 'description',
-  'photos-videos': 'photo-library',
+const SORT_LABELS: Record<SortKey, string> = {
+  date: 'Date',
+  name: 'Nom',
+  size: 'Taille',
 };
 
-const MEDIA_LABELS: Record<MediaFilter, string> = {
-  all: 'Tous',
-  documents: 'Documents',
-  'photos-videos': 'Photos',
-};
-
-function cycleMediaFilter(current: MediaFilter): MediaFilter {
-  if (current === 'all') return 'documents';
-  if (current === 'documents') return 'photos-videos';
-  return 'all';
-}
-
-export function SearchBar({ query, onQueryChange, onClear, filters, onFiltersChange, mediaFilter, onMediaFilterChange, bottomPadding = 0 }: SearchBarProps) {
+export function SearchBar({ query, onQueryChange, onClear, filters, onFiltersChange, sort, onSortChange, bottomPadding = 0 }: SearchBarProps) {
   const animatedHeight = useRef(new Animated.Value(0)).current;
   const [panelOpen, setPanelOpen] = React.useState(false);
 
@@ -67,14 +61,22 @@ export function SearchBar({ query, onQueryChange, onClear, filters, onFiltersCha
 
   const panelMaxHeight = animatedHeight.interpolate({
     inputRange: [0, 1],
-    outputRange: [0, 120],
+    outputRange: [0, 260],
   });
 
   const toggleFilter = (key: keyof SearchFilters) => {
     onFiltersChange({ ...filters, [key]: !filters[key] });
   };
 
-  const hasActiveFilter = filters.name || filters.ocrText;
+  const selectSort = (key: SortKey) => {
+    if (sort.key === key) {
+      onSortChange({ key, direction: sort.direction === 'asc' ? 'desc' : 'asc' });
+    } else {
+      onSortChange({ key, direction: 'desc' });
+    }
+  };
+
+  const hasActiveFilter = filters.name || filters.ocrText || sort.key !== 'date';
 
   return (
     <View style={[styles.wrapper, { paddingBottom: bottomPadding }]}>
@@ -107,20 +109,10 @@ export function SearchBar({ query, onQueryChange, onClear, filters, onFiltersCha
             color={hasActiveFilter ? '#fff' : '#1976D2'}
           />
         </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.iconBtn, mediaFilter !== 'all' && styles.iconBtnActive]}
-          onPress={() => onMediaFilterChange(cycleMediaFilter(mediaFilter))}
-        >
-          <MaterialIcons
-            name={MEDIA_ICONS[mediaFilter]}
-            size={22}
-            color={mediaFilter !== 'all' ? '#fff' : '#1976D2'}
-          />
-        </TouchableOpacity>
       </View>
 
       <Animated.View style={[styles.filterPanel, { maxHeight: panelMaxHeight, opacity: animatedHeight }]}>
+        <Text style={styles.sectionLabel}>Rechercher dans</Text>
         {FILTER_OPTIONS.map((opt) => (
           <TouchableOpacity
             key={opt.key}
@@ -137,23 +129,33 @@ export function SearchBar({ query, onQueryChange, onClear, filters, onFiltersCha
             </Text>
           </TouchableOpacity>
         ))}
-        <View style={styles.mediaDivider} />
-        {MEDIA_OPTIONS.map((opt) => (
-          <TouchableOpacity
-            key={opt.key}
-            style={[styles.filterChip, mediaFilter === opt.key && styles.filterChipActive]}
-            onPress={() => onMediaFilterChange(opt.key)}
-          >
-            <MaterialIcons
-              name={opt.icon}
-              size={16}
-              color={mediaFilter === opt.key ? '#fff' : '#1976D2'}
-            />
-            <Text style={[styles.filterChipText, mediaFilter === opt.key && styles.filterChipTextActive]}>
-              {opt.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
+
+        <Text style={styles.sectionLabel}>Trier par</Text>
+        {SORT_OPTIONS.map((opt) => {
+          const active = sort.key === opt.key;
+          return (
+            <TouchableOpacity
+              key={opt.key}
+              style={[styles.filterChip, active && styles.filterChipActive]}
+              onPress={() => selectSort(opt.key)}
+            >
+              <MaterialIcons
+                name={active && sort.direction === 'desc' ? 'arrow-downward' : active && sort.direction === 'asc' ? 'arrow-upward' : opt.icon}
+                size={16}
+                color={active ? '#fff' : '#1976D2'}
+              />
+              <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>
+                {opt.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+
+        {sort.key !== 'date' && (
+          <Text style={styles.sortHint}>
+            Tri : {SORT_LABELS[sort.key]} ({sort.direction === 'asc' ? 'A → Z' : 'Z → A'})
+          </Text>
+        )}
       </Animated.View>
     </View>
   );
@@ -208,16 +210,20 @@ const styles = StyleSheet.create({
   filterPanel: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    alignItems: 'center',
     paddingHorizontal: 12,
     paddingBottom: 10,
     gap: 8,
     overflow: 'hidden',
   },
-  mediaDivider: {
+  sectionLabel: {
     width: '100%',
-    height: 1,
-    backgroundColor: '#e0e0e0',
-    marginVertical: 4,
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#666',
+    marginTop: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   filterChip: {
     flexDirection: 'row',
@@ -238,5 +244,10 @@ const styles = StyleSheet.create({
   },
   filterChipTextActive: {
     color: '#fff',
+  },
+  sortHint: {
+    width: '100%',
+    fontSize: 12,
+    color: '#999',
   },
 });

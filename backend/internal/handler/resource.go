@@ -129,7 +129,7 @@ func (h *ResourceHandler) List(c *gin.Context) {
 		}
 
 		downloadURL := h.urls.GenerateDownloadURL(r.ID)
-		thumbURL := downloadURL
+		var thumbURL string
 		if thumbnailQuality != "" {
 			if best := h.resources.GetBestVariant(r.ID, thumbnailQuality); best != nil {
 				thumbURL = h.urls.GenerateVariantURL(best.ID)
@@ -209,7 +209,7 @@ func (h *ResourceHandler) Get(c *gin.Context) {
 	}
 
 	downloadURL := h.urls.GenerateDownloadURL(resource.ID)
-	thumbURL := downloadURL
+	var thumbURL string
 	if thumbnailQuality != "" {
 		if best := h.resources.GetBestVariant(resource.ID, thumbnailQuality); best != nil {
 			thumbURL = h.urls.GenerateVariantURL(best.ID)
@@ -399,7 +399,7 @@ func (h *ResourceHandler) ListByParent(c *gin.Context) {
 		}
 
 		downloadURL := h.urls.GenerateDownloadURL(r.ID)
-		thumbURL := downloadURL
+		var thumbURL string
 		if thumbnailQuality != "" {
 			if best := h.resources.GetBestVariant(r.ID, thumbnailQuality); best != nil {
 				thumbURL = h.urls.GenerateVariantURL(best.ID)

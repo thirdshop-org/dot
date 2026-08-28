@@ -15,6 +15,7 @@ export const files = sqliteTable(
     isFolder: integer('is_folder').notNull().default(0),
     ocrText: text('ocr_text'),
     thumbnailUrl: text('thumbnail_url'),
+    thumbnailLocal: text('thumbnail_local'),
     ownerId: text('owner_id'),
     createdAt: text('created_at').notNull(),
     updatedAt: text('updated_at').notNull(),

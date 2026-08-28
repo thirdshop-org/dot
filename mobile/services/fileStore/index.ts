@@ -6,7 +6,7 @@ import type { Tag, PendingAction, PendingActionType, PendingActionStatus } from 
 
 const DB_NAME = 'vaultdrop-v3.db';
 const SCHEMA_VERSION_KEY = 'schema_version';
-const SCHEMA_VERSION = 4;
+const SCHEMA_VERSION = 5;
 
 let _db: ReturnType<typeof drizzle> | null = null;
 let _sqliteDb: SQLite.SQLiteDatabase | null = null;
@@ -65,6 +65,7 @@ function createSchema(db: SQLite.SQLiteDatabase) {
       is_folder INTEGER NOT NULL DEFAULT 0,
       ocr_text TEXT,
       thumbnail_url TEXT,
+      thumbnail_local TEXT,
       owner_id TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
@@ -165,6 +166,7 @@ export type FileRecord = {
   isFolder: number;
   ocrText: string | null;
   thumbnailUrl: string | null;
+  thumbnailLocal?: string | null;
   ownerId: string | null;
   createdAt: string;
   updatedAt: string;
@@ -185,6 +187,7 @@ type FileRow = {
   isFolder: number;
   ocrText: string | null;
   thumbnailUrl: string | null;
+  thumbnailLocal: string | null;
   ownerId: string | null;
   createdAt: string;
   updatedAt: string;
@@ -205,6 +208,7 @@ function rowToRecord(row: FileRow, tags?: Tag[]): FileRecord {
     isFolder: row.isFolder,
     ocrText: row.ocrText,
     thumbnailUrl: row.thumbnailUrl,
+    thumbnailLocal: row.thumbnailLocal,
     ownerId: row.ownerId,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -247,6 +251,7 @@ function upsertRow(file: FileRecord) {
     isFolder: file.isFolder,
     ocrText: file.ocrText,
     thumbnailUrl: file.thumbnailUrl,
+    thumbnailLocal: file.thumbnailLocal ?? null,
     ownerId: file.ownerId,
     createdAt: file.createdAt,
     updatedAt: file.updatedAt,
@@ -265,6 +270,7 @@ function upsertRow(file: FileRecord) {
       isFolder: file.isFolder,
       ocrText: file.ocrText,
       thumbnailUrl: file.thumbnailUrl,
+      thumbnailLocal: file.thumbnailLocal ?? null,
       ownerId: file.ownerId,
       updatedAt: file.updatedAt,
       lastSyncedAt: file.lastSyncedAt,
@@ -450,6 +456,7 @@ export const fileStore = {
           isFolder: bf.isFolder ? 1 : 0,
           ocrText: bf.ocrText ?? null,
           thumbnailUrl: bf.thumbnailUrl ?? null,
+          thumbnailLocal: existing?.thumbnailLocal ?? null,
           ownerId: bf.ownerId ?? null,
           createdAt: bf.createdAt,
           updatedAt: bf.updatedAt ?? now,
@@ -492,6 +499,7 @@ export const fileStore = {
           isFolder: 0,
           ocrText: null,
           thumbnailUrl: null,
+          thumbnailLocal: null,
           ownerId: null,
           createdAt: df.createdAt,
           updatedAt: now,
@@ -509,6 +517,7 @@ export const fileStore = {
     if (updates.localUri !== undefined) setFields.localUri = updates.localUri;
     if (updates.source !== undefined) setFields.source = updates.source;
     if (updates.thumbnailUrl !== undefined) setFields.thumbnailUrl = updates.thumbnailUrl;
+    if (updates.thumbnailLocal !== undefined) setFields.thumbnailLocal = updates.thumbnailLocal;
     if (updates.ocrText !== undefined) setFields.ocrText = updates.ocrText;
     if (updates.parentResourceId !== undefined) setFields.parentResourceId = updates.parentResourceId;
     if (updates.name !== undefined) setFields.name = updates.name;
@@ -530,6 +539,12 @@ export const fileStore = {
     const d = getDb();
     d.update(files).set({ thumbnailUrl, updatedAt: new Date().toISOString() })
       .where(eq(files.backendId, backendId)).run();
+  },
+
+  setThumbnailLocal(id: string, thumbnailLocal: string) {
+    const d = getDb();
+    d.update(files).set({ thumbnailLocal, updatedAt: new Date().toISOString() })
+      .where(eq(files.id, id)).run();
   },
 
   markDeleted(id: string) {

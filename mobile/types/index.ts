@@ -26,6 +26,7 @@ export interface UnifiedFileItem {
   ownerId?: string;
   url?: string;
   thumbnailUrl?: string;
+  thumbnailLocal?: string;
   variants?: Variant[];
   isDeviceFile?: boolean;
   isUploading?: boolean;

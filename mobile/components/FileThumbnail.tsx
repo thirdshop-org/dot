@@ -23,6 +23,8 @@ function getFileInfo(mimeType: string, fileName: string): FileTypeInfo {
   if (mimeType.startsWith('text/')) return { icon: 'article', color: '#546E7A', bg: '#ECEFF1' };
   if (mimeType.startsWith('video/')) return { icon: 'movie', color: '#6A1B9A', bg: '#F3E5F5' };
   if (mimeType.startsWith('audio/')) return { icon: 'audiotrack', color: '#AD1457', bg: '#FCE4EC' };
+  if (mimeType.includes('zip') || mimeType.includes('compressed') || mimeType.includes('rar') || mimeType.includes('tar')) return { icon: 'folder-zip', color: '#6D4C41', bg: '#EFEBE9' };
+  if (mimeType.includes('json') || mimeType.includes('xml')) return { icon: 'code', color: '#37474F', bg: '#ECEFF1' };
   return { icon: 'insert-drive-file', color: '#757575', bg: '#F5F5F5' };
 }
 
@@ -34,6 +36,7 @@ function getExtension(fileName: string): string {
 interface FileThumbnailProps {
   uri?: string;
   thumbnailUrl?: string;
+  thumbnailLocal?: string;
   mimeType: string;
   fileName: string;
   size: number;
@@ -44,7 +47,7 @@ interface FileThumbnailProps {
   uploadProgress?: number;
 }
 
-export const FileThumbnail = React.memo(function FileThumbnail({ uri, thumbnailUrl, mimeType, fileName, size, isLoading, syncStatus, isFolder, isUploading, uploadProgress }: FileThumbnailProps) {
+export const FileThumbnail = React.memo(function FileThumbnail({ uri, thumbnailUrl, thumbnailLocal, mimeType, fileName, size, isLoading, syncStatus, isFolder, isUploading, uploadProgress }: FileThumbnailProps) {
   const info = getFileInfo(mimeType, fileName);
   const ext = getExtension(fileName);
 
@@ -64,7 +67,7 @@ export const FileThumbnail = React.memo(function FileThumbnail({ uri, thumbnailU
     );
   }
 
-  const imageUri = thumbnailUrl || (uri && mimeType.startsWith('image/') ? uri : undefined);
+  const imageUri = thumbnailUrl || thumbnailLocal || (uri && mimeType.startsWith('image/') ? uri : undefined);
 
   if (imageUri) {
     return (

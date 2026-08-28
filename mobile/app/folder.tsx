@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useCallback, useEffect } from 'react';
-import { View, FlatList, StyleSheet, TouchableOpacity, Text, Dimensions, Modal, TextInput } from 'react-native';
+import { View, FlatList, StyleSheet, TouchableOpacity, Text, Modal, TextInput } from 'react-native';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -12,7 +12,7 @@ import { SelectionPanel } from '../components/SelectionPanel';
 import { ConfirmModal, type ConfirmOption } from '../components/ConfirmModal';
 import { UnifiedFileItem } from '../types';
 import { isFolder } from '../types';
-import { FileThumbnail } from '../components/FileThumbnail';
+import { FileCard } from '../components/FileCard';
 import { fileStore } from '../services/fileStore';
 import { downloadRegistry } from '../services/downloadRegistry';
 import { apiClient } from '../api/client';
@@ -20,9 +20,6 @@ import { ENDPOINTS } from '../constants/api';
 import { useQueryClient } from '@tanstack/react-query';
 import { deleteAsync } from 'expo-file-system/legacy';
 
-const NUM_COLUMNS = 3;
-const SCREEN_WIDTH = Dimensions.get('window').width;
-const ITEM_SIZE = (SCREEN_WIDTH - 16 * 2 - (NUM_COLUMNS - 1) * 6) / NUM_COLUMNS;
 const PAGE_SIZE = 100;
 
 type RootStackParamList = {
@@ -34,44 +31,6 @@ type RootStackParamList = {
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 type FolderRouteProp = RouteProp<RootStackParamList, 'Folder'>;
-
-function FolderGridItem({ file, onPress, onLongPress, selected, onFolderPress }: {
-  file: UnifiedFileItem;
-  onPress?: () => void;
-  onLongPress?: () => void;
-  selected?: boolean;
-  onFolderPress?: () => void;
-}) {
-  const folder = isFolder(file);
-
-  return (
-    <TouchableOpacity
-      style={[styles.gridItem, selected && styles.gridItemSelected]}
-      onPress={folder ? onFolderPress : onPress}
-      onLongPress={onLongPress}
-      delayLongPress={400}
-      activeOpacity={0.7}
-    >
-      <FileThumbnail
-        uri={file.url ?? file.localUri}
-        thumbnailUrl={file.thumbnailUrl}
-        mimeType={file.mimeType}
-        fileName={file.name}
-        size={ITEM_SIZE}
-        syncStatus={file.syncStatus}
-        isFolder={file.isFolder}
-      />
-      {selected && (
-        <View style={styles.selectedOverlay}>
-          <View style={styles.checkCircle}>
-            <MaterialIcons name="check" size={18} color="#fff" />
-          </View>
-        </View>
-      )}
-      <Text style={styles.fileName} numberOfLines={1}>{file.name}</Text>
-    </TouchableOpacity>
-  );
-}
 
 export function FolderScreen() {
   const route = useRoute<FolderRouteProp>();
@@ -280,12 +239,11 @@ export function FolderScreen() {
           ) : null
         }
         renderItem={({ item: file }) => (
-          <FolderGridItem
+          <FileCard
             file={file}
             selected={selectedIds.has(file.id)}
-            onPress={() => handleItemPress(file)}
-            onLongPress={() => handleItemLongPress(file)}
-            onFolderPress={() => navigation.push('Folder', { folderId: file.id, folderName: file.name })}
+            onPress={handleItemPress}
+            onLongPress={handleItemLongPress}
           />
         )}
       />
@@ -387,6 +345,7 @@ const styles = StyleSheet.create({
   },
   list: {
     padding: 15,
+    paddingBottom: 80,
   },
   empty: {
     paddingVertical: 60,
@@ -396,36 +355,6 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 16,
     color: '#999',
-  },
-  gridItem: {
-    width: ITEM_SIZE,
-  },
-  gridItemSelected: {
-    opacity: 0.85,
-  },
-  selectedOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 18,
-    justifyContent: 'flex-start',
-    alignItems: 'flex-end',
-    padding: 4,
-  },
-  checkCircle: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: '#1976D2',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  fileName: {
-    fontSize: 11,
-    color: '#666',
-    marginTop: 4,
-    textAlign: 'center',
   },
   selectionBar: {
     backgroundColor: '#fff',

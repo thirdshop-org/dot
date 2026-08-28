@@ -1,16 +1,14 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { View, FlatList, StyleSheet, TouchableOpacity, Text, Dimensions, KeyboardAvoidingView, Platform, Keyboard, Alert, Modal, TextInput, ActivityIndicator } from 'react-native';
+import { View, FlatList, StyleSheet, TouchableOpacity, Text, KeyboardAvoidingView, Platform, Keyboard, Modal, TextInput, ActivityIndicator } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Animated, { runOnJS, useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 import { useAddTags, useMoveResources, useFolders, useFiles, useFreeLocalSpace, useCreateFolder } from '../hooks/useFiles';
 import { SelectionPanel } from '../components/SelectionPanel';
 import { UnifiedFileItem, isFolder } from '../types';
-import { SearchBar, SearchFilters, MediaFilter } from '../components/SearchBar';
-import { FileThumbnail } from '../components/FileThumbnail';
+import { SearchBar, SearchFilters, SortState } from '../components/SearchBar';
+import { FileCard } from '../components/FileCard';
 import { SettingsModal } from '../components/SettingsModal';
 import { ConfirmModal, type ConfirmOption } from '../components/ConfirmModal';
 import { UploadModal } from '../components/UploadModal';
@@ -29,9 +27,7 @@ import { useLocalFiles } from '../hooks/useLocalFiles';
 import { deleteAsync } from 'expo-file-system/legacy';
 import { useDebounce } from '../hooks/useDebounce';
 
-const SCREEN_WIDTH = Dimensions.get('window').width;
-const PADDING_H = 15;
-const ITEM_GAP = 6;
+const PAGE_SIZE = 100;
 
 type RootStackParamList = {
   Home: undefined;
@@ -52,37 +48,6 @@ function parseBackendDate(dateStr: string): Date | null {
   return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]), Number(match[4]), Number(match[5]), Number(match[6]));
 }
 
-const FileGridItem = React.memo(function FileGridItem({ file, size, onPress, onLongPress, selected }: { file: UnifiedFileItem; size: number; onPress?: (f: UnifiedFileItem) => void; onLongPress?: (f: UnifiedFileItem) => void; selected?: boolean }) {
-  return (
-    <TouchableOpacity
-      style={[styles.gridItem, { width: size }, selected && styles.gridItemSelected]}
-      onPress={() => onPress?.(file)}
-      onLongPress={() => onLongPress?.(file)}
-      delayLongPress={400}
-      activeOpacity={0.7}
-    >
-      <FileThumbnail
-        uri={file.url ?? file.localUri}
-        thumbnailUrl={file.thumbnailUrl}
-        mimeType={file.mimeType}
-        fileName={file.name}
-        size={size}
-        syncStatus={file.syncStatus}
-        isFolder={file.isFolder}
-        isUploading={file.isUploading}
-        uploadProgress={file.uploadProgress}
-      />
-      {selected && (
-        <View style={styles.selectedOverlay}>
-          <View style={styles.checkCircle}>
-            <MaterialIcons name="check" size={18} color="#fff" />
-          </View>
-        </View>
-      )}
-    </TouchableOpacity>
-  );
-});
-
 function matchesQuery(file: UnifiedFileItem, query: string, filters: SearchFilters): boolean {
   if (!query) return true;
   const q = query.toLowerCase();
@@ -95,7 +60,19 @@ function matchesQuery(file: UnifiedFileItem, query: string, filters: SearchFilte
   return false;
 }
 
-const PAGE_SIZE = 100;
+function compareBySort(a: UnifiedFileItem, b: UnifiedFileItem, sort: SortState): number {
+  let cmp = 0;
+  if (sort.key === 'name') {
+    cmp = a.name.toLowerCase().localeCompare(b.name.toLowerCase());
+  } else if (sort.key === 'size') {
+    cmp = (a.size ?? 0) - (b.size ?? 0);
+  } else {
+    const da = parseBackendDate(a.createdAt);
+    const db = parseBackendDate(b.createdAt);
+    cmp = (da?.getTime() ?? 0) - (db?.getTime() ?? 0);
+  }
+  return sort.direction === 'asc' ? cmp : -cmp;
+}
 
 export function HomeScreen() {
   const navigation = useNavigation<NavigationProp>();
@@ -108,10 +85,9 @@ export function HomeScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const debouncedSearch = useDebounce(searchQuery, 250);
   const [filters, setFilters] = useState<SearchFilters>({ name: true, ocrText: true });
-  const [mediaFilter, setMediaFilter] = useState<MediaFilter>('documents');
+  const [sort, setSort] = useState<SortState>({ key: 'date', direction: 'desc' });
   const [keyboardOpen, setKeyboardOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [numColumns, setNumColumns] = useState(3);
   const [tagModalVisible, setTagModalVisible] = useState(false);
   const [tagModalMode, setTagModalMode] = useState<'tag' | 'folder'>('tag');
   const [tagInput, setTagInput] = useState('');
@@ -130,14 +106,6 @@ export function HomeScreen() {
   const { tasks: uploadTasks } = useUploadQueue();
   useAutoSync();
 
-  const pinchScale = useSharedValue(1);
-
-  const gridAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: pinchScale.value }],
-  }));
-
-  const itemSize = (SCREEN_WIDTH - PADDING_H * 2 - (numColumns - 1) * ITEM_GAP) / numColumns;
-
   const loadMore = useCallback(() => {
     if (isFetching) return;
     const total = data?.meta?.total ?? 0;
@@ -150,7 +118,7 @@ export function HomeScreen() {
   const totalFiles = data?.meta?.total ?? 0;
   const loadedFiles = data?.data?.length ?? 0;
   const hasMore = loadedFiles > 0 && loadedFiles < totalFiles;
-  const isFiltering = mediaFilter !== 'all' || !!debouncedSearch.trim();
+  const isFiltering = !!debouncedSearch.trim();
 
   useEffect(() => {
     const show = Keyboard.addListener('keyboardDidShow', () => setKeyboardOpen(true));
@@ -201,20 +169,6 @@ export function HomeScreen() {
     [files, debouncedSearch, filters]
   );
 
-  const mediaFilteredFiles = useMemo(() => {
-    if (mediaFilter === 'all') return filteredFiles;
-
-    const PHOTOS_VIDEOS = ['image/','video/'];
-    const DOCUMENTS = ['application/','text/'];
-
-    return filteredFiles.filter((f) => {
-      const mt = (f.mimeType ?? '').toLowerCase();
-      if (mediaFilter === 'documents') return DOCUMENTS.some(docType => mt.startsWith(docType)) || PHOTOS_VIDEOS.every(docType => !mt.startsWith(docType));
-      if (mediaFilter === 'photos-videos') return PHOTOS_VIDEOS.some(docType => mt.startsWith(docType));
-      return true;
-    });
-  }, [filteredFiles, mediaFilter]);
-
   const uploadGhostItems = useMemo(() => {
     return uploadTasks
       .filter((t) => t.status === 'pending' || t.status === 'uploading')
@@ -238,17 +192,14 @@ export function HomeScreen() {
 
   const sortedFiles = useMemo(() => {
     const uploadedExistingIds = new Set(
-      mediaFilteredFiles.map((f) => f.localUri).filter(Boolean)
+      filteredFiles.map((f) => f.localUri).filter(Boolean)
     );
     const ghosts = uploadGhostItems.filter(
       (g) => g.localUri && !uploadedExistingIds.has(g.localUri)
     );
-    return [...ghosts, ...mediaFilteredFiles].sort((a, b) => {
-      const da = parseBackendDate(a.createdAt);
-      const db = parseBackendDate(b.createdAt);
-      return (db?.getTime() ?? 0) - (da?.getTime() ?? 0);
-    });
-  }, [mediaFilteredFiles, uploadGhostItems]);
+    const sorted = [...filteredFiles].sort((a, b) => compareBySort(a, b, sort));
+    return [...ghosts, ...sorted];
+  }, [filteredFiles, uploadGhostItems, sort]);
 
   const displayedCount = sortedFiles.length;
 
@@ -257,29 +208,6 @@ export function HomeScreen() {
     sortedFiles.forEach((f, i) => map.set(f.id, i));
     return map;
   }, [sortedFiles]);
-
-  const handlePinchEnd = useCallback((scale: number) => {
-    if (scale > 1.2) {
-      setNumColumns(prev => Math.max(2, prev - 1));
-    } else if (scale < 0.8) {
-      setNumColumns(prev => Math.min(6, prev + 1));
-    }
-  }, []);
-
-  const pinchGesture = useMemo(() =>
-    Gesture.Pinch()
-      .onBegin(() => {
-        pinchScale.value = 1;
-      })
-      .onChange((event) => {
-        pinchScale.value = event.scale;
-      })
-      .onEnd((event) => {
-        pinchScale.value = withSpring(1);
-        runOnJS(handlePinchEnd)(event.scale);
-      }),
-    []
-  );
 
   const toggleSelection = useCallback((id: string) => {
     setSelectedIds((prev) => {
@@ -456,14 +384,13 @@ export function HomeScreen() {
   }, [selectionMode, toggleSelection]);
 
   const renderItem = useCallback(({ item }: { item: UnifiedFileItem }) => (
-    <FileGridItem
+    <FileCard
       file={item}
-      size={itemSize}
       selected={selectedIds.has(item.id)}
       onPress={handleItemPress}
       onLongPress={handleItemLongPress}
     />
-  ), [itemSize, selectedIds, handleItemPress, handleItemLongPress]);
+  ), [selectedIds, handleItemPress, handleItemLongPress]);
 
   if (isLoading) {
     return (
@@ -535,45 +462,40 @@ export function HomeScreen() {
           )}
         </View>
       )}
-      <GestureDetector gesture={pinchGesture}>
-        <Animated.View style={[styles.listWrapper, gridAnimatedStyle]}>
-          <FlatList
-            key={numColumns}
-            data={sortedFiles}
-            keyExtractor={(item) => item.id}
-            numColumns={numColumns}
-            columnWrapperStyle={{ gap: ITEM_GAP }}
-            contentContainerStyle={styles.list}
-            keyboardShouldPersistTaps="handled"
-            keyboardDismissMode="on-drag"
-            onEndReached={loadMore}
-            onEndReachedThreshold={0.5}
-            ListFooterComponent={
-              hasMore ? (
-                <TouchableOpacity style={styles.loadMoreBtn} onPress={loadMore} disabled={isFetching}>
-                  {isFetching ? (
-                    <ActivityIndicator size="small" color="#1976D2" />
-                  ) : (
-                    <Text style={styles.loadMoreText}>
-                      Charger plus ({displayedCount}{!isFiltering && `/${totalFiles}`})
-                    </Text>
-                  )}
-                </TouchableOpacity>
-              ) : displayedCount > 0 ? (
-                <Text style={styles.loadedAllText}>{displayedCount} fichier{displayedCount > 1 ? 's' : ''}</Text>
-              ) : null
-            }
-            ListEmptyComponent={
-              <View style={styles.empty}>
-                <Text style={styles.emptyText}>
-                  {debouncedSearch ? 'Aucun résultat' : 'Aucun fichier'}
-                </Text>
-              </View>
-            }
-            renderItem={renderItem}
-          />
-        </Animated.View>
-      </GestureDetector>
+      <View style={styles.listWrapper}>
+        <FlatList
+          data={sortedFiles}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.list}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          onEndReached={loadMore}
+          onEndReachedThreshold={0.5}
+          ListFooterComponent={
+            hasMore ? (
+              <TouchableOpacity style={styles.loadMoreBtn} onPress={loadMore} disabled={isFetching}>
+                {isFetching ? (
+                  <ActivityIndicator size="small" color="#1976D2" />
+                ) : (
+                  <Text style={styles.loadMoreText}>
+                    Charger plus ({displayedCount}{!isFiltering && `/${totalFiles}`})
+                  </Text>
+                )}
+              </TouchableOpacity>
+            ) : displayedCount > 0 ? (
+              <Text style={styles.loadedAllText}>{displayedCount} fichier{displayedCount > 1 ? 's' : ''}</Text>
+            ) : null
+          }
+          ListEmptyComponent={
+            <View style={styles.empty}>
+              <Text style={styles.emptyText}>
+                {debouncedSearch ? 'Aucun résultat' : 'Aucun fichier'}
+              </Text>
+            </View>
+          }
+          renderItem={renderItem}
+        />
+      </View>
 
       {!selectionMode && (
         <SearchBar
@@ -582,8 +504,8 @@ export function HomeScreen() {
           onClear={() => setSearchQuery('')}
           filters={filters}
           onFiltersChange={setFilters}
-          mediaFilter={mediaFilter}
-          onMediaFilterChange={setMediaFilter}
+          sort={sort}
+          onSortChange={setSort}
           bottomPadding={keyboardOpen ? insets.bottom+8 : 0}
         />
       )}
@@ -785,7 +707,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   list: {
-    padding: PADDING_H,
+    paddingHorizontal: 15,
+    paddingTop: 10,
     paddingBottom: 80,
   },
   empty: {
@@ -795,30 +718,6 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 16,
     color: '#999',
-  },
-  gridItem: {
-    marginBottom: ITEM_GAP,
-  },
-  gridItemSelected: {
-    opacity: 0.85,
-  },
-  selectedOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    justifyContent: 'flex-start',
-    alignItems: 'flex-end',
-    padding: 4,
-  },
-  checkCircle: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: '#1976D2',
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   bottomNav: {
     flexDirection: 'row',

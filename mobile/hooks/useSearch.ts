@@ -21,6 +21,7 @@ function recordToUnifiedItem(record: ReturnType<typeof fileStore.getById>): Unif
     parentResourceId: record.parentResourceId ?? undefined,
     ownerId: record.ownerId ?? undefined,
     thumbnailUrl: record.thumbnailUrl ?? undefined,
+    thumbnailLocal: record.thumbnailLocal ?? undefined,
     isDeviceFile: record.source === 'local' && !record.backendId,
   };
 }
