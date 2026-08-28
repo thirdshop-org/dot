@@ -4,6 +4,7 @@ import { ENDPOINTS } from '../constants/api';
 import type { UnifiedFileItem, PaginatedResponse, FileItem, Tag } from '../types';
 import { fileStore } from '../services/fileStore';
 import { actionQueue } from '../services/actionQueue';
+import { useNetworkStatus } from './useNetworkStatus';
 
 function recordToUnifiedItem(record: ReturnType<typeof fileStore.getById>): UnifiedFileItem | null {
   if (!record) return null;
@@ -33,9 +34,43 @@ export function useFiles(parentId?: string | null, page: number = 1, limit: numb
     ? ['resources', parentId, page, limit]
     : ['resources', 'root', page, limit];
 
+  const { isOnline } =  useNetworkStatus(); 
+
   return useQuery({
     queryKey,
     queryFn: async () => {
+      
+      if ( !isOnline ) {
+
+        if ( parentId ) {
+
+          const children = fileStore.getChildrenByParent(parentId);
+
+          return {
+            data: children.map((r) => recordToUnifiedItem(r)!).filter(Boolean),
+            meta: { page, total: children.length },
+          };
+
+        }
+
+        const cached = fileStore.getRootFiles();
+        const localDeviceFiles = fileStore.getLocalDeviceFiles();
+        const validFiles = cached.files.filter(
+          (f) => !f.backendId || returnedIds.has(f.backendId) || f.source === 'local',
+        );
+        const validIds = new Set(validFiles.map((f) => f.id));
+        const extraLocal = localDeviceFiles.filter((f) => !validIds.has(f.id));
+        const mergedFiles = [...validFiles, ...extraLocal];
+
+        return {
+          data: mergedFiles.map((r) => recordToUnifiedItem(r)!).filter(Boolean),
+          meta: { page, total: ( cached.total) + extraLocal.length },
+
+        }; 
+
+      }
+
+
       if (parentId) {
         const backendRes = await apiClient.get<PaginatedResponse<FileItem>>(
           `${ENDPOINTS.RESOURCES}/folders/${parentId}/resources?page=${page}&limit=${limit}&thumbnail=thumbnail_small`,
@@ -103,6 +138,7 @@ export function useFiles(parentId?: string | null, page: number = 1, limit: numb
       if (!parentId) {
         const cached = fileStore.getRootFiles();
         const localDeviceFiles = fileStore.getLocalDeviceFiles();
+
         const validIds = new Set(cached.files.map((f) => f.id));
         const extraLocal = localDeviceFiles.filter((f) => !validIds.has(f.id));
         const allFiles = [...cached.files, ...extraLocal];

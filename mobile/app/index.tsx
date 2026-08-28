@@ -187,16 +187,30 @@ export function HomeScreen() {
   const files = data?.data ?? [];
 
   const filteredFiles = useMemo(
-    () => debouncedSearch.trim() ? files.filter((f) => matchesQuery(f, debouncedSearch, filters)) : files,
+    () => {
+
+      const search = debouncedSearch.trim();
+
+      if ( search ) {
+          return files.filter((f) => matchesQuery(f, debouncedSearch, filters));
+      }
+
+      return files;
+
+    },
     [files, debouncedSearch, filters]
   );
 
   const mediaFilteredFiles = useMemo(() => {
     if (mediaFilter === 'all') return filteredFiles;
+
+    const PHOTOS_VIDEOS = ['image/','video/'];
+    const DOCUMENTS = ['application/','text/'];
+
     return filteredFiles.filter((f) => {
       const mt = (f.mimeType ?? '').toLowerCase();
-      if (mediaFilter === 'documents') return mt.startsWith('application/') || mt.startsWith('text/');
-      if (mediaFilter === 'photos-videos') return mt.startsWith('image/') || mt.startsWith('video/');
+      if (mediaFilter === 'documents') return DOCUMENTS.some(docType => mt.startsWith(docType)) || PHOTOS_VIDEOS.every(docType => !mt.startsWith(docType));
+      if (mediaFilter === 'photos-videos') return PHOTOS_VIDEOS.some(docType => mt.startsWith(docType));
       return true;
     });
   }, [filteredFiles, mediaFilter]);
