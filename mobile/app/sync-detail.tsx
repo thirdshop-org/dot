@@ -18,13 +18,6 @@ import { useSyncPush } from '../hooks/useSyncPush';
 import { useUploadQueue } from '../hooks/useUploadQueue';
 import { UploadTask } from '../services/uploadQueue';
 
-function formatSize(bytes: number): string {
-  if (bytes === 0) return '';
-  if (bytes < 1024) return `${bytes} o`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} Ko`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`;
-}
-
 function uploadStatusIcon(task: UploadTask) {
   switch (task.status) {
     case 'pending':
@@ -52,10 +45,6 @@ export function SyncDetailScreen() {
     const interval = setInterval(bumpList, 5000);
     return () => clearInterval(interval);
   }, [bumpList]);
-
-  const pendingFiles = useMemo(() => {
-    return fileStore.getPendingSync();
-  }, [listVersion]);
 
   const errorFiles = useMemo(() => {
     return fileStore.getErrorFiles();
@@ -119,7 +108,7 @@ export function SyncDetailScreen() {
   }, [retry]);
 
   const hasUploads = uploadTasks.length > 0;
-  const hasPending = pendingFiles.length > 0;
+  const hasPending = pendingCount > 0;
   const hasErrors = errorFiles.length > 0;
   const hasContent = hasUploads || hasPending || hasErrors;
 
@@ -164,15 +153,43 @@ export function SyncDetailScreen() {
             ...uploadTasks.map((t) => ({ type: 'upload' as const, data: t })),
             ...(hasErrors ? [{ type: 'section', label: 'Fichiers en erreur' } as const] : []),
             ...errorFiles.map((f) => ({ type: 'error' as const, data: f })),
-            ...(hasPending ? [{ type: 'section', label: 'Fichiers locaux à synchroniser' } as const] : []),
-            ...pendingFiles.map((f) => ({ type: 'file' as const, data: f })),
+            ...(hasPending ? [{ type: 'pendingCard' } as const] : []),
           ]}
           keyExtractor={(item) =>
-            item.type === 'section' ? item.label : item.data.id
+            item.type === 'section' || item.type === 'pendingCard'
+              ? item.type === 'pendingCard'
+                ? 'pending-card'
+                : item.label
+              : item.data.id
           }
           renderItem={({ item }) => {
             if (item.type === 'section') {
               return <Text style={styles.headerText}>{item.label}</Text>;
+            }
+            if (item.type === 'pendingCard') {
+              return (
+                <TouchableOpacity
+                  style={styles.pendingCard}
+                  onPress={handleSyncButtonPress}
+                  disabled={isSyncing}
+                  activeOpacity={0.8}
+                >
+                  <View style={styles.pendingCardIcon}>
+                    <MaterialIcons name="cloud-upload" size={28} color="#1976D2" />
+                  </View>
+                  <View style={styles.pendingCardInfo}>
+                    <Text style={styles.pendingCardTitle}>
+                      {pendingCount > 1
+                        ? `Vous avez ${pendingCount} fichiers locaux pouvant être synchronisés`
+                        : 'Vous avez 1 fichier local pouvant être synchronisé'}
+                    </Text>
+                    <Text style={styles.pendingCardSubtitle}>
+                      Appuyer maintenant pour les synchroniser
+                    </Text>
+                  </View>
+                  <MaterialIcons name="chevron-right" size={24} color="#999" />
+                </TouchableOpacity>
+              );
             }
             if (item.type === 'upload') {
               const task = item.data;
@@ -222,22 +239,7 @@ export function SyncDetailScreen() {
                 </TouchableOpacity>
               );
             }
-            const file = item.data;
-            return (
-              <View style={styles.fileRow}>
-                <MaterialIcons name="insert-drive-file" size={20} color="#999" />
-                <View style={styles.fileInfo}>
-                  <Text style={styles.fileName} numberOfLines={1}>{file.name}</Text>
-                  <Text style={styles.fileMeta}>
-                    {formatSize(file.size)}
-                    {file.mimeType ? ` · ${file.mimeType.split('/').pop()}` : ''}
-                  </Text>
-                </View>
-                <View style={styles.localBadge}>
-                  <MaterialIcons name="phone-android" size={14} color="#757575" />
-                </View>
-              </View>
-            );
+            return null;
           }}
           contentContainerStyle={styles.list}
         />
@@ -286,6 +288,41 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 8,
     gap: 12,
+  },
+  pendingCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 8,
+    gap: 14,
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  pendingCardIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#E3F2FD',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pendingCardInfo: {
+    flex: 1,
+  },
+  pendingCardTitle: {
+    fontSize: 15,
+    color: '#333',
+    fontWeight: '600',
+  },
+  pendingCardSubtitle: {
+    fontSize: 13,
+    color: '#1976D2',
+    marginTop: 4,
   },
   fileInfo: {
     flex: 1,
