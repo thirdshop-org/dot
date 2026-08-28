@@ -34,19 +34,7 @@ const FILTER_OPTIONS: { key: keyof SearchFilters; label: string; icon: IconName 
   { key: 'ocrText', label: 'Texte OCR', icon: 'document-scanner' },
 ];
 
-const SORT_OPTIONS: { key: SortKey; label: string; icon: IconName }[] = [
-  { key: 'date', label: 'Date', icon: 'schedule' },
-  { key: 'name', label: 'Nom', icon: 'sort-by-alpha' },
-  { key: 'size', label: 'Taille', icon: 'data-usage' },
-];
-
-const SORT_LABELS: Record<SortKey, string> = {
-  date: 'Date',
-  name: 'Nom',
-  size: 'Taille',
-};
-
-export function SearchBar({ query, onQueryChange, onClear, filters, onFiltersChange, sort, onSortChange, bottomPadding = 0 }: SearchBarProps) {
+export function SearchBar({ query, onQueryChange, onClear, filters, onFiltersChange, sort, bottomPadding = 0 }: SearchBarProps) {
   const animatedHeight = useRef(new Animated.Value(0)).current;
   const [panelOpen, setPanelOpen] = React.useState(false);
 
@@ -61,19 +49,11 @@ export function SearchBar({ query, onQueryChange, onClear, filters, onFiltersCha
 
   const panelMaxHeight = animatedHeight.interpolate({
     inputRange: [0, 1],
-    outputRange: [0, 260],
+    outputRange: [0, 150],
   });
 
   const toggleFilter = (key: keyof SearchFilters) => {
     onFiltersChange({ ...filters, [key]: !filters[key] });
-  };
-
-  const selectSort = (key: SortKey) => {
-    if (sort.key === key) {
-      onSortChange({ key, direction: sort.direction === 'asc' ? 'desc' : 'asc' });
-    } else {
-      onSortChange({ key, direction: 'desc' });
-    }
   };
 
   const hasActiveFilter = filters.name || filters.ocrText || sort.key !== 'date';
@@ -129,33 +109,6 @@ export function SearchBar({ query, onQueryChange, onClear, filters, onFiltersCha
             </Text>
           </TouchableOpacity>
         ))}
-
-        <Text style={styles.sectionLabel}>Trier par</Text>
-        {SORT_OPTIONS.map((opt) => {
-          const active = sort.key === opt.key;
-          return (
-            <TouchableOpacity
-              key={opt.key}
-              style={[styles.filterChip, active && styles.filterChipActive]}
-              onPress={() => selectSort(opt.key)}
-            >
-              <MaterialIcons
-                name={active && sort.direction === 'desc' ? 'arrow-downward' : active && sort.direction === 'asc' ? 'arrow-upward' : opt.icon}
-                size={16}
-                color={active ? '#fff' : '#1976D2'}
-              />
-              <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>
-                {opt.label}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-
-        {sort.key !== 'date' && (
-          <Text style={styles.sortHint}>
-            Tri : {SORT_LABELS[sort.key]} ({sort.direction === 'asc' ? 'A → Z' : 'Z → A'})
-          </Text>
-        )}
       </Animated.View>
     </View>
   );
@@ -244,10 +197,5 @@ const styles = StyleSheet.create({
   },
   filterChipTextActive: {
     color: '#fff',
-  },
-  sortHint: {
-    width: '100%',
-    fontSize: 12,
-    color: '#999',
   },
 });
