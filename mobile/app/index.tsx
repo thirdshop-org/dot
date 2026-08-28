@@ -8,6 +8,7 @@ import { useAddTags, useMoveResources, useFolders, useFiles, useFreeLocalSpace, 
 import { SelectionPanel } from '../components/SelectionPanel';
 import { UnifiedFileItem, isFolder } from '../types';
 import { SearchBar, SearchFilters, SortState } from '../components/SearchBar';
+import { SortChips } from '../components/SortChips';
 import { FileCard } from '../components/FileCard';
 import { SettingsModal } from '../components/SettingsModal';
 import { ConfirmModal, type ConfirmOption } from '../components/ConfirmModal';
@@ -460,6 +461,10 @@ export function HomeScreen() {
           )}
         </View>
       )}
+      <SortChips
+        sort={sort}
+        onSortChange={setSort}
+      />
       <View style={styles.listWrapper}>
         <FlatList
           ref={listRef}
