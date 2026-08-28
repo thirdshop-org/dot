@@ -34,7 +34,7 @@ function uploadStatusIcon(task: UploadTask) {
 export function SyncDetailScreen() {
   const insets = useSafeAreaInsets();
   const { pendingCount, isSyncing, refresh } = useSyncQueue();
-  const { triggerSync } = useAutoSync();
+  const { syncManually } = useAutoSync();
   const { push } = useSyncPush();
   const { tasks: uploadTasks, retry, retryAll } = useUploadQueue();
 
@@ -56,7 +56,7 @@ export function SyncDetailScreen() {
     for (const f of fileStore.getErrorFiles()) {
       fileStore.resetSyncError(f.id);
     }
-    await triggerSync();
+    await syncManually();
     try {
       const { getStoredDeviceServerId } = await import('../hooks/useDeviceRegistration');
       const serverId = await getStoredDeviceServerId();
@@ -66,7 +66,7 @@ export function SyncDetailScreen() {
     } catch { }
     refresh();
     bumpList();
-  }, [triggerSync, push, refresh, bumpList]);
+  }, [syncManually, push, refresh, bumpList]);
 
   const handleSyncButtonPress = useCallback(async () => {
     if (uploadErrors.length > 0) {
@@ -85,7 +85,7 @@ export function SyncDetailScreen() {
           text: 'Réessayer',
           onPress: () => {
             fileStore.resetSyncError(file.id);
-            triggerSync().finally(() => {
+            syncManually().finally(() => {
               refresh();
               bumpList();
             });
@@ -93,7 +93,7 @@ export function SyncDetailScreen() {
         },
       ],
     );
-  }, [triggerSync, refresh, bumpList]);
+  }, [syncManually, refresh, bumpList]);
 
   const handleTaskPress = useCallback((task: UploadTask) => {
     if (task.status !== 'error') return;

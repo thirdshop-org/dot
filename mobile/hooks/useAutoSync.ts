@@ -3,7 +3,7 @@ import { createMMKV } from 'react-native-mmkv';
 import { useQueryClient } from '@tanstack/react-query';
 import { File, UploadType } from 'expo-file-system';
 import NetInfo, { NetInfoState } from '@react-native-community/netinfo';
-import { safDirectory, StoredFolder } from '../services/safDirectory';
+import { safDirectory } from '../services/safDirectory';
 import { fileStore } from '../services/fileStore';
 import { activeUploadUris } from '../services/uploadQueue';
 import { apiClient } from '../api/client';
@@ -77,40 +77,23 @@ export function useAutoSync() {
   const queryClient = useQueryClient();
   const isRunning = useRef(false);
 
-  const checkAndSync = useCallback(async () => {
+  const getPendingFiles = useCallback((): Array<ReturnType<typeof fileStore.getAllLocal>[number]> => {
+    return fileStore.getAllLocal().filter(
+      (entry) => !entry.backendId && entry.syncStatus === 'local' && entry.localUri
+    );
+  }, []);
+
+  const runPendingSync = useCallback(async (pendingFiles: Array<ReturnType<typeof fileStore.getAllLocal>[number]>) => {
     if (isRunning.current) return;
 
-    const globalMode = safDirectory.getGlobalSyncMode();
-    if (globalMode === 'off') return;
+    const globalCellular = safDirectory.getGlobalSyncCellular();
+    const netInfo = await NetInfo.fetch();
+
+    if (!canSyncBasedOnNetwork(netInfo, globalCellular)) return;
 
     isRunning.current = true;
 
     try {
-      const globalCellular = safDirectory.getGlobalSyncCellular();
-      const netInfo = await NetInfo.fetch();
-
-      if (!canSyncBasedOnNetwork(netInfo, globalCellular)) return;
-
-      const registry = fileStore.getAllLocal();
-      let pendingFiles = registry.filter(
-        (entry) => !entry.backendId && entry.syncStatus === 'local' && entry.localUri
-      );
-
-      if (globalMode === 'auto') {
-        // Mode auto global : tous les fichiers locaux sans backendId
-      } else {
-        // Mode manuel : uniquement les fichiers des dossiers en mode auto
-        const allFolders = safDirectory.getAll();
-        const autoFolderIds = new Set(
-          allFolders.filter((f) => f.syncMode === 'auto').map((f) => f.id)
-        );
-        pendingFiles = pendingFiles.filter(
-          (entry) => entry.parentResourceId && autoFolderIds.has(entry.parentResourceId)
-        );
-      }
-
-      if (pendingFiles.length === 0) return;
-
       setIsSyncing(true);
 
       for (const entry of pendingFiles) {
@@ -150,6 +133,33 @@ export function useAutoSync() {
     }
   }, [queryClient]);
 
+  const checkAndSync = useCallback(async () => {
+    const globalMode = safDirectory.getGlobalSyncMode();
+    if (globalMode === 'off') return;
+
+    let pendingFiles = getPendingFiles();
+
+    if (globalMode === 'manual') {
+      const allFolders = safDirectory.getAll();
+      const autoFolderIds = new Set(
+        allFolders.filter((f) => f.syncMode === 'auto').map((f) => f.id)
+      );
+      pendingFiles = pendingFiles.filter(
+        (entry) => entry.parentResourceId && autoFolderIds.has(entry.parentResourceId)
+      );
+    }
+
+    if (pendingFiles.length === 0) return;
+
+    await runPendingSync(pendingFiles);
+  }, [getPendingFiles, runPendingSync]);
+
+  const syncManually = useCallback(async () => {
+    const pendingFiles = getPendingFiles();
+    if (pendingFiles.length === 0) return;
+    await runPendingSync(pendingFiles);
+  }, [getPendingFiles, runPendingSync]);
+
   useEffect(() => {
     const timeout = setTimeout(() => {
       checkAndSync();
@@ -158,5 +168,5 @@ export function useAutoSync() {
     return () => { clearTimeout(timeout); clearInterval(interval); };
   }, [checkAndSync]);
 
-  return { triggerSync: checkAndSync };
+  return { triggerSync: checkAndSync, syncManually };
 }
