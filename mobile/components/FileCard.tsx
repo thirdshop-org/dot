@@ -41,7 +41,7 @@ function getExtension(fileName: string): string {
   return ext ? ext.toUpperCase() : '';
 }
 
-export function FileCard({ file, onPress, onLongPress, selected }: FileCardProps) {
+export const FileCard = React.memo(function FileCard({ file, onPress, onLongPress, selected }: FileCardProps) {
   const info = getFileInfo(file.mimeType, file.name);
   const ext = getExtension(file.name);
 
@@ -108,6 +108,12 @@ export function FileCard({ file, onPress, onLongPress, selected }: FileCardProps
           )}
         </View>
 
+        {file.syncStatus && !isUploading && (
+          <View style={styles.statusRow}>
+            <SyncStatusBadge status={file.syncStatus} showLabel />
+          </View>
+        )}
+
         {isUploading ? (
           <View style={styles.uploadRow}>
             <MaterialIcons name="cloud-upload" size={14} color="#1976D2" />
@@ -131,7 +137,7 @@ export function FileCard({ file, onPress, onLongPress, selected }: FileCardProps
       </View>
     </TouchableOpacity>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: {
@@ -215,6 +221,10 @@ const styles = StyleSheet.create({
   size: {
     fontSize: 12,
     color: '#999',
+  },
+  statusRow: {
+    flexDirection: 'row',
+    marginBottom: 6,
   },
   preview: {
     fontSize: 13,

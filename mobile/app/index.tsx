@@ -86,6 +86,7 @@ export function HomeScreen() {
   const debouncedSearch = useDebounce(searchQuery, 250);
   const [filters, setFilters] = useState<SearchFilters>({ name: true, ocrText: true });
   const [sort, setSort] = useState<SortState>({ key: 'date', direction: 'desc' });
+  const listRef = useRef<FlatList<UnifiedFileItem>>(null);
   const [keyboardOpen, setKeyboardOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [tagModalVisible, setTagModalVisible] = useState(false);
@@ -106,14 +107,34 @@ export function HomeScreen() {
   const { tasks: uploadTasks } = useUploadQueue();
   useAutoSync();
 
+  const loadingMoreRef = useRef(false);
+  const listLayoutHeightRef = useRef(0);
+  const listContentHeightRef = useRef(0);
+
   const loadMore = useCallback(() => {
-    if (isFetching) return;
+    if (loadingMoreRef.current) return;
     const total = data?.meta?.total ?? 0;
     const loaded = data?.data?.length ?? 0;
     if (loaded < total) {
+      loadingMoreRef.current = true;
       setPage((p) => p + 1);
     }
-  }, [isFetching, data?.meta?.total, data?.data?.length]);
+  }, [data?.meta?.total, data?.data?.length]);
+
+  useEffect(() => {
+    if (!isFetching) {
+      loadingMoreRef.current = false;
+    }
+  }, [isFetching]);
+
+  const handleEndReached = useCallback(() => {
+    if (listLayoutHeightRef.current > 0 &&
+        listContentHeightRef.current > 0 &&
+        listContentHeightRef.current <= listLayoutHeightRef.current) {
+      return;
+    }
+    loadMore();
+  }, [loadMore]);
 
   const totalFiles = data?.meta?.total ?? 0;
   const loadedFiles = data?.data?.length ?? 0;
@@ -441,13 +462,29 @@ export function HomeScreen() {
       )}
       <View style={styles.listWrapper}>
         <FlatList
+          ref={listRef}
           data={sortedFiles}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.list}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
-          onEndReached={loadMore}
+          onLayout={(e) => {
+            listLayoutHeightRef.current = e.nativeEvent.layout.height;
+          }}
+          onContentSizeChange={(w, h) => {
+            listContentHeightRef.current = h;
+          }}
+          onEndReached={handleEndReached}
           onEndReachedThreshold={0.5}
+          onScrollToIndexFailed={({ index, averageItemLength }) => {
+            listRef.current?.scrollToOffset({
+              offset: Math.max(0, averageItemLength * index),
+              animated: true,
+            });
+            setTimeout(() => {
+              listRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0 });
+            }, 150);
+          }}
           ListFooterComponent={
             hasMore ? (
               <TouchableOpacity style={styles.loadMoreBtn} onPress={loadMore} disabled={isFetching}>
