@@ -79,7 +79,7 @@ export function HomeScreen() {
   const insets = useSafeAreaInsets();
   const [page, setPage] = useState(1);
   const { data, isLoading, error, isFetching, refetch } = useFiles(null, page, PAGE_SIZE);
-  const { hasPermission, requestPermission, pickAndScanRecursive, folders, refreshFolders, discovered } = useLocalFiles();
+  const { pickAndScanRecursive, folders, refreshFolders, discovered } = useLocalFiles();
   const freeLocalSpace = useFreeLocalSpace();
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
@@ -395,19 +395,7 @@ export function HomeScreen() {
   if (isLoading) {
     return (
       <View style={styles.center}>
-        {!hasPermission ? (
-          <View style={styles.permissionBanner}>
-            <MaterialIcons name="photo-library" size={28} color="#1976D2" />
-            <Text style={styles.permissionText}>
-              Autorisez l'accès à vos photos pour les afficher ici
-            </Text>
-            <TouchableOpacity style={styles.permissionBtn} onPress={requestPermission}>
-              <Text style={styles.permissionBtnText}>Autoriser</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <Text style={styles.infoText}>Chargement...</Text>
-        )}
+        <Text style={styles.infoText}>Chargement...</Text>
       </View>
     );
   }
@@ -426,17 +414,6 @@ export function HomeScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 96 : 0}
     >
-      {!hasPermission && (
-        <View style={styles.permissionBanner}>
-          <MaterialIcons name="photo-library" size={28} color="#1976D2" />
-          <Text style={styles.permissionText}>
-            Autorisez l'accès à vos photos pour les afficher ici
-          </Text>
-          <TouchableOpacity style={styles.permissionBtn} onPress={requestPermission}>
-            <Text style={styles.permissionBtnText}>Autoriser</Text>
-          </TouchableOpacity>
-        </View>
-      )}
       {files.length === 0 && !searchQuery && (
         <View style={styles.folderScanBanner}>
           {folders.length > 0 ? (
@@ -656,19 +633,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f5f5f5',
-  },
-  permissionBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#E3F2FD',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    gap: 10,
-  },
-  permissionText: {
-    flex: 1,
-    fontSize: 14,
-    color: '#333',
   },
   permissionBtn: {
     backgroundColor: '#1976D2',

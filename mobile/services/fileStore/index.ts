@@ -22,32 +22,37 @@ export function initDB() {
   );
 
   if (!existingVersion) {
-    _sqliteDb.execSync(`CREATE TABLE schema_version (version INTEGER PRIMARY KEY);`);
-  }
-
-  const versionRow = _sqliteDb.getFirstSync<{ version: number }>(
-    `SELECT version FROM schema_version ORDER BY version DESC LIMIT 1`
-  );
-  const currentVersion = versionRow?.version ?? 0;
-
-  if (currentVersion < SCHEMA_VERSION) {
-    dropAllTables(_sqliteDb);
     createSchema(_sqliteDb);
+    _sqliteDb.execSync(`CREATE TABLE schema_version (version INTEGER PRIMARY KEY);`);
     _sqliteDb.execSync(`INSERT INTO schema_version (version) VALUES (${SCHEMA_VERSION});`);
+  } else {
+    const versionRow = _sqliteDb.getFirstSync<{ version: number }>(
+      `SELECT version FROM schema_version ORDER BY version DESC LIMIT 1`
+    );
+    const currentVersion = versionRow?.version ?? 0;
+
+    if (currentVersion < SCHEMA_VERSION) {
+      migrate(_sqliteDb, currentVersion, SCHEMA_VERSION);
+      _sqliteDb.execSync(`UPDATE schema_version SET version = ${SCHEMA_VERSION};`);
+    }
   }
 
   _db = drizzle(_sqliteDb);
   return _db;
 }
 
-function dropAllTables(db: SQLite.SQLiteDatabase) {
-  db.execSync(`DROP TABLE IF EXISTS file_tags;`);
-  db.execSync(`DROP TABLE IF EXISTS files;`);
-  db.execSync(`DROP TABLE IF EXISTS deleted_files;`);
-  db.execSync(`DROP TABLE IF EXISTS device_info;`);
-  db.execSync(`DROP TABLE IF EXISTS resources_fts;`);
-  db.execSync(`DROP TABLE IF EXISTS pending_actions;`);
-  db.execSync(`DROP TABLE IF EXISTS schema_version;`);
+const MIGRATIONS: Array<(db: SQLite.SQLiteDatabase) => void> = [
+  // v5: add thumbnail_local column
+  (db) => {
+    db.execSync(`ALTER TABLE files ADD COLUMN thumbnail_local TEXT;`);
+  },
+];
+
+function migrate(db: SQLite.SQLiteDatabase, fromVersion: number, toVersion: number) {
+  for (let v = fromVersion; v < toVersion; v++) {
+    const migration = MIGRATIONS[v - 1];
+    if (migration) migration(db);
+  }
 }
 
 function createSchema(db: SQLite.SQLiteDatabase) {

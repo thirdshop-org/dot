@@ -9,8 +9,7 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "NSCameraUsageDescription": "VaultDrop a besoin d'accéder à votre caméra pour scanner des documents.",
-        "NSPhotoLibraryUsageDescription": "VaultDrop a besoin d'accéder à votre galerie pour sélectionner des photos."
+        "NSCameraUsageDescription": "VaultDrop a besoin d'accéder à votre caméra pour scanner des documents."
       },
       "bundleIdentifier": "com.anonymous.webui"
     },
@@ -19,9 +18,6 @@
         "CAMERA",
         "READ_EXTERNAL_STORAGE",
         "WRITE_EXTERNAL_STORAGE",
-        "READ_MEDIA_IMAGES",
-        "READ_MEDIA_VIDEO",
-        "READ_MEDIA_AUDIO",
         "RECEIVE_BOOT_COMPLETED"
       ],
       "adaptiveIcon": {
@@ -38,13 +34,6 @@
     },
     "plugins": [
       "expo-secure-store",
-      [
-        "expo-media-library",
-        {
-          "photosPermission": "VaultDrop a besoin d'accéder à vos photos pour les afficher et les organiser.",
-          "videosPermission": "VaultDrop a besoin d'accéder à vos vidéos pour les afficher et les organiser."
-        }
-      ],
       "expo-image",
       "expo-sqlite",
       "expo-background-task",

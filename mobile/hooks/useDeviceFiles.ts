@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback } from 'react';
-import * as MediaLibrary from 'expo-media-library/legacy';
 import * as FileSystem from 'expo-file-system/legacy';
 import { safDirectory, type StoredFolder } from '../services/safDirectory';
 import { downloadRegistry } from '../services/downloadRegistry';
@@ -90,30 +89,6 @@ async function scanSafFolder(folder: StoredFolder): Promise<DeviceFile[]> {
     }
 }
 
-async function scanMediaAlbum(folder: StoredFolder): Promise<DeviceFile[]> {
-  try {
-    if (!folder.albumId) return [];
-    const result = await MediaLibrary.getAssetsAsync({
-      album: folder.albumId,
-      first: 500,
-      sortBy: 'creationTime',
-    });
-    return result.assets.map((asset) => ({
-      id: `media_${folder.id}_${asset.id}`,
-      uri: asset.uri,
-      name: asset.filename,
-      mimeType: asset.mediaType === 'video' ? 'video/mp4' : 'image/jpeg',
-      size: 0,
-      createdAt: asset.creationTime
-        ? new Date(asset.creationTime).toISOString()
-        : new Date().toISOString(),
-      folderId: folder.id,
-    }));
-  } catch (err) {
-    return [];
-  }
-}
-
 export async function scanSubdirectories(
   baseUri: string,
   depth: number = 0,
@@ -143,80 +118,15 @@ export async function scanSubdirectories(
 export function useDeviceFiles() {
   const [files, setFiles] = useState<DeviceFile[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [hasPermission, setHasPermission] = useState(false);
   const [folders, setFolders] = useState<StoredFolder[]>(() => safDirectory.getAll());
   const [discovered, setDiscovered] = useState(() => safDirectory.getDiscovered());
   const { newFiles, clearNewFiles } = useFileWatcher();
 
-  const requestPermission = useCallback(async () => {
-    const req = await MediaLibrary.requestPermissionsAsync();
-    if (req.granted) {
-      setHasPermission(true);
-      return true;
-    }
-    const check = await MediaLibrary.getPermissionsAsync();
-    const granted = check.granted;
-    setHasPermission(granted);
-    return granted;
-  }, []);
-
-  const loadAssets = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const result = await MediaLibrary.getAssetsAsync({
-        first: 500,
-        mediaType: ['photo', 'video'],
-        sortBy: 'creationTime',
-      });
-
-      const deviceFiles: DeviceFile[] = result.assets.map((asset) => ({
-        id: asset.id,
-        uri: asset.uri,
-        name: asset.filename,
-        mimeType: asset.mediaType === 'video' ? 'video/mp4' : 'image/jpeg',
-        size: 0,
-        createdAt: asset.creationTime
-          ? new Date(asset.creationTime).toISOString()
-          : new Date().toISOString(),
-      }));
-
-      setFiles(deviceFiles);
-    } catch (err) {
-      setFiles([]);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  const discoverMediaAlbums = useCallback(async (): Promise<number> => {
-    try {
-      const albums = await MediaLibrary.getAlbumsAsync();
-      let added = 0;
-      for (const album of albums) {
-        if (album.title && album.assetCount > 0) {
-          safDirectory.addMediaFolder(album.id, album.title, '');
-          added++;
-        }
-      }
-      if (added > 0) {
-        setFolders(safDirectory.getAll());
-      }
-      return added;
-    } catch (err) {
-      return 0;
-    }
-  }, []);
-
   const scanVisibleFolders = useCallback(async () => {
-    const visibleFolders = safDirectory.getVisibleFolders();
+    const visibleFolders = safDirectory.getVisibleFolders().filter((f) => f.source !== 'media-library');
     if (visibleFolders.length === 0) return;
 
-    const results = await Promise.all(
-      visibleFolders.map((folder) => {
-        if (folder.source === 'media-library') return scanMediaAlbum(folder);
-        return scanSafFolder(folder);
-      })
-    );
+    const results = await Promise.all(visibleFolders.map((folder) => scanSafFolder(folder)));
     const safFiles = results.flat();
 
     setFiles((prev) => {
@@ -284,33 +194,19 @@ export function useDeviceFiles() {
     }
   }, [discovered, scanVisibleFolders]);
 
-  const runInitialDiscovery = useCallback(async () => {
-    if (safDirectory.getDiscovered()) return;
-
-    const granted = hasPermission || await requestPermission();
-    if (granted) {
-      const mediaCount = await discoverMediaAlbums();
-      if (mediaCount > 0) {
-        await scanVisibleFolders();
-      }
-    }
-
-    safDirectory.setDiscovered();
-    setDiscovered(true);
-  }, [hasPermission, requestPermission, discoverMediaAlbums, scanVisibleFolders]);
-
   const refreshFolders = useCallback(() => {
     setFolders(safDirectory.getAll());
   }, []);
 
   const rescan = useCallback(async () => {
-    const granted = await requestPermission();
-    if (granted) {
-      await loadAssets();
+    setIsLoading(true);
+    try {
+      await scanVisibleFolders();
+      loadRegistryFiles();
+    } finally {
+      setIsLoading(false);
     }
-    await scanVisibleFolders();
-    loadRegistryFiles();
-  }, [requestPermission, loadAssets, scanVisibleFolders, loadRegistryFiles]);
+  }, [scanVisibleFolders, loadRegistryFiles]);
 
   // Handle new files detected by native module
   useEffect(() => {
@@ -333,22 +229,16 @@ export function useDeviceFiles() {
 
   // Initial load
   useEffect(() => {
-    requestPermission().then((granted) => {
-      if (granted) {
-        loadAssets();
-      }
-    });
     scanVisibleFolders();
     loadRegistryFiles();
-    runInitialDiscovery();
-  }, []);
+  }, [scanVisibleFolders, loadRegistryFiles]);
 
   return {
-    files, isLoading, hasPermission,
-    requestPermission, rescan,
+    files, isLoading,
+    rescan,
     pickAndScanRecursive,
     folders, refreshFolders,
-    discovered, discoverMediaAlbums,
+    discovered,
   };
 }
 

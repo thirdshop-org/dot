@@ -1,7 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, Alert } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { UploadFile } from '../services/uploadQueue';
 import { useUploadQueue } from '../hooks/useUploadQueue';
@@ -13,35 +12,6 @@ interface UploadModalProps {
 
 export function UploadModal({ visible, onClose }: UploadModalProps) {
   const { enqueue } = useUploadQueue();
-
-  const pickImages = async () => {
-    try {
-      const { status: perm } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (perm !== 'granted') {
-        Alert.alert('Permission requise', "L'accès à la galerie est nécessaire pour sélectionner des photos.");
-        return;
-      }
-
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        quality: 1,
-        allowsMultipleSelection: true,
-      });
-
-      if (result.canceled || result.assets.length === 0) return;
-
-      const files = result.assets.map((asset) => ({
-        uri: asset.uri,
-        type: asset.mimeType || 'image/jpeg',
-        name: asset.fileName || 'photo.jpg',
-      }));
-
-      enqueue(files);
-      onClose();
-    } catch {
-      Alert.alert('Erreur', "Impossible d'accéder à la galerie");
-    }
-  };
 
   const pickDocuments = async () => {
     try {
@@ -86,14 +56,6 @@ export function UploadModal({ visible, onClose }: UploadModalProps) {
               <MaterialIcons name="close" size={22} color="#999" />
             </TouchableOpacity>
           </View>
-
-          <TouchableOpacity
-            style={styles.photoButton}
-            onPress={pickImages}
-          >
-            <MaterialIcons name="photo-library" size={20} color="#fff" />
-            <Text style={styles.buttonText}>Sélectionner des photos</Text>
-          </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.docButton}
@@ -144,16 +106,6 @@ const styles = StyleSheet.create({
   },
   closeBtn: {
     padding: 4,
-  },
-  photoButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#1976D2',
-    padding: 16,
-    borderRadius: 8,
-    marginBottom: 12,
-    gap: 8,
   },
   docButton: {
     flexDirection: 'row',
