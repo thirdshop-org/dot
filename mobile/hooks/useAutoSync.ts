@@ -9,7 +9,15 @@ import { activeUploadUris } from '../services/uploadQueue';
 import { apiClient } from '../api/client';
 import { API_BASE_URL, ENDPOINTS } from '../constants/api';
 import { ApiError } from '../types';
-import { setIsSyncing } from './useSyncQueue';
+import {
+  setIsSyncing,
+  setSyncProgress,
+  isSyncLoopRunning,
+  setSyncLoopRunning,
+  requestSyncCancel,
+  isSyncCancelRequested,
+  consumeSyncCancel,
+} from './useSyncQueue';
 
 const MAX_RETRIES = 5;
 const RETRY_MMKV_ID = 'vaultdrop-sync-retries';
@@ -73,6 +81,8 @@ function canSyncBasedOnNetwork(netInfo: NetInfoState, cellularAllowed: boolean):
   return true;
 }
 
+let autoSyncLoopStarted = false;
+
 export function useAutoSync() {
   const queryClient = useQueryClient();
   const isRunning = useRef(false);
@@ -83,8 +93,13 @@ export function useAutoSync() {
     );
   }, []);
 
+  const cancelSync = useCallback(() => {
+    requestSyncCancel();
+  }, []);
+
   const runPendingSync = useCallback(async (pendingFiles: Array<ReturnType<typeof fileStore.getAllLocal>[number]>) => {
     if (isRunning.current) return;
+    if (isSyncLoopRunning()) return;
 
     const globalCellular = safDirectory.getGlobalSyncCellular();
     const netInfo = await NetInfo.fetch();
@@ -92,11 +107,18 @@ export function useAutoSync() {
     if (!canSyncBasedOnNetwork(netInfo, globalCellular)) return;
 
     isRunning.current = true;
+    setSyncLoopRunning(true);
 
     try {
       setIsSyncing(true);
+      consumeSyncCancel();
 
-      for (const entry of pendingFiles) {
+      const progressFiles = pendingFiles.map((f) => ({ id: f.id, name: f.name }));
+
+      for (let index = 0; index < pendingFiles.length; index++) {
+        if (isSyncCancelRequested()) break;
+        const entry = pendingFiles[index];
+        setSyncProgress({ files: progressFiles, currentIndex: index });
         const uri = entry.localUri;
         if (!uri || activeUploadUris.has(uri)) continue;
         activeUploadUris.add(uri);
@@ -126,10 +148,16 @@ export function useAutoSync() {
         }
       }
 
+      if (consumeSyncCancel()) {
+        return;
+      }
+
       queryClient.invalidateQueries({ queryKey: ['resources'] });
     } finally {
+      setSyncProgress(null);
       setIsSyncing(false);
       isRunning.current = false;
+      setSyncLoopRunning(false);
     }
   }, [queryClient]);
 
@@ -161,12 +189,15 @@ export function useAutoSync() {
   }, [getPendingFiles, runPendingSync]);
 
   useEffect(() => {
+    if (autoSyncLoopStarted) return;
+    autoSyncLoopStarted = true;
+
     const timeout = setTimeout(() => {
       checkAndSync();
     }, 5_000);
     const interval = setInterval(checkAndSync, 30_000);
-    return () => { clearTimeout(timeout); clearInterval(interval); };
+    return () => { clearTimeout(timeout); clearInterval(interval); autoSyncLoopStarted = false; };
   }, [checkAndSync]);
 
-  return { triggerSync: checkAndSync, syncManually };
+  return { triggerSync: checkAndSync, syncManually, cancelSync };
 }

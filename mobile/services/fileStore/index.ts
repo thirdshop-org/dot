@@ -1,6 +1,6 @@
 import { drizzle } from 'drizzle-orm/expo-sqlite';
 import * as SQLite from 'expo-sqlite';
-import { eq, like, or, and, desc, asc, sql, isNull } from 'drizzle-orm';
+import { eq, like, or, and, desc, asc, sql, isNull, inArray, isNotNull } from 'drizzle-orm';
 import { files, fileTags, deletedFiles, pendingActions } from './schema';
 import type { Tag, PendingAction, PendingActionType, PendingActionStatus } from '../../types';
 
@@ -587,6 +587,19 @@ export const fileStore = {
   count(): number {
     const d = getDb();
     const row = d.select({ count: sql<number>`count(*)` }).from(files).get();
+    return row?.count ?? 0;
+  },
+
+  countPendingSync(): number {
+    const d = getDb();
+    const row = d.select({ count: sql<number>`count(*)` }).from(files).where(
+      and(
+        or(eq(files.source, 'local'), eq(files.source, 'synced')),
+        isNull(files.backendId),
+        isNotNull(files.localUri),
+        inArray(files.syncStatus, ['local', 'error']),
+      )
+    ).get();
     return row?.count ?? 0;
   },
 

@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback, useState, useEffect } from 'react';
+import React, { useMemo, useCallback, useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,12 +7,12 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
+  Animated,
+  Easing,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { fileStore, FileRecord } from '../services/fileStore';
-import { safDirectory } from '../services/safDirectory';
-import { useSyncQueue } from '../hooks/useSyncQueue';
+import { useSyncQueue, useSyncProgress } from '../hooks/useSyncQueue';
 import { useAutoSync } from '../hooks/useAutoSync';
 import { useSyncPush } from '../hooks/useSyncPush';
 import { useUploadQueue } from '../hooks/useUploadQueue';
@@ -31,10 +31,117 @@ function uploadStatusIcon(task: UploadTask) {
   }
 }
 
+function SpinningSyncIcon({ size, color }: { size: number; color: string }) {
+  const spin = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const animation = Animated.loop(
+      Animated.timing(spin, {
+        toValue: 1,
+        duration: 1200,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      })
+    );
+    animation.start();
+    return () => animation.stop();
+  }, [spin]);
+
+  const rotate = spin.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
+
+  return (
+    <Animated.View style={{ transform: [{ rotate }] }}>
+      <MaterialIcons name="sync" size={size} color={color} />
+    </Animated.View>
+  );
+}
+
+type PendingFile = { id: string; name: string };
+
+const PendingSyncCard = React.memo(function PendingSyncCard({
+  syncing,
+  pendingCount,
+  shortList,
+  onSyncPress,
+  onCancel,
+}: {
+  syncing: boolean;
+  pendingCount: number;
+  shortList: PendingFile[] | null;
+  onSyncPress: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <View style={styles.pendingCard}>
+      <TouchableOpacity
+        style={styles.pendingCardTop}
+        onPress={syncing ? undefined : onSyncPress}
+        disabled={syncing}
+        activeOpacity={0.8}
+      >
+        <View style={styles.pendingCardIcon}>
+          {syncing ? (
+            <SpinningSyncIcon size={28} color="#1976D2" />
+          ) : (
+            <MaterialIcons name="cloud-upload" size={28} color="#1976D2" />
+          )}
+        </View>
+        <View style={styles.pendingCardInfo}>
+          <Text style={styles.pendingCardTitle}>
+            {syncing
+              ? 'Synchronisation en cours...'
+              : pendingCount > 1
+                ? `Vous avez ${pendingCount} fichiers locaux pouvant être synchronisés`
+                : 'Vous avez 1 fichier local pouvant être synchronisé'}
+          </Text>
+          <Text style={styles.pendingCardSubtitle}>
+            {syncing
+              ? shortList && shortList[0]
+                ? `En cours : ${shortList[0].name}`
+                : 'Synchronisation en cours...'
+              : 'Appuyer maintenant pour les synchroniser'}
+          </Text>
+        </View>
+        {!syncing && <MaterialIcons name="chevron-right" size={24} color="#999" />}
+      </TouchableOpacity>
+
+      {syncing && shortList && shortList.length > 0 && (
+        <View style={styles.pendingList}>
+          {shortList.map((f, i) => (
+            <View key={f.id} style={styles.pendingRow}>
+              {i === 0 ? (
+                <SpinningSyncIcon size={16} color="#1976D2" />
+              ) : (
+                <MaterialIcons name="schedule" size={16} color="#FFA000" />
+              )}
+              <Text
+                style={[styles.pendingRowText, i === 0 && styles.pendingRowActive]}
+                numberOfLines={1}
+              >
+                {f.name}
+              </Text>
+            </View>
+          ))}
+        </View>
+      )}
+
+      {syncing && (
+        <TouchableOpacity style={styles.stopBtn} onPress={onCancel} activeOpacity={0.8}>
+          <MaterialIcons name="stop-circle" size={18} color="#fff" />
+          <Text style={styles.stopBtnText}>Arrêter la synchronisation</Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+});
+
 export function SyncDetailScreen() {
-  const insets = useSafeAreaInsets();
   const { pendingCount, isSyncing, refresh } = useSyncQueue();
-  const { syncManually } = useAutoSync();
+  const { syncProgress } = useSyncProgress();
+  const { syncManually, cancelSync } = useAutoSync();
   const { push } = useSyncPush();
   const { tasks: uploadTasks, retry, retryAll } = useUploadQueue();
 
@@ -107,37 +214,21 @@ export function SyncDetailScreen() {
     );
   }, [retry]);
 
+  const syncing = !!syncProgress;
   const hasUploads = uploadTasks.length > 0;
-  const hasPending = pendingCount > 0;
+  const hasPending = pendingCount > 0 || syncing;
   const hasErrors = errorFiles.length > 0;
   const hasContent = hasUploads || hasPending || hasErrors;
 
+  const shortList = useMemo(() => {
+    if (!syncProgress) return null;
+    const { files, currentIndex } = syncProgress;
+    const start = Math.max(0, currentIndex);
+    return files.slice(start, start + 5);
+  }, [syncProgress]);
+
   return (
     <View style={styles.container}>
-      {(hasPending || hasErrors || uploadErrors.length > 0) && (
-        <TouchableOpacity
-          style={[styles.syncBtn, isSyncing && styles.syncBtnDisabled]}
-          onPress={handleSyncButtonPress}
-          disabled={isSyncing}
-        >
-          {isSyncing ? (
-            <ActivityIndicator size="small" color="#fff" />
-          ) : (
-            <MaterialIcons
-              name={uploadErrors.length > 0 ? "refresh" : "cloud-upload"}
-              size={20}
-              color="#fff"
-            />
-          )}
-          <Text style={styles.syncBtnText}>
-            {isSyncing ? 'Synchronisation...'
-              : uploadErrors.length > 0
-                ? `Tout réessayer (${uploadErrors.length + (hasPending ? pendingCount : 0)})`
-                : `Synchroniser (${pendingCount})`}
-          </Text>
-        </TouchableOpacity>
-      )}
-
       {!hasContent ? (
         <View style={styles.empty}>
           <MaterialIcons name="cloud-done" size={48} color="#4CAF50" />
@@ -162,33 +253,20 @@ export function SyncDetailScreen() {
                 : item.label
               : item.data.id
           }
+          extraData={[isSyncing, syncProgress]}
           renderItem={({ item }) => {
             if (item.type === 'section') {
               return <Text style={styles.headerText}>{item.label}</Text>;
             }
             if (item.type === 'pendingCard') {
               return (
-                <TouchableOpacity
-                  style={styles.pendingCard}
-                  onPress={handleSyncButtonPress}
-                  disabled={isSyncing}
-                  activeOpacity={0.8}
-                >
-                  <View style={styles.pendingCardIcon}>
-                    <MaterialIcons name="cloud-upload" size={28} color="#1976D2" />
-                  </View>
-                  <View style={styles.pendingCardInfo}>
-                    <Text style={styles.pendingCardTitle}>
-                      {pendingCount > 1
-                        ? `Vous avez ${pendingCount} fichiers locaux pouvant être synchronisés`
-                        : 'Vous avez 1 fichier local pouvant être synchronisé'}
-                    </Text>
-                    <Text style={styles.pendingCardSubtitle}>
-                      Appuyer maintenant pour les synchroniser
-                    </Text>
-                  </View>
-                  <MaterialIcons name="chevron-right" size={24} color="#999" />
-                </TouchableOpacity>
+                <PendingSyncCard
+                  syncing={syncing}
+                  pendingCount={pendingCount}
+                  shortList={shortList}
+                  onSyncPress={handleSyncButtonPress}
+                  onCancel={cancelSync}
+                />
               );
             }
             if (item.type === 'upload') {
@@ -253,25 +331,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f5f5f5',
   },
-  syncBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#1976D2',
-    marginHorizontal: 16,
-    marginTop: 16,
-    borderRadius: 10,
-    paddingVertical: 14,
-    gap: 10,
-  },
-  syncBtnDisabled: {
-    backgroundColor: '#90CAF9',
-  },
-  syncBtnText: {
-    fontSize: 16,
-    color: '#fff',
-    fontWeight: '600',
-  },
   list: {
     padding: 16,
   },
@@ -290,8 +349,6 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   pendingCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
     backgroundColor: '#fff',
     borderRadius: 14,
     padding: 16,
@@ -302,6 +359,11 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 2 },
     elevation: 2,
+  },
+  pendingCardTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
   },
   pendingCardIcon: {
     width: 48,
@@ -323,6 +385,41 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#1976D2',
     marginTop: 4,
+  },
+  pendingList: {
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
+    paddingTop: 12,
+    gap: 8,
+  },
+  pendingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  pendingRowText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#999',
+  },
+  pendingRowActive: {
+    color: '#1976D2',
+    fontWeight: '500',
+  },
+  stopBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#E53935',
+    borderRadius: 8,
+    paddingVertical: 10,
+    marginTop: 4,
+  },
+  stopBtnText: {
+    fontSize: 14,
+    color: '#fff',
+    fontWeight: '600',
   },
   fileInfo: {
     flex: 1,
