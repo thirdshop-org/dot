@@ -12,6 +12,10 @@ func (s *Services) MoveDocumentIntoDocument(from *entities.Document, to *entitie
 		return fmt.Errorf(entities.ERROR_DOCUMENT_NOT_PERCISTED)
 	}
 
+	if to.DocumentType != entities.DIRECTORY {
+		return fmt.Errorf("The destination document must be a directory")
+	}
+
 	if canEdit, _ := UserCanEditDocument(s.ConnectedUser, from); canEdit == false {
 		return fmt.Errorf("You can not edit this folder")
 	}

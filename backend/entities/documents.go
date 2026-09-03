@@ -5,9 +5,10 @@ import (
 )
 
 type Document struct {
-	DocumentUUID *string
-	DocumentName string
-	DocumentType int
+	DocumentUUID         *string
+	DocumentType         int
+	DocumentName         *string
+	DocumentOriginalName string
 }
 
 const (
@@ -44,8 +45,24 @@ func NewDocument(documentName string, documentType int) (error, *Document) {
 	}
 
 	return nil, &Document{
-		DocumentName: documentName,
+		DocumentName: &documentName,
 		DocumentType: documentType,
 	}
+
+}
+
+func (d *Document) GetOriginalName() *string {
+
+	return &d.DocumentOriginalName
+
+}
+
+func (d *Document) GetName() *string {
+
+	if d.DocumentName == nil {
+		return d.GetOriginalName()
+	}
+
+	return d.DocumentName
 
 }
