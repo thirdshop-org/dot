@@ -1,14 +1,19 @@
-package main
+package entities
 
-import "fmt"
+import (
+	"fmt"
+)
 
 type Document struct {
+	DocumentUUID *string
 	DocumentName string
 	DocumentType int
 }
 
 const (
-	ERROR_DOCUMENT_TYPE = "ERROR_DOCUMENT_TYPE"
+	ERROR_DOCUMENT_TYPE          = "ERROR_DOCUMENT_TYPE"
+	ERROR_DOCUMENT_MOVE          = "ERROR_DOCUMENT_MOVE"
+	ERROR_DOCUMENT_NOT_PERCISTED = "ERROR_DOCUMENT_NOT_PERCISTED"
 )
 
 const (

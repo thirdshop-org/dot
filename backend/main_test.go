@@ -3,16 +3,18 @@ package main
 import (
 	"fmt"
 	"testing"
+
+	"github.com/vaultdrop/backend/entities"
 )
 
 func TestUserCreation(t *testing.T) {
 
-	err, userAntoine := NewUser("antoine")
+	err, userAntoine := entities.NewUser("antoine")
 	if err != nil {
 		t.Errorf(`Error creating antoine user %v`, err)
 	}
 
-	err, userBob := NewUser("bob")
+	err, userBob := entities.NewUser("bob")
 	if err != nil {
 		t.Errorf(`Error creating bob user %v`, err)
 	}
@@ -23,12 +25,12 @@ func TestUserCreation(t *testing.T) {
 
 func TestCreateDocument(t *testing.T) {
 
-	err, document := NewDocument("paper.pdf", FILE)
+	err, document := entities.NewDocument("paper.pdf", entities.FILE)
 	if err != nil {
 		t.Errorf(`Error creating document %v`, err)
 	}
 
-	err, directory := NewDocument("bob", DIRECTORY)
+	err, directory := entities.NewDocument("bob", entities.DIRECTORY)
 	if err != nil {
 		t.Errorf(`Error creating bob directory %v`, err)
 	}
