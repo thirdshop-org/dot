@@ -5,10 +5,11 @@ import (
 )
 
 type Document struct {
-	DocumentUUID         *string
-	DocumentType         int
-	DocumentName         *string
-	DocumentOriginalName string
+	UUID         *string
+	Type         int
+	Name         *string
+	OriginalName string
+	Version      int
 }
 
 const (
@@ -36,7 +37,7 @@ func IsDirectory(documentType int) bool {
 	return DIRECTORY == documentType
 }
 
-func NewDocument(documentName string, documentType int) (error, *Document) {
+func NewDocument(documentName string, documentType int, documentVersion int) (error, *Document) {
 
 	documentTypeIsValid := IsDocumentTypeValid(documentType)
 
@@ -45,24 +46,25 @@ func NewDocument(documentName string, documentType int) (error, *Document) {
 	}
 
 	return nil, &Document{
-		DocumentName: &documentName,
-		DocumentType: documentType,
+		Name:    &documentName,
+		Type:    documentType,
+		Version: documentVersion,
 	}
 
 }
 
 func (d *Document) GetOriginalName() *string {
 
-	return &d.DocumentOriginalName
+	return &d.OriginalName
 
 }
 
 func (d *Document) GetName() *string {
 
-	if d.DocumentName == nil {
+	if d.Name == nil {
 		return d.GetOriginalName()
 	}
 
-	return d.DocumentName
+	return d.Name
 
 }
