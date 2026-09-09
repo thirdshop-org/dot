@@ -13,6 +13,8 @@ export async function useSyncDevice() {
 
         syncStartedAt = Date.UTC(Date.now());
 
+        console.info("Sync started")
+
         while (true) {
 
             await sync()
@@ -27,8 +29,6 @@ export async function useSyncDevice() {
     }
 
     async function sync() {
-
-        console.info("Sync started")
 
         const userPreferences = await getUserPreferences()
 

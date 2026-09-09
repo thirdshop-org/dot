@@ -33,10 +33,10 @@ export type UserPreferences = {
 
 export async function getUserPreferences(): Promise<UserPreferences> {
 
-    return new Promise(()=>{
-        return {
+    return new Promise((resolve)=>{
+        resolve({
             syncMode: 'full'
-        } satisfies UserPreferences
+        } satisfies UserPreferences)
     });
 
 }
