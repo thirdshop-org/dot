@@ -1,5 +1,6 @@
-import { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
+import { useSyncDevice } from '../features/syncDevice';
 
 export type User = {
 };
@@ -11,6 +12,11 @@ type AuthContextValue = {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+
+  useEffect(()=>{
+    const {} = useSyncDevice()
+  },[])
+
   const [user, setUser] = useState<User | null>(null);
 
   const value = useMemo(() => ({ user }), [user]);
