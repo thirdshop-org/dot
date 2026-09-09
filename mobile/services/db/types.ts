@@ -1,4 +1,6 @@
-import type { FileEntry, Folder } from "./safDirectory.types";
+import type { FileEntry, Folder } from '../safDirectory.types';
+
+export type { FileEntry, Folder } from '../safDirectory.types';
 
 export type SyncStatus = 'local' | 'cloud' | 'local-cloud';
 

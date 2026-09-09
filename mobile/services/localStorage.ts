@@ -9,6 +9,6 @@ export {
   saveFolder,
   saveDirectory,
   saveUserPreferences,
-} from './sqliteStorage';
+} from './db';
 
-export type { FolderContext, StoredFile, SyncStatus, UserPreferences } from './sqliteStorage.types';
+export type { FolderContext, StoredFile, SyncStatus, UserPreferences } from './db';
