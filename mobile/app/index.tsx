@@ -11,7 +11,7 @@ export default function Index() {
   useEffect(() => {
     (async () => {
       const saved = await getFolders();
-      setFolders(saved.map((ctx) => ctx.folder.name));
+      setFolders(saved.map((folder) => folder.name));
     })();
   }, []);
 
