@@ -1,18 +1,26 @@
 import { StatusBar } from 'expo-status-bar';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { pickDirectory } from '../services/safDirectory';
-import { saveDirectory } from '../services/localStorage';
+import { saveDirectory, getFolders } from '../services/localStorage';
 
 export default function Index() {
 
   const [folders, setFolders] = useState<string[]>([]);
+
+  useEffect(() => {
+    (async () => {
+      const saved = await getFolders();
+      setFolders(saved.map((ctx) => ctx.folder.name));
+    })();
+  }, []);
 
   const handlePickDirectory = async () => {
     const folder = await pickDirectory();
     if ( !folder ) return;
     await saveDirectory(folder);
     setFolders((prev) => [...prev, folder.name]);
+    console.log(folders)
   };
 
   return (

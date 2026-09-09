@@ -1,35 +1,11 @@
 import { Directory, File, Paths } from 'expo-file-system';
-
-export type Folder = {
-  uri: string;
-  name: string;
-  isDirectory: true;
-  exists?: boolean;
-};
-
-export type FileEntry = {
-  uri: string;
-  name: string;
-  isDirectory: false;
-  extension: string;
-  exists: boolean;
-  size: number;
-  type: string;
-  lastModified: number | null;
-};
-
-export type DirectoryEntry = Folder | FileEntry;
-
-export type FolderInfo = {
-  uri: string;
-  name: string;
-  exists: boolean;
-};
-
-type PickDirectoryOptions = {
-  recursive?: boolean;
-  includeRoot?: boolean;
-};
+import type {
+  DirectoryEntry,
+  FileEntry,
+  Folder,
+  FolderInfo,
+  PickDirectoryOptions,
+} from './safDirectory.types';
 
 export async function pickDirectory(initialUri?: string): Promise<Folder | null> {
   try {

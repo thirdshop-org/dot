@@ -1,13 +1,7 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useSyncDevice } from '../features/syncDevice';
-
-export type User = {
-};
-
-type AuthContextValue = {
-  user: User | null;
-};
+import type { AuthContextValue, User } from './AuthContext.types';
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 

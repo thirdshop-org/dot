@@ -8,6 +8,7 @@
     "expo-file-system": "~57.0.6",
     "expo-linking": "~57.0.9",
     "expo-router": "~57.0.20",
+    "expo-sqlite": "~57.0.2",
     "expo-status-bar": "~57.0.1",
     "react": "19.2.3",
     "react-dom": "19.2.3",
