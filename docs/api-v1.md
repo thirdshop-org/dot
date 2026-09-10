@@ -17,7 +17,7 @@ Références : `V2.md` (modèle cible), `mobile/services/db/` (conventions sync)
 ## 2. Identité et identifiants (invariants)
 
 - **Device-first** : le device s'enregistre (`POST /devices`) avec son identité **générée localement** (`device_user_id` 32-hex mobile) et reçoit en échange un token **paseto** v4-local qu'il stocke. Requêtes suivantes : `Authorization: Bearer <token>` (toutes les routes **sauf `/health`**), résolu en `device_id` par middleware. V1 : pas de comptes utilisateurs (`users.user_id` reste NULL sur `devices`).
-- La ré-émission est tolérée (le server décide de ré-énoncer un token ; la déduplication/persistance des devices arrive avec la table `devices`).
+- Au register, le device est **upserté** dans `devices` (`last_seen_at` rafraîchi) ; chaque nouvelle requête avec token est l'occasion de rafraîchir `last_seen_at`. Une ressource ne peut être créée que par un device enregistré (`resources.owner_id` → `devices.device_id`, FK).
 - **Identifiants** : `resource_id`, `device_user_id`, `token` de share-link = **TEXT opaque 32-hex minuscule**, `^[0-9a-f]{32}$`. Le mobile génère toujours `lower(hex(randomblob(16)))` ; le serveur stocke **tel quel**, sans conversion UUID (cf. note V2.md). Contrainte serveur : `CHECK (col ~ '^[0-9a-f]{32}$')` sur toutes les colonnes id + FK.
 - Horodatages échangés en **millisecondes epoch** (le mobile utilise `Date.now()`).
 
@@ -60,7 +60,7 @@ type OcrJob = { id: string; status: OcrJobStatus; text?: string | null; error?: 
 
 - Multipart : champ `file` + `folderId?` optionnel. **Le client ne fixe jamais `Content-Type`** (le boundary doit être généré par la plateforme).
 - Limite : `MAX_FILE_SIZE_MB` (défaut 50). Dépassement → 413 `{ "error": { "code": "FILE_TOO_LARGE", … } }`.
-- Le fichier physique est stocké sous `UPLOAD_DIR` ; la métadonnée est persistée en base et renvoyée en `FileDto`.
+- Le fichier physique est stocké sous `UPLOAD_DIR/<device_id>/<resource_id>.<ext>` ; la métadonnée est persistée en base et renvoyée en `FileDto`. Si la persistance de la métadonnée échoue (ex. `NAME_CONFLICT`), le fichier physique est supprimé.
 
 ## 5. OCR
 
@@ -127,4 +127,4 @@ type ResourcePermission = {
 
 ## 7. Codes d'erreur courants
 
-`NOT_FOUND`, `NOT_IMPLEMENTED` (501 temporaire sur les routes non construites), `FILE_TOO_LARGE`, `NETWORK_ERROR` (côté client), `HTTP_<status>` (fallback). Le serveur doit répondre 501 `{ "error": { "code": "NOT_IMPLEMENTED", "message": "…" } }` sur toute route encore en queue.
+`NOT_FOUND`, `NOT_IMPLEMENTED` (501 temporaire sur les routes non construites — état actuel : files CRUD/upload, devices, health, folders sont réels ; `search`, `ocr/*`, `sync/*` en queue), `FILE_TOO_LARGE` (413), `NAME_CONFLICT` (409 — même nom dans le même parent, cf. `UNIQUE(parent_id, name)`), `NETWORK_ERROR` (côté client), `HTTP_<status>` (fallback). Le serveur doit répondre 501 `{ "error": { "code": "NOT_IMPLEMENTED", "message": "…" } }` sur toute route encore en queue. Statut `SERVICE_UNAVAILABLE` (503) si le backend n'est pas initialisé.

@@ -25,6 +25,15 @@ func DevicesRegister(c *gin.Context) {
 		return
 	}
 
+	if Store == nil || Store.Repository == nil {
+		api.Error(c, 503, "SERVICE_UNAVAILABLE", "backend not initialized")
+		return
+	}
+	if err := Store.Repository.Devices.Upsert(req.DeviceID); err != nil {
+		api.Error(c, 500, "INTERNAL", "could not persist device")
+		return
+	}
+
 	token, err := Auth.Issue(req.DeviceID)
 	if err != nil {
 		api.Error(c, 500, "TOKEN_ERROR", "could not issue token")

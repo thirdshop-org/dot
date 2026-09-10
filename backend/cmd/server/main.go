@@ -9,37 +9,14 @@ import (
 	"github.com/vaultdrop/backend/db"
 	"github.com/vaultdrop/backend/handlers"
 	"github.com/vaultdrop/backend/pkg/auth"
+	"github.com/vaultdrop/backend/repository"
+	"github.com/vaultdrop/backend/service"
 )
 
 func newRouter() *gin.Engine {
-
 	r := gin.Default()
-
-	public := r.Group("/api/v1")
-	{
-		public.GET("/health", handlers.Health)
-		public.POST("/devices", handlers.DevicesRegister)
-	}
-
-	protected := r.Group("/api/v1")
-	protected.Use(handlers.RequireDevice)
-	{
-		protected.GET("/files", handlers.FilesList)
-		protected.GET("/files/search", handlers.FilesSearch)
-		protected.GET("/files/:id", handlers.FilesGet)
-		protected.DELETE("/files/:id", handlers.FilesDelete)
-		protected.GET("/files/folders", handlers.FoldersList)
-		protected.POST("/files/upload", handlers.FilesUpload)
-
-		protected.POST("/ocr/jobs", handlers.OcrJobsCreate)
-		protected.GET("/ocr/jobs/:id", handlers.OcrJobsGet)
-
-		protected.POST("/sync/ops", handlers.SyncOpsPush)
-		protected.GET("/sync/permissions", handlers.SyncPermissionsGet)
-	}
-
+	handlers.RegisterRoutes(r)
 	return r
-
 }
 
 func main() {
@@ -50,15 +27,26 @@ func main() {
 		log.Fatalln(err)
 	}
 
+	conn, err := db.Open(cfg.DatabaseURL)
+	if err != nil {
+		log.Fatalf("connexion postgres: %v", err)
+	}
+
+	if err := db.MigrateDatabase(cfg.DatabaseURL); err != nil {
+		log.Fatalf("migrations postgres: %v", err)
+	}
+
 	authManager, err := auth.NewManager(cfg.AuthSecret)
 	if err != nil {
 		log.Fatalln(err)
 	}
 	handlers.Auth = authManager
 
-	if err := db.MigrateDatabase(cfg.DatabaseURL); err != nil {
-		log.Fatalf("migrations postgres: %v", err)
-	}
+	handlers.Store = service.NewResources(
+		repository.NewRepository(conn),
+		cfg.UploadDir,
+		cfg.MaxFileSizeMB*1024*1024,
+	)
 
 	if err := newRouter().Run(fmt.Sprintf(":%d", cfg.Port)); err != nil {
 		log.Fatalln(err)

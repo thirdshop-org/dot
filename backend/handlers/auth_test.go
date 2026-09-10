@@ -8,8 +8,14 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
+
+	"github.com/vaultdrop/backend/dbtest"
 	"github.com/vaultdrop/backend/pkg/auth"
+	"github.com/vaultdrop/backend/repository"
+	"github.com/vaultdrop/backend/service"
 )
+
+const authTestURL = "postgres://vaultdrop:vaultdrop@localhost:5432/vaultdrop_handlers_auth_test?sslmode=disable"
 
 func newTestRouterForAuth() *gin.Engine {
 	gin.SetMode(gin.TestMode)
@@ -21,10 +27,20 @@ func newTestRouterForAuth() *gin.Engine {
 	return r
 }
 
+func setTestStore(t *testing.T) *repository.Repository {
+	t.Helper()
+	conn := dbtest.OpenTestDatabase(t, authTestURL)
+	repo := repository.NewRepository(conn)
+	Store = service.NewResources(repo, t.TempDir(), 1_048_576)
+	t.Cleanup(func() { Store = nil })
+	return repo
+}
+
 func TestDevicesRegisterValid(t *testing.T) {
 	m, _ := auth.NewManager("test-secret")
 	Auth = m
 	defer func() { Auth = nil }()
+	repo := setTestStore(t)
 
 	deviceID := "0123456789abcdef0123456789abcdef"
 	body := `{"deviceId":"` + deviceID + `"}`
@@ -53,6 +69,12 @@ func TestDevicesRegisterValid(t *testing.T) {
 	verified, err := m.Verify(envelope.Data.Token)
 	if err != nil || verified != deviceID {
 		t.Errorf("token invalid: %v", err)
+	}
+
+	// Le device est bien persisté (requis par les FK resources.owner_id).
+	exists, err := repo.Devices.Exists(deviceID)
+	if err != nil || !exists {
+		t.Errorf("device non persisté: exists=%v err=%v", exists, err)
 	}
 }
 
@@ -98,8 +120,9 @@ func TestRequireDeviceAcceptsValidToken(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer "+signed)
 	newTestRouterForAuth().ServeHTTP(rec, req)
 
-	// FilesList is still a 501 stub — the point is it got past the middleware.
-	if rec.Code != 501 {
-		t.Fatalf("status = %d body = %s", rec.Code, rec.Body.String())
+	// Sans Store le handler répond SERVICE_UNAVAILABLE (503) — le point est
+	// que la requête a dépassé le middleware (jamais 401).
+	if rec.Code == 401 {
+		t.Fatalf("middleware a rejeté un token valide: %s", rec.Body.String())
 	}
 }

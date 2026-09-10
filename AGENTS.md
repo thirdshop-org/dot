@@ -34,8 +34,8 @@ cd mobile && npm run test:db
 - `config/` — env (`godotenv`, optionnel) + defaults: `PORT`, `DATABASE_URL`, `UPLOAD_DIR`, `MAX_FILE_SIZE_MB`, `OCR_LANG`, secret paseto
 - `models/` — domain entities (users, devices, documents/resources, clients)
 - `service/` — business logic (permissions, upload, create folder, move)
-- `handlers/` — HTTP handlers (bind the routes; currently 501 not-implemented stubs)
-- `repository/` — Postgres persistence (`golang-migrate` + `lib/pq`); IDs are TEXT 32-hex (never UUID conversion, cf. `docs/api-v1.md`)
+- `handlers/` — HTTP handlers (health, devices register + paseto, files CRUD/upload — réels ; search/OCR/sync stubs 501)
+- `repository/` — Postgres persistence réelle (`repository.Resources` : insert/list/get/soft-delete scoping `owner_id`, `repository.Devices.Upsert`) ; IDs are TEXT 32-hex, `NewID()` = `crypto/rand` 16 octets hex (jamais UUID conversion, cf. `docs/api-v1.md`)
 - `db/` — package migrations (`golang-migrate/v4`, embarquées via `embed` dans `db/migrations/*.sql`) : `db.MigrateDatabase(url)` au boot du serveur ; test harness `db/migrations_test.go` (up → assertions schéma → down, `TEST_DATABASE_URL`, skip si PG indisponible)
 - `ocr/` — OCR engine behind an interface (Tesseract system call, `OCR_LANG` défaut `fra+eng`)
 - Response helpers: `pkg/api/response.go`
