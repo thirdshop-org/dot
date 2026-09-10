@@ -48,8 +48,11 @@ cd mobile && npm run test:db
   - `localStorage.ts` — thin re-export of `services/db` (legacy alias)
 - `features/syncDevice.ts` — device sync orchestration (two-pass SAF walk, single transaction per root, `exists = 0` reconciliation)
 - `context/AuthContext.tsx` — session context: exposes `deviceUserId` (bootstrapped from `getDeviceUserId()`) and starts the background `syncDevice` loop
+- `app/` — expo-router screens: `index.tsx` (dossiers racines + ajout SAF), `folder/[id].tsx` (sous-dossiers + fichiers)
+- `api/` — REST client (`client.ts` fetch wrapper + `types.ts` = contrat d'API : enveloppe `{ data, meta }`, erreurs `{ error: { code, message } }`)
+- `hooks/` — TanStack Query hooks: `useFiles`, `useSearch`, `useUpload` (+ OCR jobs)
 - No business logic on the client — heavy processing stays server-side
-- API base URL configured via `EXPO_PUBLIC_API_BASE_URL` env var (client + hooks not yet built)
+- API base URL via `EXPO_PUBLIC_API_BASE_URL` (défaut `http://localhost:8080/api/v1`)
 
 ## Data Conventions
 

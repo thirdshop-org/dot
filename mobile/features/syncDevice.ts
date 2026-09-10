@@ -11,13 +11,7 @@ import {
   type StoredFile,
   type StoredFolder,
 } from '../services/db';
-
-export type SyncResult = {
-  rootUri: string;
-  folders: number;
-  files: number;
-  missing: number;
-};
+import type { SyncResult } from './syncDevice.types';
 
 function uriDepth(uri: string): number {
   return uri.split('/').length;
