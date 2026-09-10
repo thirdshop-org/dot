@@ -34,7 +34,9 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "test:db": "tsx --test tests/migrations.test.ts tests/repositories.test.ts",
-    "test:migrations": "tsx --test tests/migrations.test.ts"
+    "test:migrations": "tsx --test tests/migrations.test.ts",
+    "test:api": "tsx --test tests/apiClient.test.ts",
+    "test": "npm run test:db && npm run test:api"
   },
   "private": true
 }

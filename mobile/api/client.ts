@@ -72,20 +72,49 @@ async function request<T>(
     const body = (await response.json().catch(() => null)) as
       | ApiData<T>
       | ApiErrorBody
+      | unknown[]
+      | string
+      | number
       | null;
 
     if ( !response.ok ) {
-      const error = body != null && 'error' in body ? body.error : null;
+      const error = body != null && isErrorBody(body) ? body.error : null;
       throw new ApiError(
         error?.code ?? `HTTP_${response.status}`,
         error?.message ?? response.statusText
       );
     }
 
-    return (body ?? { data: undefined as T }) as ApiData<T>;
+    // 2xx : enveloppe `{ data }` obligatoire. Un corps illisible (HTML d'un
+    // proxy, JSON malformé, corps vide) ou un objet sans clé `data` est une
+    // réponse invalide → ApiError propre, jamais de TypeError ni de data
+    // indéfini silencieux. Les listes brutes (`[]`) restent tolérées.
+    if ( body === null || isErrorBody(body) ) {
+      throw new ApiError('INVALID_RESPONSE', 'Réponse serveur invalide (enveloppe {data} attendue)');
+    }
+    if ( !isRecord(body) ) {
+      return { data: body as T };
+    }
+    if ( !('data' in body) ) {
+      throw new ApiError('INVALID_RESPONSE', 'Réponse serveur invalide (enveloppe {data} attendue)');
+    }
+    return body as ApiData<T>;
   } finally {
     clearTimeout(timer);
   }
+}
+
+function isErrorBody(body: unknown): body is ApiErrorBody {
+  return (
+    typeof body === 'object' &&
+    body !== null &&
+    'error' in body &&
+    (body as { error?: { code?: unknown } }).error != null
+  );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 export const api = {
