@@ -1,4 +1,4 @@
-package entities
+package models
 
 import "fmt"
 
@@ -13,7 +13,7 @@ func NewClient(clientVersion int) (error, Client) {
 	isCompatible := ServerClientIsCompatibleWithClient(clientVersion)
 
 	if !isCompatible {
-		return fmt.Errorf("You client version %n is not compatible with the server verison %n", clientVersion, SERVER_VERSION), nil
+		return fmt.Errorf("You client version %d is not compatible with the server verison %d", clientVersion, SERVER_VERSION), nil
 	}
 
 	client := ClientVerisonOne{

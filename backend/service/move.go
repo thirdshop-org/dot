@@ -1,18 +1,18 @@
-package services
+package service
 
 import (
 	"fmt"
 
-	"github.com/vaultdrop/backend/entities"
+	"github.com/vaultdrop/backend/models"
 )
 
-func (s *Services) MoveDocumentIntoDocument(from *entities.Document, to *entities.Document) error {
+func (s *Services) MoveDocumentIntoDocument(from *models.Document, to *models.Document) error {
 
-	if from.DocumentUUID == nil {
-		return fmt.Errorf(entities.ERROR_DOCUMENT_NOT_PERCISTED)
+	if from.UUID == nil {
+		return fmt.Errorf(models.ERROR_DOCUMENT_NOT_PERCISTED)
 	}
 
-	if to.DocumentType != entities.DIRECTORY {
+	if to.Type != models.DIRECTORY {
 		return fmt.Errorf("The destination document must be a directory")
 	}
 
@@ -26,7 +26,7 @@ func (s *Services) MoveDocumentIntoDocument(from *entities.Document, to *entitie
 
 	// Check if document exist and move the document into document if is directory
 
-	fmt.Println("To implement move to ", to.DocumentUUID)
+	fmt.Println("To implement move to ", to.UUID)
 
 	return nil
 

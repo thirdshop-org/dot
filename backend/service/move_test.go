@@ -1,24 +1,24 @@
-package services
+package service
 
 import (
 	"testing"
 
-	"github.com/vaultdrop/backend/entities"
+	"github.com/vaultdrop/backend/models"
 )
 
 func TestMoveDocument(t *testing.T) {
 
-	err, userAntoine := entities.NewUser("antoine")
+	err, userAntoine := models.NewUser("antoine")
 	if err != nil {
 		t.Errorf(`Error creating antoine user %v`, err)
 	}
 
 	fakeUUID := "dsqdsq"
-	err, document := entities.NewDocument("test.pdf", entities.FILE)
-	document.DocumentUUID = &fakeUUID
+	err, document := models.NewDocument("test.pdf", models.FILE, 1)
+	document.UUID = &fakeUUID
 
-	err, folder := entities.NewDocument("orga", entities.DIRECTORY)
-	folder.DocumentUUID = &fakeUUID
+	err, folder := models.NewDocument("orga", models.DIRECTORY, 1)
+	folder.UUID = &fakeUUID
 
 	service := New(userAntoine)
 
@@ -32,14 +32,14 @@ func TestMoveDocument(t *testing.T) {
 
 func TestMoveDocumentToAFile(t *testing.T) {
 
-	err, userAntoine := entities.NewUser("antoine")
+	err, userAntoine := models.NewUser("antoine")
 	if err != nil {
 		t.Errorf(`Error creating antoine user %v`, err)
 	}
 
-	err, document := entities.NewDocument("test.pdf", entities.FILE)
+	err, document := models.NewDocument("test.pdf", models.FILE, 1)
 
-	err, notAFolder := entities.NewDocument("orga", entities.FILE)
+	err, notAFolder := models.NewDocument("orga", models.FILE, 1)
 
 	service := New(userAntoine)
 

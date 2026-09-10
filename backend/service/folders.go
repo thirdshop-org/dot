@@ -1,10 +1,10 @@
-package services
+package service
 
-import "github.com/vaultdrop/backend/entities"
+import "github.com/vaultdrop/backend/models"
 
-func (s *Services) CreateFolder(folderName string, destination *entities.Document) (error, *entities.Document) {
+func (s *Services) CreateFolder(folderName string, destination *models.Document) (error, *models.Document) {
 
-	err, directory := entities.NewDocument(folderName, entities.DIRECTORY)
+	err, directory := models.NewDocument(folderName, models.DIRECTORY, 1)
 	if err != nil {
 		return err, nil
 	}

@@ -1,14 +1,12 @@
-package services
+package service
 
-import "github.com/vaultdrop/backend/entities"
-
-// import "github.com/vaultdrop/backend/entities"
+import "github.com/vaultdrop/backend/models"
 
 type Services struct {
-	ConnectedUser *entities.User
+	ConnectedUser *models.User
 }
 
-func New(connectedUser *entities.User) *Services {
+func New(connectedUser *models.User) *Services {
 
 	return &Services{
 		ConnectedUser: connectedUser,
@@ -16,18 +14,18 @@ func New(connectedUser *entities.User) *Services {
 
 }
 
-func UserCanReadDocument(connectedUser *entities.User, document *entities.Document) (bool, string) {
+func UserCanReadDocument(connectedUser *models.User, document *models.Document) (bool, string) {
 	return true, ""
 }
 
-func UserCanEditDocument(connectedUser *entities.User, document *entities.Document) (bool, string) {
+func UserCanEditDocument(connectedUser *models.User, document *models.Document) (bool, string) {
 	return true, ""
 }
 
-func UserCanDeleteDocument(connectedUser *entities.User, document *entities.Document) (bool, string) {
+func UserCanDeleteDocument(connectedUser *models.User, document *models.Document) (bool, string) {
 	return true, ""
 }
 
-func UserCanCreateDocument(connectedUser *entities.User, document *entities.Document) (bool, string) {
+func UserCanCreateDocument(connectedUser *models.User, document *models.Document) (bool, string) {
 	return true, ""
 }
