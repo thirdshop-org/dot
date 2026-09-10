@@ -127,4 +127,4 @@ type ResourcePermission = {
 
 ## 7. Codes d'erreur courants
 
-`NOT_FOUND`, `NOT_IMPLEMENTED` (501 temporaire sur les routes non construites — état actuel : files CRUD/upload, devices, health, folders sont réels ; `search`, `ocr/*`, `sync/*` en queue), `FILE_TOO_LARGE` (413), `NAME_CONFLICT` (409 — même nom dans le même parent, cf. `UNIQUE(parent_id, name)`), `NETWORK_ERROR` (côté client), `HTTP_<status>` (fallback). Le serveur doit répondre 501 `{ "error": { "code": "NOT_IMPLEMENTED", "message": "…" } }` sur toute route encore en queue. Statut `SERVICE_UNAVAILABLE` (503) si le backend n'est pas initialisé.
+`NOT_FOUND`, `NOT_IMPLEMENTED` (501 temporaire sur les routes non construites — état actuel : files CRUD/upload/search, folders, devices, health sont réels ; `ocr/*`, `sync/*` en queue), `FILE_TOO_LARGE` (413), `NAME_CONFLICT` (409 — même nom dans le même parent, cf. `UNIQUE(parent_id, name)`), `NETWORK_ERROR` (côté client), `HTTP_<status>` (fallback). Le serveur doit répondre 501 `{ "error": { "code": "NOT_IMPLEMENTED", "message": "…" } }` sur toute route encore en queue. Statut `SERVICE_UNAVAILABLE` (503) si le backend n'est pas initialisé.

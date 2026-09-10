@@ -89,6 +89,18 @@ func (s *Resources) ListRootFolders(ownerID string) ([]FolderDTO, error) {
 	return folders, nil
 }
 
+func (s *Resources) SearchFiles(ownerID, q string, page, pageSize int) ([]FileDTO, int, error) {
+	rows, total, err := s.Repo.SearchFiles(ownerID, q, pageSize, (page-1)*pageSize)
+	if err != nil {
+		return nil, 0, err
+	}
+	files := make([]FileDTO, 0, len(rows))
+	for _, row := range rows {
+		files = append(files, toFileDTO(row))
+	}
+	return files, total, nil
+}
+
 // Upload persists the multipart-sourced file under UploadDir/<device> and
 // records its metadata, returning the FileDTO. The physical file is removed
 // if metadata persistence fails (e.g. name conflict).

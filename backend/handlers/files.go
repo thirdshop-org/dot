@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/vaultdrop/backend/pkg/api"
@@ -123,4 +124,26 @@ func FoldersList(c *gin.Context) {
 	api.OK(c, folders)
 }
 
-func FilesSearch(c *gin.Context) { api.NotImplemented(c) }
+func FilesSearch(c *gin.Context) {
+	if Store == nil {
+		api.Error(c, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "backend not initialized")
+		return
+	}
+	deviceID := c.GetString(DeviceIDKey)
+	q := strings.TrimSpace(c.Query("q"))
+	if q == "" {
+		api.Error(c, http.StatusBadRequest, "INVALID_REQUEST", "missing required query param `q`")
+		return
+	}
+	page := intParam(c.Query("page"), 1)
+	pageSize := intParam(c.Query("pageSize"), 50)
+	if pageSize > 200 {
+		pageSize = 200
+	}
+	files, total, err := Store.SearchFiles(deviceID, q, page, pageSize)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	api.OKList(c, files, page, pageSize, total)
+}

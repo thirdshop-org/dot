@@ -242,6 +242,51 @@ func TestFilesFlow(t *testing.T) {
 	expectError(t, rec, http.StatusNotFound, "NOT_FOUND", "get-after-delete")
 }
 
+func TestSearchFiles(t *testing.T) {
+	r, _, repo := setup(t)
+	device := repository.NewID()
+	token := registerDevice(t, r, device)
+
+	if err := repo.Resources.InsertFile(device, repository.NewID(), "vacances-août.jpg", "", 100, nil, nil); err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+	if err := repo.Resources.InsertFile(device, repository.NewID(), "rapport-q3.pdf", "", 100, nil, nil); err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+	if err := repo.Resources.InsertFile(device, repository.NewID(), "toto.txt", "", 100, nil, nil); err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+
+	// q obligatoire
+	rec, _ := doRequest(t, r, http.MethodGet, "/api/v1/files/search", token, nil, "")
+	expectError(t, rec, http.StatusBadRequest, "INVALID_REQUEST", "search-no-q")
+
+	// insensible à la casse + sous-chaîne
+	rec, _ = doRequest(t, r, http.MethodGet, "/api/v1/files/search?q=APORT", token, nil, "")
+	env := expectOK(t, rec, "search")
+	var files []fileDTO
+	if err := json.Unmarshal(env.Data, &files); err != nil {
+		t.Fatalf("search: unmarshal: %v", err)
+	}
+	if len(files) != 1 || files[0].Name != "rapport-q3.pdf" {
+		t.Errorf("search 'APORT': %+v", files)
+	}
+	if env.Meta == nil || env.Meta.Total != 1 {
+		t.Errorf("meta search: %+v", env.Meta)
+	}
+
+	// wildcards neutralisés (trouve que "toto", pas tous les fichiers)
+	rec, _ = doRequest(t, r, http.MethodGet, "/api/v1/files/search?q=%25", token, nil, "")
+	env = expectOK(t, rec, "search-escaped")
+	files = nil
+	if err := json.Unmarshal(env.Data, &files); err != nil {
+		t.Fatalf("search-escaped: unmarshal: %v", err)
+	}
+	if len(files) != 0 {
+		t.Errorf("q=%% doit ne rien matcher, got %+v", files)
+	}
+}
+
 func TestUploadTooLarge(t *testing.T) {
 	r, _, _ := setup(t)
 	device := repository.NewID()

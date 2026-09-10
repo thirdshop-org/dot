@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/lib/pq"
@@ -195,6 +196,41 @@ func (r *Resources) DeleteFile(ownerID, resourceID string) (string, error) {
 		return "", ErrNotFound
 	}
 	return resourceID, nil
+}
+
+// SearchFiles returns the owner device's files whose name matches q
+// (case-insensitive substring, wildcards escaped), plus the total count.
+func (r *Resources) SearchFiles(ownerID, q string, limit, offset int) ([]FileRow, int, error) {
+	pattern := `%` + escapeLike(q) + `%`
+	where := `type = 'file' AND deleted_at IS NULL AND owner_id = $1 AND name ILIKE $2 ESCAPE '\'`
+
+	var total int
+	if err := r.DB.QueryRow(`SELECT COUNT(*) FROM resources WHERE `+where, ownerID, pattern).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	rows, err := r.DB.Query(
+		fmt.Sprintf(`SELECT %s FROM resources WHERE %s ORDER BY name ASC LIMIT $3 OFFSET $4`,
+			fileColumns, where),
+		ownerID, pattern, limit, offset,
+	)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+	files := make([]FileRow, 0)
+	for rows.Next() {
+		row, err := r.scanFile(rows.Scan)
+		if err != nil {
+			return nil, 0, err
+		}
+		files = append(files, row)
+	}
+	return files, total, rows.Err()
+}
+
+func escapeLike(q string) string {
+	replacer := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+	return replacer.Replace(q)
 }
 
 // ListRootFolders returns the owner device's top-level folders (parent_id NULL).
