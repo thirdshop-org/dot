@@ -210,6 +210,8 @@ CREATE INDEX IF NOT EXISTS idx_folders_resource_id ON folders(resource_id);
 CREATE INDEX IF NOT EXISTS idx_files_resource_id ON files(resource_id);
 CREATE INDEX IF NOT EXISTS idx_files_folder_resource ON files(folder_resource_id);
 CREATE INDEX IF NOT EXISTS idx_folders_parent ON folders(parent_resource_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_folders_uri ON folders(uri) WHERE uri IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_files_uri ON files(uri) WHERE uri IS NOT NULL;
 `);
         await txn.execAsync(`PRAGMA user_version = 4;`);
       });

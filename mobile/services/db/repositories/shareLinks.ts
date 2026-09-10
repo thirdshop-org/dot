@@ -1,4 +1,4 @@
-import { getDatabase } from '../client';
+import { getSession } from '../session';
 import type { NewShareLink, ResourceType, ShareLink, ShareLinkRow } from '../types';
 
 const PUSH_STATUS_SQL = `(
@@ -16,7 +16,7 @@ const PUSH_STATUS_SQL = `(
 ) AS push_status`;
 
 export async function createShareLink(input: NewShareLink): Promise<ShareLink> {
-  const db = await getDatabase();
+  const db = await getSession();
   const now = Date.now();
 
   let token = input.token;
@@ -49,7 +49,7 @@ export async function createShareLink(input: NewShareLink): Promise<ShareLink> {
 }
 
 export async function getShareLinkById(id: number): Promise<ShareLink | null> {
-  const db = await getDatabase();
+  const db = await getSession();
   const row = await db.getFirstAsync<ShareLinkRow & { push_status: ShareLink['pushStatus'] }>(
     `SELECT sl.*, ${PUSH_STATUS_SQL} FROM share_links sl WHERE sl.id = ?`,
     id,
@@ -58,7 +58,7 @@ export async function getShareLinkById(id: number): Promise<ShareLink | null> {
 }
 
 export async function getShareLinkByToken(token: string): Promise<ShareLink | null> {
-  const db = await getDatabase();
+  const db = await getSession();
   const row = await db.getFirstAsync<ShareLinkRow & { push_status: ShareLink['pushStatus'] }>(
     `SELECT sl.*, ${PUSH_STATUS_SQL} FROM share_links sl WHERE sl.token = ?`,
     token,
@@ -70,7 +70,7 @@ export async function getShareLinks(
   resourceId?: string,
   resourceType?: ResourceType,
 ): Promise<ShareLink[]> {
-  const db = await getDatabase();
+  const db = await getSession();
   let sql = `SELECT sl.*, ${PUSH_STATUS_SQL} FROM share_links sl`;
   const params: string[] = [];
   if (resourceId) {
@@ -87,7 +87,7 @@ export async function getShareLinks(
 }
 
 export async function incrementLinkDownloads(id: number): Promise<void> {
-  const db = await getDatabase();
+  const db = await getSession();
   await db.runAsync(
     `UPDATE share_links SET downloads_count = downloads_count + 1, updated_at = ? WHERE id = ?`,
     Date.now(),
@@ -96,7 +96,7 @@ export async function incrementLinkDownloads(id: number): Promise<void> {
 }
 
 export async function revokeShareLink(id: number): Promise<void> {
-  const db = await getDatabase();
+  const db = await getSession();
   await db.runAsync(
     `UPDATE share_links SET is_revoked = 1, updated_at = ? WHERE id = ?`,
     Date.now(),
@@ -108,7 +108,7 @@ export async function removeShareLinksForResource(
   resourceId: string,
   resourceType: ResourceType,
 ): Promise<void> {
-  const db = await getDatabase();
+  const db = await getSession();
   await db.runAsync('DELETE FROM share_links WHERE resource_id = ? AND resource_type = ?', resourceId, resourceType);
 }
 

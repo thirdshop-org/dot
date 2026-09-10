@@ -1,4 +1,4 @@
-import { getDatabase } from '../client';
+import { getSession } from '../session';
 import { newResourceId } from '../id';
 import { FILE_COLUMNS_SQL } from '../schema';
 import { getDeviceUserId } from './preferences';
@@ -6,6 +6,7 @@ import type { FileEntry, FileRow, StoredFile, SyncStatus } from '../types';
 
 export type SaveFileOptions = {
   syncStatus?: SyncStatus;
+  resource_id?: string;
 };
 
 export async function saveFile(
@@ -13,15 +14,20 @@ export async function saveFile(
   folderResourceId: string,
   options: SaveFileOptions = {},
 ): Promise<StoredFile> {
-  const db = await getDatabase();
+  const db = await getSession();
   const now = Date.now();
   const exists = file.exists ? 1 : 0;
   const ownerId = await getDeviceUserId();
 
-  const existing = await db.getFirstAsync<FileRow>(
-    `SELECT ${FILE_COLUMNS_SQL} FROM files WHERE uri = ?`,
-    file.uri,
-  );
+  const existing = options.resource_id
+    ? await db.getFirstAsync<FileRow>(
+        `SELECT ${FILE_COLUMNS_SQL} FROM files WHERE resource_id = ?`,
+        options.resource_id,
+      )
+    : await db.getFirstAsync<FileRow>(
+        `SELECT ${FILE_COLUMNS_SQL} FROM files WHERE uri = ?`,
+        file.uri,
+      );
 
   const resourceId = existing?.resource_id ?? (await newResourceId());
   const baseSync = existing?.sync_status ?? options.syncStatus ?? 'local';
@@ -64,7 +70,7 @@ export async function saveFile(
 }
 
 export async function getFiles(folderResourceId?: string): Promise<StoredFile[]> {
-  const db = await getDatabase();
+  const db = await getSession();
   const rows =
     folderResourceId === undefined
       ? await db.getAllAsync<FileRow>(`SELECT ${FILE_COLUMNS_SQL} FROM files ORDER BY name ASC`)
@@ -76,7 +82,7 @@ export async function getFiles(folderResourceId?: string): Promise<StoredFile[]>
 }
 
 export async function getFile(resourceId: string): Promise<StoredFile | null> {
-  const db = await getDatabase();
+  const db = await getSession();
   const row = await db.getFirstAsync<FileRow>(
     `SELECT ${FILE_COLUMNS_SQL} FROM files WHERE resource_id = ?`,
     resourceId,
@@ -85,7 +91,7 @@ export async function getFile(resourceId: string): Promise<StoredFile | null> {
 }
 
 export async function removeFile(resourceId: string): Promise<void> {
-  const db = await getDatabase();
+  const db = await getSession();
   await db.runAsync('DELETE FROM files WHERE resource_id = ?', resourceId);
 }
 

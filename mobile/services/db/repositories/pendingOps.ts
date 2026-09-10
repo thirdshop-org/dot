@@ -1,4 +1,4 @@
-import { getDatabase } from '../client';
+import { getSession } from '../session';
 import type {
   NewPendingOperation,
   PendingOperation,
@@ -13,10 +13,12 @@ const PENDING_OPERATION_COLUMNS = `
 const MAX_BACKOFF_MS = 24 * 60 * 60 * 1000;
 const BASE_BACKOFF_MS = 30 * 1000;
 
+export const MAX_PENDING_ATTEMPTS = 5;
+
 export async function enqueuePendingOperation(
   operation: NewPendingOperation,
 ): Promise<number> {
-  const db = await getDatabase();
+  const db = await getSession();
   const row = await db.getFirstAsync<{ id: number }>(
     `INSERT INTO pending_operations
        (resource_id, resource_type, ref_type, ref_id, operation, payload, status, attempts, created_at)
@@ -36,7 +38,7 @@ export async function enqueuePendingOperation(
 export async function getPendingOperations(
   status?: PendingOperationStatus,
 ): Promise<PendingOperation[]> {
-  const db = await getDatabase();
+  const db = await getSession();
   const rows = status
     ? await db.getAllAsync<PendingOperationRow>(
         `SELECT ${PENDING_OPERATION_COLUMNS} FROM pending_operations
@@ -51,7 +53,7 @@ export async function getPendingOperations(
 }
 
 export async function getNextQueuedOperation(): Promise<PendingOperation | null> {
-  const db = await getDatabase();
+  const db = await getSession();
   const row = await db.getFirstAsync<PendingOperationRow>(
     `SELECT ${PENDING_OPERATION_COLUMNS} FROM pending_operations
      WHERE status = 'pending'
@@ -68,7 +70,7 @@ export async function markPendingOperation(
   status: PendingOperationStatus,
   error?: string | null,
 ): Promise<void> {
-  const db = await getDatabase();
+  const db = await getSession();
   const now = Date.now();
 
   if (status === 'failed') {
@@ -78,12 +80,23 @@ export async function markPendingOperation(
     );
     if (!current) return;
     const attempts = current.attempts + 1;
+    if (attempts >= MAX_PENDING_ATTEMPTS) {
+      await db.runAsync(
+        `UPDATE pending_operations SET
+           status = 'failed', attempts = ?, error = ?, next_retry_at = NULL, last_error_at = ?
+         WHERE id = ?`,
+        attempts,
+        error ?? null,
+        now,
+        id,
+      );
+      return;
+    }
     const backoff = Math.min(BASE_BACKOFF_MS * 2 ** attempts, MAX_BACKOFF_MS);
     await db.runAsync(
       `UPDATE pending_operations SET
-         status = ?, attempts = ?, error = ?, next_retry_at = ?, last_error_at = ?
+         status = 'pending', attempts = ?, error = ?, next_retry_at = ?, last_error_at = ?
        WHERE id = ?`,
-      status,
       attempts,
       error ?? null,
       now + backoff,

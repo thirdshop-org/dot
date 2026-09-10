@@ -1,4 +1,4 @@
-import { getDatabase } from '../client';
+import { getSession } from '../session';
 import { newResourceId } from '../id';
 import { FOLDER_COLUMNS_SQL } from '../schema';
 import { getDeviceUserId } from './preferences';
@@ -20,21 +20,21 @@ export async function saveFolder(
   input: SaveFolderInput,
   options: SaveFolderOptions = {},
 ): Promise<StoredFolder> {
-  const db = await getDatabase();
+  const db = await getSession();
   const now = Date.now();
   const exists =
     input.exists === undefined || input.exists === null ? null : input.exists ? 1 : 0;
   const ownerId = await getDeviceUserId();
 
-  const existing = input.uri
+  const existing = input.resource_id
     ? await db.getFirstAsync<FolderRow>(
-        `SELECT ${FOLDER_COLUMNS_SQL} FROM folders WHERE uri = ?`,
-        input.uri,
+        `SELECT ${FOLDER_COLUMNS_SQL} FROM folders WHERE resource_id = ?`,
+        input.resource_id,
       )
-    : input.resource_id
+    : input.uri
       ? await db.getFirstAsync<FolderRow>(
-          `SELECT ${FOLDER_COLUMNS_SQL} FROM folders WHERE resource_id = ?`,
-          input.resource_id,
+          `SELECT ${FOLDER_COLUMNS_SQL} FROM folders WHERE uri = ?`,
+          input.uri,
         )
       : null;
 
@@ -82,7 +82,7 @@ export async function saveDirectory(folder: {
 }
 
 export async function getFolders(): Promise<StoredFolder[]> {
-  const db = await getDatabase();
+  const db = await getSession();
   const rows = await db.getAllAsync<FolderRow>(
     `SELECT ${FOLDER_COLUMNS_SQL} FROM folders ORDER BY name ASC`,
   );
@@ -92,7 +92,7 @@ export async function getFolders(): Promise<StoredFolder[]> {
 export async function getFolderFolders(
   parentResourceId: string | null,
 ): Promise<StoredFolder[]> {
-  const db = await getDatabase();
+  const db = await getSession();
   const rows = await db.getAllAsync<FolderRow>(
     `SELECT ${FOLDER_COLUMNS_SQL} FROM folders WHERE parent_resource_id IS ? ORDER BY name ASC`,
     parentResourceId,
@@ -101,7 +101,7 @@ export async function getFolderFolders(
 }
 
 export async function getFolder(resourceId: string): Promise<StoredFolder | null> {
-  const db = await getDatabase();
+  const db = await getSession();
   const row = await db.getFirstAsync<FolderRow>(
     `SELECT ${FOLDER_COLUMNS_SQL} FROM folders WHERE resource_id = ?`,
     resourceId,
@@ -110,7 +110,7 @@ export async function getFolder(resourceId: string): Promise<StoredFolder | null
 }
 
 export async function removeFolder(resourceId: string): Promise<void> {
-  const db = await getDatabase();
+  const db = await getSession();
   await db.runAsync('DELETE FROM folders WHERE resource_id = ?', resourceId);
 }
 

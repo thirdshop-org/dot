@@ -1,4 +1,4 @@
-import { getDatabase } from '../client';
+import { getSession } from '../session';
 import type { Recipient, RecipientRow, RecipientType } from '../types';
 
 export async function saveRecipient(
@@ -6,7 +6,7 @@ export async function saveRecipient(
   recipientId: string,
   displayName: string,
 ): Promise<Recipient> {
-  const db = await getDatabase();
+  const db = await getSession();
   await db.runAsync(
     `INSERT INTO recipients (recipient_type, recipient_id, display_name, is_active, updated_at)
      VALUES (?, ?, ?, 1, ?)
@@ -28,7 +28,7 @@ export async function saveRecipient(
 }
 
 export async function getRecipients(activeOnly = true): Promise<Recipient[]> {
-  const db = await getDatabase();
+  const db = await getSession();
   const rows = activeOnly
     ? await db.getAllAsync<RecipientRow>(
         'SELECT * FROM recipients WHERE is_active = 1 ORDER BY display_name ASC',
@@ -42,7 +42,7 @@ export async function setRecipientActive(
   recipientId: string,
   active: boolean,
 ): Promise<void> {
-  const db = await getDatabase();
+  const db = await getSession();
   await db.runAsync(
     `UPDATE recipients SET is_active = ?, updated_at = ?
      WHERE recipient_type = ? AND recipient_id = ?`,

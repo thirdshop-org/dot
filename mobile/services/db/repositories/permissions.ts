@@ -1,5 +1,5 @@
-import type { SQLiteDatabase } from 'expo-sqlite';
-import { getDatabase } from '../client';
+import type { DbSession } from '../session';
+import { getSession } from '../session';
 import { PERMISSION_TTL_MS } from '../schema';
 import { getDeviceUserId } from './preferences';
 import type {
@@ -29,6 +29,7 @@ export type AccessCheck = {
 
 type LineageNode = {
   resource_id: string;
+  resource_type: ResourceType;
   parent_resource_id: string | null;
   owner_id: string;
 };
@@ -41,7 +42,7 @@ export async function getResourcePermission(
   resourceId: string,
   resourceType: ResourceType,
 ): Promise<ResourcePermission | null> {
-  const db = await getDatabase();
+  const db = await getSession();
   const row = await db.getFirstAsync<ResourcePermissionRow>(
     `SELECT * FROM resource_permissions WHERE resource_id = ? AND resource_type = ?`,
     resourceId,
@@ -53,7 +54,7 @@ export async function getResourcePermission(
 export async function saveResourcePermission(
   permission: NewResourcePermission,
 ): Promise<void> {
-  const db = await getDatabase();
+  const db = await getSession();
   const now = Date.now();
   await db.runAsync(
     `INSERT INTO resource_permissions
@@ -83,21 +84,32 @@ async function resourceLineage(
   resourceId: string,
   resourceType: ResourceType,
 ): Promise<LineageNode[]> {
-  const db = await getDatabase();
+  const db = await getSession();
 
-  const anchor = await db.getFirstAsync<{ folder_resource_id: string }>(
-    'SELECT folder_resource_id FROM files WHERE resource_id = ?',
-    resourceId,
-  );
   if (resourceType === 'file') {
-    if (!anchor) return [];
-    return folderLineage(db, anchor.folder_resource_id);
+    const file = await db.getFirstAsync<{
+      folder_resource_id: string;
+      owner_id: string;
+    }>(
+      'SELECT folder_resource_id, owner_id FROM files WHERE resource_id = ?',
+      resourceId,
+    );
+    if (!file) return [];
+    return [
+      {
+        resource_id: resourceId,
+        resource_type: 'file',
+        parent_resource_id: file.folder_resource_id,
+        owner_id: file.owner_id,
+      },
+      ...(await folderLineage(db, file.folder_resource_id)),
+    ];
   }
   return folderLineage(db, resourceId);
 }
 
 async function folderLineage(
-  db: SQLiteDatabase,
+  db: DbSession,
   startResourceId: string,
 ): Promise<LineageNode[]> {
   const rows = await db.getAllAsync<LineageNode>(
@@ -108,34 +120,18 @@ async function folderLineage(
        FROM folders f
        JOIN lineage l ON f.resource_id = l.parent_resource_id
      )
-     SELECT resource_id, parent_resource_id, owner_id FROM lineage`,
+     SELECT resource_id, 'folder' AS resource_type, parent_resource_id, owner_id FROM lineage`,
     startResourceId,
   );
   return rows;
 }
 
-function decideFromPermission(
-  permission: ResourcePermission,
-  required: AccessLevel,
-  now: number,
-): AccessCheck {
-  if (permission.expiresAt != null && permission.expiresAt < now) {
-    return {
-      allowed: false,
-      access: permission.effectiveAccess,
-      source: 'cache',
-      stale: false,
-      expiresAt: permission.expiresAt,
-    };
-  }
-  const granted = rank(permission.effectiveAccess) >= rank(required);
-  return {
-    allowed: granted,
-    access: permission.effectiveAccess,
-    source: 'cache',
-    stale: now - permission.cachedAt > PERMISSION_TTL_MS,
-    expiresAt: permission.expiresAt,
-  };
+function isStale(cachedAt: number, now: number): boolean {
+  return now - cachedAt > PERMISSION_TTL_MS;
+}
+
+function readOnlyAccess(permission: ResourcePermission, now: number): AccessLevel {
+  return isStale(permission.cachedAt, now) ? 'viewer' : permission.effectiveAccess;
 }
 
 export async function canAccess(
@@ -143,28 +139,75 @@ export async function canAccess(
   resourceType: ResourceType,
   required: AccessLevel,
 ): Promise<AccessCheck> {
-  const db = await getDatabase();
   const now = Date.now();
   const deviceUserId = await getDeviceUserId();
 
-  const cached = await getResourcePermission(resourceId, resourceType);
-  if (cached) return decideFromPermission(cached, required, now);
+  const exactCache = await getResourcePermission(resourceId, resourceType);
+  if (exactCache) {
+    if (exactCache.expiresAt != null && exactCache.expiresAt < now) {
+      return {
+        allowed: false,
+        access: exactCache.effectiveAccess,
+        source: 'cache',
+        stale: false,
+        expiresAt: exactCache.expiresAt,
+      };
+    }
+    const stale = isStale(exactCache.cachedAt, now);
+    const applyAccess = readOnlyAccess(exactCache, now);
+    return {
+      allowed: rank(applyAccess) >= rank(required),
+      access: applyAccess,
+      source: 'cache',
+      stale,
+      expiresAt: exactCache.expiresAt,
+    };
+  }
 
   const lineage = await resourceLineage(resourceId, resourceType);
-  for (const node of lineage) {
+  let best: {
+    access: AccessLevel;
+    source: AccessSource;
+    stale: boolean;
+    expiresAt: number | null;
+  } | null = null;
+
+  for (const [index, node] of lineage.entries()) {
     if (node.owner_id === deviceUserId) {
       return { allowed: true, access: 'owner', source: 'owner', stale: false, expiresAt: null };
     }
-    const nodePermission = await getResourcePermission(node.resource_id, 'folder');
-    if (nodePermission) {
-      const decision = decideFromPermission(nodePermission, required, now);
-      if (decision.source === 'cache') {
-        return { ...decision, source: 'inherited' };
-      }
+
+    const nodePermission = await getResourcePermission(node.resource_id, node.resource_type);
+    if (!nodePermission) continue;
+    if (nodePermission.expiresAt != null && nodePermission.expiresAt < now) continue;
+    if (index > 0 && nodePermission.inherit === false) continue;
+
+    const stale = isStale(nodePermission.cachedAt, now);
+    const candidate = {
+      access: readOnlyAccess(nodePermission, now),
+      source: (index === 0 ? 'cache' : 'inherited') as AccessSource,
+      stale,
+      expiresAt: nodePermission.expiresAt,
+    };
+    if (
+      !best ||
+      rank(candidate.access) > rank(best.access) ||
+      (rank(candidate.access) === rank(best.access) && !candidate.stale && best.stale)
+    ) {
+      best = candidate;
     }
   }
 
-  return { allowed: false, access: null, source: 'none', stale: false, expiresAt: null };
+  if (!best) {
+    return { allowed: false, access: null, source: 'none', stale: false, expiresAt: null };
+  }
+  return {
+    allowed: rank(best.access) >= rank(required),
+    access: best.access,
+    source: best.source,
+    stale: best.stale,
+    expiresAt: best.expiresAt,
+  };
 }
 
 export async function canWrite(

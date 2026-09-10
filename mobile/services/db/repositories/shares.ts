@@ -1,4 +1,4 @@
-import { getDatabase } from '../client';
+import { getSession } from '../session';
 import type { NewShare, ResourceType, Share, ShareRow } from '../types';
 
 const PUSH_STATUS_SQL = `(
@@ -16,7 +16,7 @@ const PUSH_STATUS_SQL = `(
 ) AS push_status`;
 
 export async function saveShare(share: NewShare): Promise<Share> {
-  const db = await getDatabase();
+  const db = await getSession();
   const now = Date.now();
 
   await db.runAsync(
@@ -56,7 +56,7 @@ export async function getShare(
   recipientType: 'user' | 'group',
   recipientId: string,
 ): Promise<Share | null> {
-  const db = await getDatabase();
+  const db = await getSession();
   const row = await db.getFirstAsync<ShareRow & { push_status: Share['pushStatus'] }>(
     `SELECT s.*, ${PUSH_STATUS_SQL} FROM shares s
      WHERE s.resource_id = ? AND s.resource_type = ? AND s.recipient_type = ? AND s.recipient_id = ?`,
@@ -72,7 +72,7 @@ export async function getShares(
   resourceId?: string,
   resourceType?: ResourceType,
 ): Promise<Share[]> {
-  const db = await getDatabase();
+  const db = await getSession();
   let sql = `SELECT s.*, ${PUSH_STATUS_SQL} FROM shares s`;
   const params: string[] = [];
   if (resourceId) {
@@ -94,7 +94,7 @@ export async function removeShare(
   recipientType: 'user' | 'group',
   recipientId: string,
 ): Promise<void> {
-  const db = await getDatabase();
+  const db = await getSession();
   await db.runAsync(
     `DELETE FROM shares
      WHERE resource_id = ? AND resource_type = ? AND recipient_type = ? AND recipient_id = ?`,
@@ -109,7 +109,7 @@ export async function removeSharesForResource(
   resourceId: string,
   resourceType: ResourceType,
 ): Promise<void> {
-  const db = await getDatabase();
+  const db = await getSession();
   await db.runAsync('DELETE FROM shares WHERE resource_id = ? AND resource_type = ?', resourceId, resourceType);
 }
 

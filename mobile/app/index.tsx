@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { pickDirectory } from '../services/safDirectory';
 import { saveDirectory, getFolders } from '../services/localStorage';
+import { syncRoot } from '../features/syncDevice';
 
 export default function Index() {
 
@@ -18,9 +19,14 @@ export default function Index() {
   const handlePickDirectory = async () => {
     const folder = await pickDirectory();
     if ( !folder ) return;
-    await saveDirectory(folder);
+    const saved = await saveDirectory(folder);
     setFolders((prev) => [...prev, folder.name]);
-    console.log(folders)
+    try {
+      const result = await syncRoot(saved.resource_id);
+      console.info('walk', JSON.stringify(result));
+    } catch (error) {
+      console.warn('walk failed', error);
+    }
   };
 
   return (
