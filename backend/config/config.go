@@ -1,8 +1,6 @@
 package config
 
 import (
-	"fmt"
-	"log"
 	"os"
 	"strconv"
 
@@ -10,46 +8,52 @@ import (
 )
 
 type ApplicationConfig struct {
-	Port int64
+	Port          int
+	DatabaseURL   string
+	UploadDir     string
+	MaxFileSizeMB int64
+	OcrLang       string
+	AuthSecret    string
 }
 
 func LoadApplicationConfig() (error, *ApplicationConfig) {
 
-	err := godotenv.Load()
+	// .env optionnel — les défauts suffisent pour le dev local.
+	_ = godotenv.Load()
 
-	if err != nil {
-		log.Fatal("Error loading .env file")
-	}
-
-	err, portString := getVar("PORT", "8080", true)
+	port, err := getInt("PORT", 8080)
 	if err != nil {
 		return err, nil
 	}
 
-	port, err := strconv.ParseInt(portString, 10, 64)
+	maxSize, err := getInt("MAX_FILE_SIZE_MB", 50)
 	if err != nil {
 		return err, nil
 	}
 
 	return nil, &ApplicationConfig{
-		Port: port,
+		Port:          port,
+		DatabaseURL:   get("DATABASE_URL", "postgres://vaultdrop:vaultdrop@localhost:5432/vaultdrop?sslmode=disable"),
+		UploadDir:     get("UPLOAD_DIR", "./uploads"),
+		MaxFileSizeMB: int64(maxSize),
+		OcrLang:       get("OCR_LANG", "fra+eng"),
+		AuthSecret:    get("AUTH_SECRET", "dev-secret-change-me"),
 	}
 
 }
 
-func getVar(varName string, defaultValue string, isRequired bool) (error, string) {
-	varValue := os.Getenv(varName)
-
-	if varValue == "" {
-
-		if isRequired {
-			return fmt.Errorf("%s is missing and required : ", varName), ""
-		}
-
-		return nil, defaultValue
-
+func get(name string, defaultValue string) string {
+	value := os.Getenv(name)
+	if value == "" {
+		return defaultValue
 	}
+	return value
+}
 
-	return nil, varValue
-
+func getInt(name string, defaultValue int) (int, error) {
+	value := os.Getenv(name)
+	if value == "" {
+		return defaultValue, nil
+	}
+	return strconv.Atoi(value)
 }
