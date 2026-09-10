@@ -36,7 +36,9 @@
     "test:db": "tsx --test tests/migrations.test.ts tests/repositories.test.ts",
     "test:migrations": "tsx --test tests/migrations.test.ts",
     "test:api": "tsx --test tests/apiClient.test.ts",
-    "test": "npm run test:db && npm run test:api"
+    "test:sync": "tsx --test tests/syncOutbox.test.ts",
+    "test:e2e": "tsx --test tests/e2e.live.test.ts",
+    "test": "npm run test:db && npm run test:api && npm run test:sync"
   },
   "private": true
 }

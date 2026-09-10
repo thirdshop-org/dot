@@ -6,6 +6,9 @@ import type {
   FolderDto,
   ListFilesParams,
   OcrJob,
+  ResourcePermission,
+  SyncOperation,
+  SyncResult,
 } from './types';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://localhost:8080/api/v1';
@@ -16,6 +19,10 @@ let authToken: string | null = null;
 
 export function setAuthToken(token: string | null): void {
   authToken = token;
+}
+
+export function hasAuthToken(): boolean {
+  return authToken !== null;
 }
 
 type QueryParams = Record<string, string | number | boolean | undefined | null>;
@@ -171,4 +178,14 @@ export const api = {
 
   getOcrJob: (id: string) =>
     request<OcrJob>(`/ocr/jobs/${encodeURIComponent(id)}`),
+
+  syncOps: (operations: SyncOperation[]) =>
+    request<SyncResult>('/sync/ops', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ operations }),
+    }),
+
+  getSyncPermissions: (after?: number) =>
+    request<ResourcePermission[]>(`/sync/permissions${after != null ? `?after=${after}` : ''}`),
 };

@@ -36,5 +36,8 @@ export {
   enqueuePendingOperation,
   getPendingOperations,
   getNextQueuedOperation,
+  listQueuedOperations,
+  scheduleRetries,
   markPendingOperation,
+  MAX_PENDING_ATTEMPTS,
 } from './pendingOps';

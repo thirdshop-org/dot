@@ -12,7 +12,7 @@ Références : `V2.md` (modèle cible), `mobile/services/db/` (conventions sync)
 - JSON partout, sauf `POST /files/upload` (multipart).
 - Enveloppe succès : `{ "data": T, "meta"?: { "page": int, "pageSize": int, "total": int } }` (`meta` présent sur les listes paginées).
 - Erreur : `{ "error": { "code": string, "message": string } }` + statut HTTP adéquat.
-- Côté client, toute réponse non-`2xx` est normalisée en `ApiError` : `code` du body si présent, sinon `HTTP_<status>` ; échec réseau → `NETWORK_ERROR`.
+- Côté client, toute réponse non-`2xx` est normalisée en `ApiError` : `code` du body si présent, sinon `HTTP_<status>` ; échec réseau → `NETWORK_ERROR`. Une réponse `2xx` mais dont le body n'est pas du JSON d'enveloppe valide (HTML, corps vide, JSON mal formé, absence de la clé `data`) → `INVALID_RESPONSE` (client-only).
 
 ## 2. Identité et identifiants (invariants)
 
@@ -133,4 +133,4 @@ type ResourcePermission = {
 
 ## 7. Codes d'erreur courants
 
-`NOT_FOUND`, `NOT_IMPLEMENTED` (501 temporaire sur les routes non construites — état actuel : **toutes les routes V1 sont réelles** : files CRUD/upload/search, folders, devices, health, sync/ops, sync/permissions, ocr/jobs), `FILE_TOO_LARGE` (413), `NAME_CONFLICT` (409 — même nom dans le même parent, cf. `UNIQUE(parent_id, name)`, **ou à la racine**, index partiel `(owner_id, name) WHERE parent_id IS NULL`), `NETWORK_ERROR` (côté client), `HTTP_<status>` (fallback). Statut `SERVICE_UNAVAILABLE` (503) si le backend n'est pas initialisé.
+`NOT_FOUND`, `NOT_IMPLEMENTED` (501 temporaire sur les routes non construites — état actuel : **toutes les routes V1 sont réelles** : files CRUD/upload/search, folders, devices, health, sync/ops, sync/permissions, ocr/jobs), `FILE_TOO_LARGE` (413), `NAME_CONFLICT` (409 — même nom dans le même parent, cf. `UNIQUE(parent_id, name)`, **ou à la racine**, index partiel `(owner_id, name) WHERE parent_id IS NULL`), `NETWORK_ERROR` (côté client), `INVALID_RESPONSE` (côté client — 2xx mais corps d'enveloppe invalide), `HTTP_<status>` (fallback). Statut `SERVICE_UNAVAILABLE` (503) si le backend n'est pas initialisé.

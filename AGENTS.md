@@ -52,6 +52,7 @@ cd mobile && npm run test:db
   - `db/` — SQLite persistence, see `mobile/AGENTS.md` for the full contract (schema, migrations, repositories, tests)
   - `localStorage.ts` — thin re-export of `services/db` (legacy alias)
 - `features/syncDevice.ts` — device sync orchestration (two-pass SAF walk, single transaction per root, `exists = 0` reconciliation)
+- `features/syncOutbox.ts` — pulls `pending_operations` to `POST /sync/ops` (resume-at-`applied` index, transient retries never bump `attempts`) and `GET /sync/permissions` delta snapshot; both no-ops without an auth token
 - `context/AuthContext.tsx` — session context: exposes `deviceUserId` (bootstrapped from `getDeviceUserId()`) and starts the background `syncDevice` loop
 - `app/` — expo-router screens: `index.tsx` (dossiers racines + ajout SAF), `folder/[id].tsx` (sous-dossiers + fichiers)
 - `api/` — REST client (`client.ts` fetch wrapper + `types.ts` = contrat d'API : enveloppe `{ data, meta }`, erreurs `{ error: { code, message } }`)

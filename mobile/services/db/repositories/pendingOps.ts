@@ -65,6 +65,37 @@ export async function getNextQueuedOperation(): Promise<PendingOperation | null>
   return row ? toPendingOperation(row) : null;
 }
 
+// Même chose mais en batch (tri FIFO identique) — utilisé par pushPendingOps.
+export async function listQueuedOperations(limit: number): Promise<PendingOperation[]> {
+  if (limit <= 0) return [];
+  const db = await getSession();
+  const rows = await db.getAllAsync<PendingOperationRow>(
+    `SELECT ${PENDING_OPERATION_COLUMNS} FROM pending_operations
+     WHERE status = 'pending'
+       AND (next_retry_at IS NULL OR next_retry_at <= ?)
+     ORDER BY created_at ASC, id ASC
+     LIMIT ?`,
+    Date.now(),
+    limit,
+  );
+  return rows.map(toPendingOperation);
+}
+
+// Reporter des opérations sans incrémenter attempts (utilisé en cas d'erreur
+// transitoire réseau/serveur, pour éviter les dead-letters prématurées).
+export async function scheduleRetries(ids: number[], retryAt: number): Promise<void> {
+  const db = await getSession();
+  const now = Date.now();
+  for (const id of ids) {
+    await db.runAsync(
+      `UPDATE pending_operations SET next_retry_at = ?, last_error_at = ? WHERE id = ?`,
+      retryAt,
+      now,
+      id,
+    );
+  }
+}
+
 export async function markPendingOperation(
   id: number,
   status: PendingOperationStatus,

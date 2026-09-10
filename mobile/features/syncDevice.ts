@@ -12,6 +12,7 @@ import {
   type StoredFolder,
 } from '../services/db';
 import type { SyncResult } from './syncDevice.types';
+import { pushPendingOps, refreshPermissions } from './syncOutbox';
 
 function uriDepth(uri: string): number {
   return uri.split('/').length;
@@ -119,6 +120,16 @@ export async function useSyncDevice(intervalMs = 30_000): Promise<void> {
     try {
       const results = await syncDevice();
       console.info('syncDevice', JSON.stringify(results));
+      // Puis pousser l'outbox (si un token est disponible) et rafraîchir le
+      // cache des permissions (delta).
+      const { pushed, retried } = await pushPendingOps();
+      if (pushed > 0 || retried > 0) {
+        console.info('pushPendingOps', JSON.stringify({ pushed, retried }));
+      }
+      const perms = await refreshPermissions();
+      if (perms > 0) {
+        console.info('refreshPermissions', perms);
+      }
     } catch (error) {
       console.warn('syncDevice failed, retrying later', error);
     }
