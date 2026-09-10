@@ -122,8 +122,12 @@ export async function useSyncDevice(intervalMs = 30_000): Promise<void> {
   if (preferences.syncMode === 'none') return;
 
   while (true) {
-    const results = await syncDevice();
-    console.info('syncDevice', JSON.stringify(results));
+    try {
+      const results = await syncDevice();
+      console.info('syncDevice', JSON.stringify(results));
+    } catch (error) {
+      console.warn('syncDevice failed, retrying later', error);
+    }
     await new Promise((resolve) => setTimeout(resolve, intervalMs));
   }
 }

@@ -47,7 +47,7 @@ cd mobile && npm run test:db
   - `db/` — SQLite persistence, see `mobile/AGENTS.md` for the full contract (schema, migrations, repositories, tests)
   - `localStorage.ts` — thin re-export of `services/db` (legacy alias)
 - `features/syncDevice.ts` — device sync orchestration (two-pass SAF walk, single transaction per root, `exists = 0` reconciliation)
-- `context/AuthContext.tsx` — session context
+- `context/AuthContext.tsx` — session context: exposes `deviceUserId` (bootstrapped from `getDeviceUserId()`) and starts the background `syncDevice` loop
 - No business logic on the client — heavy processing stays server-side
 - API base URL configured via `EXPO_PUBLIC_API_BASE_URL` env var (client + hooks not yet built)
 
