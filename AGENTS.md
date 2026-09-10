@@ -30,14 +30,18 @@ cd mobile && npm run test:db
 
 ## Backend Structure
 
-- Entry point: `backend/cmd/server/main.go`
-- Internal packages: `handlers/`, `models/`, `repository/`, `service/`, `ocr/`
+- Entry point: `backend/cmd/server/main.go` (wiring gin + config + routes)
+- `config/` — env (`godotenv`, optionnel) + defaults: `PORT`, `DATABASE_URL`, `UPLOAD_DIR`, `MAX_FILE_SIZE_MB`, `OCR_LANG`, secret paseto
+- `models/` — domain entities (users, devices, documents/resources, clients)
+- `service/` — business logic (permissions, upload, create folder, move)
+- `handlers/` — HTTP handlers (bind the routes; currently 501 not-implemented stubs)
+- `repository/` — Postgres persistence (`golang-migrate` + `lib/pq`); IDs are TEXT 32-hex (never UUID conversion, cf. `docs/api-v1.md`)
+- `ocr/` — OCR engine behind an interface (Tesseract system call, `OCR_LANG` défaut `fra+eng`)
 - Response helpers: `pkg/api/response.go`
 - File uploads stored in `backend/uploads/`
 - Standard JSON response envelope: `{ "data": ..., "meta": { "page": ..., "total": ... } }`
 - Error format: `{ "error": { "code": "...", "message": "..." } }`
-- OCR language: `fra+eng`
-- Handlers are stub implementations (return not-implemented errors)
+- Route list is a tracked contract (`cmd/server/router_test.go` mirrors `mobile/api/client.ts`)
 
 ## Frontend Structure
 
@@ -63,6 +67,14 @@ cd mobile && npm run test:db
 - Decisions are made **offline** from a cached `resource_permissions` snapshot pushed by the server; the server remains the source of truth. `canAccess` enforces ranking (viewer < commenter < editor < owner), `inherit`, `expires_at`, and a 24h stale-cache read-only downgrade.
 - `password_hash` and download counters are **server-side only**; the client only stores the `has_password` boolean and a counter mirror.
 
+## API Contract (V1)
+
+- **The mobile client is the contract**: endpoint shapes in `mobile/api/types.ts` + `mobile/api/client.ts` are authoritative and must match exactly; the server does not renegotiate them. Consolidated spec: `docs/api-v1.md`.
+- **Identity**: device-first. The device registers (`POST /devices`) and authenticates with a paseto bearer token; no user accounts in V1 (`users` table exists but `devices.user_id` stays NULL).
+- **Identifiers**: `resource_id` / `device_user_id` / share-link `token` are opaque **lowercase 32-hex** TEXT (`^[0-9a-f]{32}$`, CHECK-enforced), stored as-is server-side (no UUID conversion). The mobile always generates `lower(hex(randomblob(16)))`.
+- **Outbox idempotence + ordering**: client pushes batches of `pending_operations`; each operation carries `operation_id` (= client `pending_operations.id`), server enforces uniqueness per device. Batches are applied **sequentially**; the server stops at the first non-idempotent failure and returns the index reached so the client resumes there (outbox retry/backoff can reorder).
+- **Permissions snapshot**: the server pushes `resource_permissions` snapshots (`effective_access` ranking viewer < commenter < editor < owner, `inherit`, `expires_at`, TTL 24h → read-only downgrade) that the offline `canAccess` consumes.
+
 ## Non-Goals (V1)
 
 - Plugin system
@@ -72,4 +84,6 @@ cd mobile && npm run test:db
 
 ## References
 
-- `README.md` — full spec, API endpoints, data flow, folder structure, iteration roadmap
+- `docs/api-v1.md` — **contrat API V1** (autoritatif, consolidé depuis `mobile/api/types.ts`)
+- `README.md` / `V1.md` — specs **obsolètes** (bannières en tête de fichier)
+- `V2.md` — modèle cible Postgres/ReBAC (identifiants en TEXT 32-hex, cf. `docs/api-v1.md`)

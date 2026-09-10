@@ -1,5 +1,7 @@
 # VaultDrop — Application de Gestion de Fichiers V1
 
+> ⚠️ **Obsolète** — cette spec décrit une V1 single-user (SQLite). Référentiel actuel : `docs/api-v1.md` (contrat API) et `V2.md` (modèle cible Postgres/ReBAC).
+
 ## Vision
 
 Application mobile tout-en-un permettant de centraliser, organiser et retrouver ses documents. Upload depuis l'appareil, scan caméra avec OCR, tagging et recherche rapide. Le back-end Go assure le traitement asynchrone (OCR, indexing) et la persistence. Le front React Native reste léger : il affiche, interagit et met en cache.

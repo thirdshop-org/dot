@@ -1,19 +1,14 @@
 services:
-  paddleocr:
-    build:
-      context: ./backend/ocr-server
-      dockerfile: Dockerfile
-    ports:
-      - "9090:8080"
-    environment:
-      - OCR_LANG=fr
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-sf", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 120s
+  # paddleocr envisagé, non retenu — OCR via Tesseract (appel système), cf. docs/api-v1.md
+  # paddleocr:
+  #   build:
+  #     context: ./backend/ocr-server
+  #     dockerfile: Dockerfile
+  #   ports:
+  #     - "9090:8080"
+  #   environment:
+  #     - OCR_LANG=fr
+  #   restart: unless-stopped
 
   postgres:
     image: postgres:17-alpine
@@ -41,12 +36,9 @@ services:
   #   environment:
   #     - PORT=8080
   #     - DATABASE_URL=postgres://vaultdrop:vaultdrop@postgres:5432/vaultdrop?sslmode=disable
-  #     - OCR_ENDPOINT=http://paddleocr:8080
   #   volumes:
   #     - ./backend/uploads:/app/uploads
   #   depends_on:
-  #     paddleocr:
-  #       condition: service_healthy
   #     postgres:
   #       condition: service_healthy
   #   restart: unless-stopped
