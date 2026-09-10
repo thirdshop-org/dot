@@ -1,4 +1,4 @@
-import { getDatabase } from './client';
+import { getDatabase, withDatabaseRetry } from './client';
 import type { SQLiteBindValue } from 'expo-sqlite';
 
 export type DbSession = {
@@ -14,5 +14,16 @@ export function __setDbForTests(db: DbSession | null): void {
 }
 
 export async function getSession(): Promise<DbSession> {
-  return override ?? (await getDatabase());
+  if (override) return override;
+  await getDatabase();
+  return liveSession;
 }
+
+const liveSession: DbSession = {
+  runAsync: (sql, ...params) =>
+    withDatabaseRetry((db) => db.runAsync(sql, ...params)),
+  getFirstAsync: (sql, ...params) =>
+    withDatabaseRetry((db) => db.getFirstAsync(sql, ...params)),
+  getAllAsync: (sql, ...params) =>
+    withDatabaseRetry((db) => db.getAllAsync(sql, ...params)),
+};
