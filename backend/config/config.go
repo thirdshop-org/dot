@@ -33,7 +33,7 @@ func LoadApplicationConfig() (error, *ApplicationConfig) {
 
 	return nil, &ApplicationConfig{
 		Port:          port,
-		DatabaseURL:   get("DATABASE_URL", "postgres://vaultdrop:vaultdrop@localhost:5432/vaultdrop?sslmode=disable"),
+		DatabaseURL:   get("DATABASE_URL", "postgres://vaultdrop:vaultdrop@localhost:5432/vaultdrop_dev?sslmode=disable"),
 		UploadDir:     get("UPLOAD_DIR", "./uploads"),
 		MaxFileSizeMB: int64(maxSize),
 		OcrLang:       get("OCR_LANG", "fra+eng"),

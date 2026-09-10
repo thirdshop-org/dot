@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/vaultdrop/backend/config"
+	"github.com/vaultdrop/backend/db"
 	"github.com/vaultdrop/backend/handlers"
 	"github.com/vaultdrop/backend/pkg/auth"
 )
@@ -54,6 +55,10 @@ func main() {
 		log.Fatalln(err)
 	}
 	handlers.Auth = authManager
+
+	if err := db.MigrateDatabase(cfg.DatabaseURL); err != nil {
+		log.Fatalf("migrations postgres: %v", err)
+	}
 
 	if err := newRouter().Run(fmt.Sprintf(":%d", cfg.Port)); err != nil {
 		log.Fatalln(err)
