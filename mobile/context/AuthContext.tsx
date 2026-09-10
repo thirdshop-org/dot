@@ -60,10 +60,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     bootstrap();
-    useSyncDevice();
+    // Boucle de sync en arrière-plan (décalée, annulée au unmount).
+    const stopSync = useSyncDevice();
 
     return () => {
       active = false;
+      stopSync();
     };
   }, []);
 

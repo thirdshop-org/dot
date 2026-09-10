@@ -98,6 +98,15 @@ export async function closeDatabase(): Promise<void> {
   opening = null;
 }
 
+export async function checkpointDatabase(): Promise<void> {
+  try {
+    const db = await getDatabase();
+    await db.execAsync('PRAGMA wal_checkpoint(TRUNCATE)');
+  } catch {
+    // Best-effort : ne jamais faire échouer la sync sur un checkpoint.
+  }
+}
+
 export async function withTransaction<T>(
   work: (db: SQLiteDatabase) => Promise<T>,
 ): Promise<T> {

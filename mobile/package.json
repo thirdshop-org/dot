@@ -38,8 +38,9 @@
     "test:migrations": "tsx --test tests/migrations.test.ts",
     "test:api": "tsx --test tests/apiClient.test.ts",
     "test:sync": "tsx --test tests/syncOutbox.test.ts",
+    "test:saf": "tsx --test tests/safWalk.test.ts",
     "test:e2e": "tsx --test tests/e2e.live.test.ts",
-    "test": "npm run test:db && npm run test:api && npm run test:sync"
+    "test": "npm run test:db && npm run test:api && npm run test:sync && npm run test:saf"
   },
   "private": true
 }

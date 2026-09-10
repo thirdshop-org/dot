@@ -6,6 +6,14 @@ import type {
   FolderInfo,
   PickDirectoryOptions,
 } from './safDirectory.types';
+import { __setSafWalkImpl, yieldToMainThread } from './safWalk';
+export { listFoldersChunked, yieldToMainThread, DEFAULT_WALK_BUDGET_MS } from './safWalk';
+
+__setSafWalkImpl({
+  list: listDirectory,
+  info: getFolderInfo,
+  yield: yieldToMainThread,
+});
 
 export async function pickDirectory(initialUri?: string): Promise<Folder | null> {
   try {

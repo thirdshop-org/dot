@@ -1,4 +1,9 @@
-export { getDatabase, closeDatabase, withTransaction } from './client';
+export {
+  getDatabase,
+  closeDatabase,
+  withTransaction,
+  checkpointDatabase,
+} from './client';
 export { migrateDatabase, type Migration, type MigrationDb } from './migrations';
 export * from './repositories';
 export type { AccessCheck, AccessSource } from './repositories/permissions';

@@ -1,6 +1,16 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { ApiError } from '../api/client';
 import i18n from '../i18n';
@@ -46,49 +56,61 @@ export default function Login() {
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>{i18n.t('login_subtitle')}</Text>
-      <TextInput
-        style={styles.input}
-        placeholder={i18n.t('login_username')}
-        autoCapitalize="none"
-        autoCorrect={false}
-        value={username}
-        onChangeText={setUsername}
-      />
-      <TextInput
-        style={styles.input}
-        placeholder={i18n.t('login_password')}
-        secureTextEntry
-        value={password}
-        onChangeText={setPassword}
-      />
-      {error ? <Text style={styles.error}>{error}</Text> : null}
-      <Pressable
-        style={[styles.button, submitting && styles.buttonDisabled]}
-        onPress={handleSubmit}
-        disabled={submitting}
+    <KeyboardAvoidingView
+      style={styles.flex}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
+      <ScrollView
+        contentContainerStyle={styles.container}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
       >
-        <Text style={styles.buttonText}>
-          {submitting ? i18n.t('login_submitting') : i18n.t('login_submit')}
-        </Text>
-      </Pressable>
-      <Pressable
-        style={styles.skipButton}
-        onPress={() => {
-          continueWithoutAccount();
-          router.replace('/');
-        }}
-      >
-        <Text style={styles.skipButtonText}>{i18n.t('login_skip')}</Text>
-      </Pressable>
-    </View>
+        <Text style={styles.title}>{i18n.t('login_subtitle')}</Text>
+        <TextInput
+          style={styles.input}
+          placeholder={i18n.t('login_username')}
+          autoCapitalize="none"
+          autoCorrect={false}
+          value={username}
+          onChangeText={setUsername}
+        />
+        <TextInput
+          style={styles.input}
+          placeholder={i18n.t('login_password')}
+          secureTextEntry
+          value={password}
+          onChangeText={setPassword}
+        />
+        {error ? <Text style={styles.error}>{error}</Text> : null}
+        <Pressable
+          style={[styles.button, submitting && styles.buttonDisabled]}
+          onPress={handleSubmit}
+          disabled={submitting}
+        >
+          <Text style={styles.buttonText}>
+            {submitting ? i18n.t('login_submitting') : i18n.t('login_submit')}
+          </Text>
+        </Pressable>
+        <Pressable
+          style={styles.skipButton}
+          onPress={() => {
+            continueWithoutAccount();
+            router.replace('/');
+          }}
+        >
+          <Text style={styles.skipButtonText}>{i18n.t('login_skip')}</Text>
+        </Pressable>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  flex: {
     flex: 1,
+  },
+  container: {
+    flexGrow: 1,
     backgroundColor: '#fff',
     padding: 24,
     justifyContent: 'center',
