@@ -26,9 +26,9 @@ func op(operationID int64, resourceID, operation, resourceType string, payload m
 }
 
 func TestSyncOpsApplySequential(t *testing.T) {
-	r, _, _ := setup(t)
+	r, _, repo := setup(t)
 	device := repository.NewID()
-	token := registerDevice(t, r, device)
+	token, _ := registerAndLogin(t, r, repo, testUserUsername(device, "sa"), "sync-test-password", device)
 
 	folderID := repository.NewID()
 	fileID := repository.NewID()
@@ -78,9 +78,9 @@ func TestSyncOpsApplySequential(t *testing.T) {
 }
 
 func TestSyncOpsStopsAtFirstNonIdempotentFailure(t *testing.T) {
-	r, _, _ := setup(t)
+	r, _, repo := setup(t)
 	device := repository.NewID()
-	token := registerDevice(t, r, device)
+	token, _ := registerAndLogin(t, r, repo, testUserUsername(device, "sb"), "sync-test-password", device)
 
 	folderID := repository.NewID()
 	dupeID := repository.NewID()
@@ -126,10 +126,10 @@ func TestSyncOpsStopsAtFirstNonIdempotentFailure(t *testing.T) {
 func TestSyncOpsDeleteIdempotent(t *testing.T) {
 	r, _, repo := setup(t)
 	device := repository.NewID()
-	token := registerDevice(t, r, device)
+	token, user := registerAndLogin(t, r, repo, testUserUsername(device, "sc"), "sync-test-password", device)
 
 	fileID := repository.NewID()
-	if err := repo.Resources.InsertFile(device, fileID, "x.txt", "", 1, nil, nil); err != nil {
+	if err := repo.Resources.InsertFile(user, fileID, "x.txt", "", 1, nil, nil); err != nil {
 		t.Fatalf("insert: %v", err)
 	}
 
@@ -155,10 +155,10 @@ func TestSyncOpsDeleteIdempotent(t *testing.T) {
 func TestSnapshotPermissions(t *testing.T) {
 	r, _, repo := setup(t)
 	device := repository.NewID()
-	token := registerDevice(t, r, device)
+	token, user := registerAndLogin(t, r, repo, testUserUsername(device, "sd"), "sync-test-password", device)
 
 	folderID := repository.NewID()
-	if err := repo.Resources.InsertFolder(device, folderID, "Docs", ""); err != nil {
+	if err := repo.Resources.InsertFolder(user, folderID, "Docs", ""); err != nil {
 		t.Fatalf("insert folder: %v", err)
 	}
 
@@ -174,7 +174,7 @@ func TestSnapshotPermissions(t *testing.T) {
 	if err := json.Unmarshal(env.Data, &perms); err != nil {
 		t.Fatalf("snapshot: unmarshal: %v", err)
 	}
-	if len(perms) != 1 || perms[0].ResourceID != folderID || perms[0].EffectiveAccess != "owner" || perms[0].OwnerID != device {
+	if len(perms) != 1 || perms[0].ResourceID != folderID || perms[0].EffectiveAccess != "owner" || perms[0].OwnerID != user {
 		t.Errorf("snapshot: %+v", perms)
 	}
 	if perms[0].CachedAt == 0 {

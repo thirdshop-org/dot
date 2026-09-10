@@ -9,6 +9,7 @@ import (
 var expectedRoutes = []string{
 	"GET /api/v1/health",
 	"POST /api/v1/devices",
+	"POST /api/v1/auth/login",
 
 	"GET /api/v1/files",
 	"GET /api/v1/files/:id",
@@ -16,6 +17,9 @@ var expectedRoutes = []string{
 	"GET /api/v1/files/search",
 	"GET /api/v1/files/folders",
 	"POST /api/v1/files/upload",
+
+	"GET /api/v1/users/resolve",
+	"PATCH /api/v1/users/me/password",
 
 	"POST /api/v1/ocr/jobs",
 	"GET /api/v1/ocr/jobs/:id",

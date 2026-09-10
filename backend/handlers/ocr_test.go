@@ -30,7 +30,7 @@ func (s stubEngine) ExtractText(_ context.Context, _ string, _ string) (string, 
 	return s.text, nil
 }
 
-func setupOcr(t *testing.T) (*gin.Engine, string) {
+func setupOcr(t *testing.T) (*gin.Engine, string, *repository.Repository) {
 	t.Helper()
 	conn := dbtest.OpenTestDatabase(t, handlersTestURL)
 	repo := repository.NewRepository(conn)
@@ -45,7 +45,7 @@ func setupOcr(t *testing.T) (*gin.Engine, string) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	handlers.RegisterRoutes(r)
-	return r, uploadDir
+	return r, uploadDir, repo
 }
 
 type ocrJobDTO struct {
@@ -75,20 +75,20 @@ func waitTerminal(t *testing.T, r *gin.Engine, token, jobID string) ocrJobDTO {
 }
 
 func TestOcrJobsLifecycle(t *testing.T) {
-	r, uploadDir := setupOcr(t)
+	r, uploadDir, repo := setupOcr(t)
 	device := repository.NewID()
-	token := registerDevice(t, r, device)
+	token, user := registerAndLogin(t, r, repo, testUserUsername(device, "oa"), "ocr-test-password", device)
 
-	// Fichier + fichier physique (simule UPLOAD_DIR/<device>/<id>.txt)
+	// Fichier + fichier physique (simule UPLOAD_DIR/<user>/<id>.txt — après
+	// 000007 le répertoire d'upload est scopé par USER)
 	fileID := repository.NewID()
-	if err := os.MkdirAll(filepath.Join(uploadDir, device), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(uploadDir, user), 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(uploadDir, device, fileID+".txt"), []byte("ignored by stub"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(uploadDir, user, fileID+".txt"), []byte("ignored by stub"), 0o644); err != nil {
 		t.Fatalf("write: %v", err)
 	}
-	repo := handlers.Store.Repository
-	if err := repo.Resources.InsertFile(device, fileID, "scan.png", "", 128, nil, nil); err != nil {
+	if err := repo.Resources.InsertFile(user, fileID, "scan.png", "", 128, nil, nil); err != nil {
 		t.Fatalf("insert: %v", err)
 	}
 
@@ -115,15 +115,15 @@ func TestOcrJobsLifecycle(t *testing.T) {
 	expectError(t, rec, http.StatusNotFound, "NOT_FOUND", "ocr-missing-file")
 }
 
-func TestOcrJobsScopedByDevice(t *testing.T) {
-	r, _ := setupOcr(t)
+func TestOcrJobsScopedByOwner(t *testing.T) {
+	r, _, repo := setupOcr(t)
 	deviceA := repository.NewID()
 	deviceB := repository.NewID()
-	tokenA := registerDevice(t, r, deviceA)
-	tokenB := registerDevice(t, r, deviceB)
+	tokenA, userA := registerAndLogin(t, r, repo, testUserUsername(deviceA, "oc"), "ocr-test-password", deviceA)
+	tokenB, _ := registerAndLogin(t, r, repo, testUserUsername(deviceB, "od"), "ocr-test-password-b", deviceB)
 
 	fileID := repository.NewID()
-	if err := handlers.Store.Repository.Resources.InsertFile(deviceA, fileID, "scan.png", "", 128, nil, nil); err != nil {
+	if err := repo.Resources.InsertFile(userA, fileID, "scan.png", "", 128, nil, nil); err != nil {
 		t.Fatalf("insert: %v", err)
 	}
 	body, _ := json.Marshal(map[string]string{"fileId": fileID})
@@ -132,9 +132,9 @@ func TestOcrJobsScopedByDevice(t *testing.T) {
 	var created ocrJobDTO
 	_ = json.Unmarshal(env.Data, &created)
 
-	// Un autre device ne voit pas le job
+	// Un autre user ne voit pas le job
 	rec, _ = doRequest(t, r, http.MethodGet, "/api/v1/ocr/jobs/"+created.ID, tokenB, nil, "")
-	expectError(t, rec, http.StatusNotFound, "NOT_FOUND", "ocr-other-device")
+	expectError(t, rec, http.StatusNotFound, "NOT_FOUND", "ocr-other-owner")
 }
 
 func bodyFor(id string) []byte {

@@ -18,7 +18,7 @@ func OcrJobsCreate(c *gin.Context) {
 		api.Error(c, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "backend not initialized")
 		return
 	}
-	deviceID := c.GetString(DeviceIDKey)
+	userID := c.GetString(UserIDKey)
 
 	var req ocrJobRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -26,7 +26,7 @@ func OcrJobsCreate(c *gin.Context) {
 		return
 	}
 
-	job, err := Ocr.Create(deviceID, req.FileID)
+	job, err := Ocr.Create(userID, c.GetString(DeviceIDKey), req.FileID)
 	if err != nil {
 		writeError(c, err)
 		return

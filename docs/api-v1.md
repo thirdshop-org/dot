@@ -16,9 +16,13 @@ Références : `V2.md` (modèle cible), `mobile/services/db/` (conventions sync)
 
 ## 2. Identité et identifiants (invariants)
 
-- **Device-first** : le device s'enregistre (`POST /devices`) avec son identité **générée localement** (`device_user_id` 32-hex mobile) et reçoit en échange un token **paseto** v4-local qu'il stocke. Requêtes suivantes : `Authorization: Bearer <token>` (toutes les routes **sauf `/health`**), résolu en `device_id` par middleware. V1 : pas de comptes utilisateurs (`users.user_id` reste NULL sur `devices`).
-- Au register, le device est **upserté** dans `devices` (`last_seen_at` rafraîchi) ; chaque nouvelle requête avec token est l'occasion de rafraîchir `last_seen_at`. Une ressource ne peut être créée que par un device enregistré (`resources.owner_id` → `devices.device_id`, FK).
-- **Identifiants** : `resource_id`, `device_user_id`, `token` de share-link = **TEXT opaque 32-hex minuscule**, `^[0-9a-f]{32}$`. Le mobile génère toujours `lower(hex(randomblob(16)))` ; le serveur stocke **tel quel**, sans conversion UUID (cf. note V2.md). Contrainte serveur : `CHECK (col ~ '^[0-9a-f]{32}$')` sur toutes les colonnes id + FK.
+- **User-first (V1 finale)** : le device s'enregistre d'abord (`POST /devices`) avec son identité **générée localement** (`device_user_id` 32-hex mobile) — **réponse `{ "deviceId" }` uniquement, sans token**. Puis le client appelle `POST /auth/login` (`username` + `password` + `device_id`) pour obtenir son token **paseto** v4-local. Requêtes suivantes : `Authorization: Bearer <token>` (toutes les routes **sauf `/health`, `/devices`, `/auth/login`**).
+- **Claims du token** : le **subject = `user_id`** (AUTORISE, clé de scoping de toutes les ressources) ; `device_id` est un **claim secondaire, porté mais NON autorisant seul** (idempotence outbox + jobs OCR). Résolu par middleware `RequireAuth` qui vérifie aussi que le compte existe toujours (`deleted_at IS NULL`).
+- **TTL : 7 jours, sans refresh.** À expiration, le client re-logine (`POST /auth/login`). Le changement de mot de passe (`PATCH /users/me/password`) **n'invalide pas** les tokens déjà émis — limite V1 assumée (pas de liste de révocation) jusqu'à l'expiration.
+- Au login, `devices.user_id` mémorise le **dernier user connecté** (INFORMATIF uniquement, jamais autorisant — recommande `POST /devices` → `POST /auth/login` pour un nouveau device, sans réutiliser le device d'un autre compte).
+- **Identifiants** : `resource_id`, `device_user_id`, `user_id`, `is_admin`… = **TEXT opaque 32-hex minuscule**, `^[0-9a-f]{32}$`. Le mobile génère toujours `lower(hex(randomblob(16)))` ; le serveur stocke **tel quel**, sans conversion UUID (cf. note V2.md). Contrainte serveur : `CHECK (col ~ '^[0-9a-f]{32}$')` sur toutes les colonnes id + FK.
+- **Usernames** : `username` = forme affichée ; l'unicité et la résolution portent sur `username_normalized` (lowercase + trim). Résolution d'un destinataire : `GET /users/resolve?username=` (exact uniquement, jamais de listing ni de préfixe — pas d'énumération de comptes).
+- **Bootstrap** : au premier démarrage, si `users` est vide, `ADMIN_USERNAME`/`ADMIN_PASSWORD` (env) créent le **premier admin** ; absents → le serveur **refuse de démarrer**. L'env n'écrase jamais un compte existant.
 - Horodatages échangés en **millisecondes epoch** (le mobile utilise `Date.now()`).
 
 ## 3. Endpoints
@@ -26,7 +30,10 @@ Références : `V2.md` (modèle cible), `mobile/services/db/` (conventions sync)
 | Méthode | Path | Requête | Réponse `data` | Statut absence |
 |---|---|---|---|---|
 | GET | `/health` | — | `{ "status": "healthy" }` | — |
-| POST | `/devices` | `{ "deviceId": "…32-hex" }` (client-generated) | `{ "deviceId": "…32-hex", "token": "v4.local…" }` | `INVALID_DEVICE_ID` |
+| POST | `/devices` | `{ "deviceId": "…32-hex" }` (client-generated) | `{ "deviceId": "…32-hex" }` — **aucun token** (V1 finale) | `INVALID_DEVICE_ID` |
+| POST | `/auth/login` | `{ "username", "password", "device_id" }` | `{ "token", "expires_at" (ms), "user": { "id", "username", "is_admin" } }` | `UNAUTHORIZED` / `INVALID_DEVICE_ID` |
+| GET | `/users/resolve` | query `username` (obligatoire) | `{ "id", "username" }` | `NOT_FOUND` |
+| PATCH | `/users/me/password` | `{ "current_password", "new_password" }` | `{ "id" }` | `INVALID_PASSWORD` (403) |
 | GET | `/files` | query `folderId?`, `page?`, `pageSize?`, `sort?` | `FileDto[]` (+ `meta`) | — |
 | GET | `/files/:id` | — | `FileDto` | `NOT_FOUND` |
 | DELETE | `/files/:id` | — | `{ "id": "…" }` | `NOT_FOUND` |
@@ -60,14 +67,14 @@ type OcrJob = { id: string; status: OcrJobStatus; text?: string | null; error?: 
 
 - Multipart : champ `file` + `folderId?` optionnel. **Le client ne fixe jamais `Content-Type`** (le boundary doit être généré par la plateforme).
 - Limite : `MAX_FILE_SIZE_MB` (défaut 50). Dépassement → 413 `{ "error": { "code": "FILE_TOO_LARGE", … } }`.
-- Le fichier physique est stocké sous `UPLOAD_DIR/<device_id>/<resource_id>.<ext>` ; la métadonnée est persistée en base et renvoyée en `FileDto`. Si la persistance de la métadonnée échoue (ex. `NAME_CONFLICT`), le fichier physique est supprimé.
+- Le fichier physique est stocké sous `UPLOAD_DIR/<user_id>/<resource_id>.<ext>` ; la métadonnée est persistée en base et renvoyée en `FileDto`. Si la persistance de la métadonnée échoue (ex. `NAME_CONFLICT`), le fichier physique est supprimé.
 
 ## 5. OCR
 
 - `POST /ocr/jobs { fileId }` → `OcrJob` immédiat (`status: queued`), traitement **asynchrone** (goroutine par job côté serveur, V1).
 - `GET /ocr/jobs/:id` → statut. Le mobile **poll toutes les 3s** jusqu'à `done`/`failed` (`hooks/useUpload.ts`). Cycle : `queued → processing → done | failed` ; `done` renvoie `text`, `failed` renvoie `error`.
 - Moteur : **Tesseract en appel système** (`ocr/tesseract.go`), langue `OCR_LANG` (défaut `fra+eng`). Les images sont passées directement à `tesseract` ; les **PDF** subissent une extraction du calque texte (`ledongthuc/pdf`, déjà en go.mod) — un PDF scanné produit un texte vide plutôt qu'un rendu/OCR (hors scope V1).
-- `fileId` inconnu/pas du device → `NOT_FOUND`. Fichier physique introuvable (ex. suppression manuelle sous `UPLOAD_DIR`) → job `failed` `"file not readable"`.
+- `fileId` inconnu/pas du user → `NOT_FOUND`. Fichier physique introuvable (ex. suppression manuelle sous `UPLOAD_DIR`) → job `failed` `"file not readable"`. Le job est créé par le device courant (`ocr_jobs.device_id`) mais la validation de la ressource est scopée par le **user**.
 
 ## 6. Contrat de sync (outbox + snapshot)
 
@@ -90,7 +97,7 @@ type OcrJob = { id: string; status: OcrJobStatus; text?: string | null; error?: 
 ```
 
 - `operation` ∈ `create_resource | update_metadata | delete_resource | move_resource | share | revoke_share | update_share | create_link | revoke_link` (cf. `PendingOperationType` mobile).
-- **Idempotence** : contrainte d'unicité serveur `(device_id, operation_id)`. Pour chaque op : si déjà traitée → **no-op** (comptée comme appliquée, les doublons arrivent à cause du backoff/retry). Sinon appliquée si valide.
+- L'idempotence outbox reste **par device** : `UNIQUE(device_id, operation_id)` (la réinscription d'un device avec un login différent ne réutilise pas l'historique outbox d'un autre compte). Pour chaque op : si déjà traitée → **no-op** (comptée comme appliquée, les doublons arrivent à cause du backoff/retry). Sinon appliquée si valide.
 - **Ordre** : les opérations sont appliquées **séquentiellement**, dans l'ordre du batch. Le serveur **s'arrête à la première erreur non-idempotente** et renvoie l'index atteint — le client reprend à cet index.
 - Réponse : `2xx` avec `{ "applied": int, "failed": { "operation_id": int, "code": string, "message": string } | null }` (`applied` = index de la prochaine op à envoyer).
 - Côté client, le `pushStatus` (pending/synced/failed) des shares/share_links est **dérivé** de l'état des opérations de l'outbox ; dead-letter après `MAX_PENDING_ATTEMPTS` (= 5). **Côté serveur, les ops `share | revoke_share | update_share | create_link | revoke_link` sont accusées réception mais ne créent aucun état** (V1 single-owner, pas de table shares serveur) — la dérivation du pushStatus reste purement client.
@@ -103,7 +110,7 @@ type OcrJob = { id: string; status: OcrJobStatus; text?: string | null; error?: 
 
 ### 6.2 Snapshot — `GET /sync/permissions?after=<cached_at_ms>`
 
-- Renvoie le delta (ou l'ensemble) des permissions effectives pour le device appelant, chacune sous la forme exacte consommée par `canAccess` :
+- Renvoie le delta (ou l'ensemble) des permissions effectives pour le **user** appelant, chacune sous la forme exacte consommée par `canAccess` :
 
 ```ts
 type ResourcePermission = {
@@ -111,7 +118,7 @@ type ResourcePermission = {
   resourceType: 'folder' | 'file';
   effectiveAccess: 'viewer' | 'commenter' | 'editor' | 'owner';
   inherit: boolean;
-  ownerId: string | null;         // device ownership si applicable
+  ownerId: string | null;         // ownership USER si applicable
   sharedById: string | null;
   expiresAt: number | null;       // ms epoch ; null = jamais
   cachedAt: number;               // ms epoch — horodatage du snapshot (TTL 24h)
@@ -123,7 +130,7 @@ type ResourcePermission = {
   1. Rang : `viewer = 1 < commenter = 2 < editor = 3 < owner = 4`.
   2. La permission **exacte sur le nœud** est autoritaire (elle n'est pas annulée par son propre `inherit=false`).
   3. Les ancêtres propagent **uniquement si leur relation a `inherit = true`** ; une relation expirée (`expires_at` passé) est ignorée **et ne propage pas**.
-  4. `owner_id` == device appelant → `owner` (fallback, quel que soit le niveau remonté).
+  4. `owner_id` == le user appelant → `owner` (fallback, quel que soit le niveau remonté).
   5. Le **rang le plus élevé** l'emporte ; sans relation applicable et sans ownership → la ressource n'est pas dans le snapshot.
 - **TTL / stale** : après `PERMISSION_TTL_MS` (= 24h) sans reseed, `canAccess` **downgrade en lecture seule** (`viewer`) vers le cache.
 
@@ -133,4 +140,13 @@ type ResourcePermission = {
 
 ## 7. Codes d'erreur courants
 
-`NOT_FOUND`, `NOT_IMPLEMENTED` (501 temporaire sur les routes non construites — état actuel : **toutes les routes V1 sont réelles** : files CRUD/upload/search, folders, devices, health, sync/ops, sync/permissions, ocr/jobs), `FILE_TOO_LARGE` (413), `NAME_CONFLICT` (409 — même nom dans le même parent, cf. `UNIQUE(parent_id, name)`, **ou à la racine**, index partiel `(owner_id, name) WHERE parent_id IS NULL`), `NETWORK_ERROR` (côté client), `INVALID_RESPONSE` (côté client — 2xx mais corps d'enveloppe invalide), `HTTP_<status>` (fallback). Statut `SERVICE_UNAVAILABLE` (503) si le backend n'est pas initialisé.
+- Authentification : `UNAUTHORIZED` (**401** — token manquant/invalide/expiré, compte supprimé, OU identifiants de login erronés : **indistinguables par design**, même code+message), `INVALID_DEVICE_ID` (**400** — device non enregistré au login).
+- Ressources : `NOT_FOUND` (404), `NAME_CONFLICT` (409 — même nom dans le même parent, cf. `UNIQUE(parent_id, name)`, **ou à la racine**, index partiel `(user_id, name) WHERE parent_id IS NULL`), `FILE_TOO_LARGE` (413), `INVALID_PASSWORD` (403 sur `PATCH /users/me/password`).
+- Client-only : `NETWORK_ERROR`, `INVALID_RESPONSE` (2xx mais corps d'enveloppe invalide), `HTTP_<status>` (fallback). Statut `SERVICE_UNAVAILABLE` (503) si le backend n'est pas initialisé.
+- **V1 finale : toutes les routes sont réelles** (pas de 501 restant).
+
+## 8. Moteur de login (règles de sécurité)
+
+- `POST /auth/login` : le **device doit exister** (`POST /devices` d'abord, sinon 400 `INVALID_DEVICE_ID`). La vérification du mot de passe est **constant-time** (`argon2id`, comparaison `subtle`) et le délai est **égalisé** entre « username inconnu » et « mauvais mot de passe » (vérification contre un dummy-hash) — les deux produisent exactement la même réponse 401.
+- `GET /users/resolve` : résolution **exacte** du `username_normalized` uniquement ; ne renvoie **jamais** `email` ni `is_admin` (ni listing, ni préfixe → pas d'énumération de comptes).
+- `PATCH /users/me/password` : exige `current_password` (mauvais curl → 403). Minimum 8 caractères. **Limite V1** : tokens émis non révoqués (validité 7 j), et `is_admin`/`ADMIN_*` non modifiables par API.

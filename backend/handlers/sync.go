@@ -18,7 +18,7 @@ func SyncOpsPush(c *gin.Context) {
 		api.Error(c, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "backend not initialized")
 		return
 	}
-	deviceID := c.GetString(DeviceIDKey)
+	userID := c.GetString(UserIDKey)
 
 	var req syncOpsRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -26,7 +26,7 @@ func SyncOpsPush(c *gin.Context) {
 		return
 	}
 
-	result, err := Store.ApplyBatch(deviceID, req.Operations)
+	result, err := Store.ApplyBatch(userID, c.GetString(DeviceIDKey), req.Operations)
 	if err != nil {
 		writeError(c, err)
 		return
@@ -39,13 +39,13 @@ func SyncPermissionsGet(c *gin.Context) {
 		api.Error(c, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "backend not initialized")
 		return
 	}
-	deviceID := c.GetString(DeviceIDKey)
+	userID := c.GetString(UserIDKey)
 	after := c.Query("after")
 	var afterMs int64
 	if after != "" {
 		afterMs = int64(intParam(after, 0))
 	}
-	perms, err := Store.Snapshot(deviceID, afterMs)
+	perms, err := Store.Snapshot(userID, afterMs)
 	if err != nil {
 		writeError(c, err)
 		return

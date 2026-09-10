@@ -26,13 +26,13 @@ func FilesList(c *gin.Context) {
 		api.Error(c, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "backend not initialized")
 		return
 	}
-	deviceID := c.GetString(DeviceIDKey)
+	userID := c.GetString(UserIDKey)
 	page := intParam(c.Query("page"), 1)
 	pageSize := intParam(c.Query("pageSize"), 50)
 	if pageSize > 200 {
 		pageSize = 200
 	}
-	files, total, err := Store.ListFiles(deviceID, c.Query("folderId"), page, pageSize, c.Query("sort"), c.Query("order"))
+	files, total, err := Store.ListFiles(userID, c.Query("folderId"), page, pageSize, c.Query("sort"), c.Query("order"))
 	if err != nil {
 		writeError(c, err)
 		return
@@ -45,13 +45,13 @@ func FilesGet(c *gin.Context) {
 		api.Error(c, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "backend not initialized")
 		return
 	}
-	deviceID := c.GetString(DeviceIDKey)
+	userID := c.GetString(UserIDKey)
 	id := c.Param("id")
 	if !deviceIDPattern.MatchString(id) {
 		api.Error(c, http.StatusNotFound, "NOT_FOUND", "file not found")
 		return
 	}
-	file, err := Store.GetFile(deviceID, id)
+	file, err := Store.GetFile(userID, id)
 	if err != nil {
 		writeError(c, err)
 		return
@@ -64,13 +64,13 @@ func FilesDelete(c *gin.Context) {
 		api.Error(c, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "backend not initialized")
 		return
 	}
-	deviceID := c.GetString(DeviceIDKey)
+	userID := c.GetString(UserIDKey)
 	id := c.Param("id")
 	if !deviceIDPattern.MatchString(id) {
 		api.Error(c, http.StatusNotFound, "NOT_FOUND", "file not found")
 		return
 	}
-	deletedID, err := Store.DeleteFile(deviceID, id)
+	deletedID, err := Store.DeleteFile(userID, id)
 	if err != nil {
 		writeError(c, err)
 		return
@@ -83,7 +83,7 @@ func FilesUpload(c *gin.Context) {
 		api.Error(c, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "backend not initialized")
 		return
 	}
-	deviceID := c.GetString(DeviceIDKey)
+	userID := c.GetString(UserIDKey)
 	folderID := c.PostForm("folderId")
 
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, Store.MaxFileSize+1)
@@ -102,7 +102,7 @@ func FilesUpload(c *gin.Context) {
 		return
 	}
 
-	dto, err := Store.Upload(deviceID, file, folderID)
+	dto, err := Store.Upload(userID, file, folderID)
 	if err != nil {
 		writeError(c, err)
 		return
@@ -115,8 +115,8 @@ func FoldersList(c *gin.Context) {
 		api.Error(c, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "backend not initialized")
 		return
 	}
-	deviceID := c.GetString(DeviceIDKey)
-	folders, err := Store.ListRootFolders(deviceID)
+	userID := c.GetString(UserIDKey)
+	folders, err := Store.ListRootFolders(userID)
 	if err != nil {
 		writeError(c, err)
 		return
@@ -129,7 +129,7 @@ func FilesSearch(c *gin.Context) {
 		api.Error(c, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "backend not initialized")
 		return
 	}
-	deviceID := c.GetString(DeviceIDKey)
+	userID := c.GetString(UserIDKey)
 	q := strings.TrimSpace(c.Query("q"))
 	if q == "" {
 		api.Error(c, http.StatusBadRequest, "INVALID_REQUEST", "missing required query param `q`")
@@ -140,7 +140,7 @@ func FilesSearch(c *gin.Context) {
 	if pageSize > 200 {
 		pageSize = 200
 	}
-	files, total, err := Store.SearchFiles(deviceID, q, page, pageSize)
+	files, total, err := Store.SearchFiles(userID, q, page, pageSize)
 	if err != nil {
 		writeError(c, err)
 		return

@@ -34,12 +34,10 @@ func DevicesRegister(c *gin.Context) {
 		return
 	}
 
-	token, err := Auth.Issue(req.DeviceID)
-	if err != nil {
-		api.Error(c, 500, "TOKEN_ERROR", "could not issue token")
-		return
-	}
-
-	api.OK(c, gin.H{"deviceId": req.DeviceID, "token": token})
+	// POST /devices n'émet PLUS de token : de l'identité user-first (V1), le
+	// device s'enregistre pour exister, puis le client appelle POST /auth/login
+	// avec username/password + device_id pour obtenir son token (cf.
+	// docs/api-v1.md §2). Réponse : { deviceId } uniquement.
+	api.OK(c, gin.H{"deviceId": req.DeviceID})
 
 }

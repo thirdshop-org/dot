@@ -14,6 +14,8 @@ type ApplicationConfig struct {
 	MaxFileSizeMB int64
 	OcrLang       string
 	AuthSecret    string
+	AdminUsername string
+	AdminPassword string
 }
 
 func LoadApplicationConfig() (error, *ApplicationConfig) {
@@ -38,6 +40,8 @@ func LoadApplicationConfig() (error, *ApplicationConfig) {
 		MaxFileSizeMB: int64(maxSize),
 		OcrLang:       get("OCR_LANG", "fra+eng"),
 		AuthSecret:    get("AUTH_SECRET", "dev-secret-change-me"),
+		AdminUsername: get("ADMIN_USERNAME", ""),
+		AdminPassword: get("ADMIN_PASSWORD", ""),
 	}
 
 }

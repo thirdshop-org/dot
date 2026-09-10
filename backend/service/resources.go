@@ -36,7 +36,7 @@ type FolderDTO struct {
 }
 
 // Resources holds the business logic for files/folders list-get-delete-upload,
-// always scoped by the requesting device.
+// always scoped by the requesting USER (resources.user_id after 000007).
 type Resources struct {
 	Repo        *repository.Resources
 	Repository  *repository.Repository
@@ -101,7 +101,7 @@ func (s *Resources) SearchFiles(ownerID, q string, page, pageSize int) ([]FileDT
 	return files, total, nil
 }
 
-// Upload persists the multipart-sourced file under UploadDir/<device> and
+// Upload persists the multipart-sourced file under UploadDir/<user> and
 // records its metadata, returning the FileDTO. The physical file is removed
 // if metadata persistence fails (e.g. name conflict).
 func (s *Resources) Upload(ownerID string, file *multipart.FileHeader, folderID string) (FileDTO, error) {

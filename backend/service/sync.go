@@ -79,13 +79,16 @@ func classifySyncError(err error) (string, string) {
 	}
 }
 
-func (s *Resources) ApplyBatch(ownerID string, ops []SyncOperation) (SyncResult, error) {
+// ApplyBatch applique les ops de l'outbox : les mutations de ressources sont
+// scopées par l'UTILISATEUR (userID), l'idempotence reste par DEVICE
+// (deviceID) — cf. docs/api-v1.md §6.1.
+func (s *Resources) ApplyBatch(userID, deviceID string, ops []SyncOperation) (SyncResult, error) {
 	for i := range ops {
 		op := &ops[i]
 		if err := validateSyncOp(op); err != nil {
 			return SyncResult{Applied: i, Failed: &FailedOperation{OperationID: op.OperationID, Code: "INVALID_REQUEST", Message: err.Error()}}, nil
 		}
-		already, err := s.Repository.Operations.Applied(ownerID, op.OperationID)
+		already, err := s.Repository.Operations.Applied(deviceID, op.OperationID)
 		if err != nil {
 			return SyncResult{}, err
 		}
@@ -93,16 +96,16 @@ func (s *Resources) ApplyBatch(ownerID string, ops []SyncOperation) (SyncResult,
 			continue
 		}
 		if ackOnlyOps[op.Operation] {
-			if err := s.recordApplied(ownerID, op); err != nil {
+			if err := s.recordApplied(deviceID, op); err != nil {
 				return SyncResult{}, err
 			}
 			continue
 		}
-		if err := s.applySyncOp(ownerID, op); err != nil {
+		if err := s.applySyncOp(userID, op); err != nil {
 			code, message := classifySyncError(err)
 			return SyncResult{Applied: i, Failed: &FailedOperation{OperationID: op.OperationID, Code: code, Message: message}}, nil
 		}
-		if err := s.recordApplied(ownerID, op); err != nil {
+		if err := s.recordApplied(deviceID, op); err != nil {
 			return SyncResult{}, err
 		}
 	}
@@ -230,9 +233,9 @@ type ResourcePermission struct {
 	UpdatedAt       int64  `json:"updatedAt"`
 }
 
-// Snapshot returns the delta of effective permissions for the device since
-// afterMs (epoch ms; 0 = all). V1 single-owner : toutes les ressources
-// appartiennent au device appelant (effective_access = owner).
+// Snapshot returns the delta of effective permissions for the user since
+// afterMs (epoch ms; 0 = all). V1 : pas encore de partage entre users — toutes
+// les ressources appartiennent au user appelant (effective_access = owner).
 func (s *Resources) Snapshot(ownerID string, afterMs int64) ([]ResourcePermission, error) {
 	rows, err := s.Repo.ListOwned(ownerID, afterMs)
 	if err != nil {

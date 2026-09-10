@@ -14,6 +14,7 @@ import (
 	"github.com/vaultdrop/backend/dbtest"
 	"github.com/vaultdrop/backend/handlers"
 	"github.com/vaultdrop/backend/pkg/auth"
+	"github.com/vaultdrop/backend/pkg/passwd"
 	"github.com/vaultdrop/backend/repository"
 	"github.com/vaultdrop/backend/service"
 )
@@ -110,22 +111,53 @@ func expectError(t *testing.T, rec *httptest.ResponseRecorder, status int, code,
 	}
 }
 
-func registerDevice(t *testing.T, r *gin.Engine, deviceID string) string {
+func registerAndLogin(t *testing.T, r *gin.Engine, repo *repository.Repository, username, password, deviceID string) (token, userID string) {
 	t.Helper()
-	body := fmt.Sprintf(`{"deviceId":%q}`, deviceID)
-	rec, _ := doRequest(t, r, http.MethodPost, "/api/v1/devices", "", []byte(body), "application/json")
+	rec, _ := doRequest(t, r, http.MethodPost, "/api/v1/devices", "", []byte(fmt.Sprintf(`{"deviceId":%q}`, deviceID)), "application/json")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("register: status %d body=%s", rec.Code, rec.Body.String())
+	}
+
+	username = service.NormalizeUsername(username)
+	if _, err := repo.Users.GetByUsernameNormalized(username); err == repository.ErrNotFound {
+		hash, herr := passwd.Hash(password)
+		if herr != nil {
+			t.Fatalf("hash: %v", herr)
+		}
+		if _, cerr := repo.Users.Create(username, username, hash, false); cerr != nil {
+			t.Fatalf("create user: %v", cerr)
+		}
+	} else if err != nil {
+		t.Fatalf("get user: %v", err)
+	}
+
+	body := fmt.Sprintf(`{"username":%q,"password":%q,"device_id":%q}`, username, password, deviceID)
+	rec, _ = doRequest(t, r, http.MethodPost, "/api/v1/auth/login", "", []byte(body), "application/json")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("login: status %d body=%s", rec.Code, rec.Body.String())
+	}
 	var env struct {
 		Data struct {
 			Token string `json:"token"`
+			User  struct {
+				ID string `json:"id"`
+			} `json:"user"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil {
-		t.Fatalf("register: unmarshal: %v body=%s", err, rec.Body.String())
+		t.Fatalf("login: unmarshal: %v body=%s", err, rec.Body.String())
 	}
-	if env.Data.Token == "" {
-		t.Fatalf("register: pas de token (status %d)", rec.Code)
+	if env.Data.Token == "" || env.Data.User.ID == "" {
+		t.Fatalf("login: token/user manquant %s", rec.Body.String())
 	}
-	return env.Data.Token
+	return env.Data.Token, env.Data.User.ID
+}
+
+// testUserUsername fournit un username unique par device (les bases de test
+// sont reset, mais deux devices d'un même test ne doivent pas partager un
+// compte).
+func testUserUsername(deviceID, suffix string) string {
+	return "u" + suffix + "-" + deviceID[:8]
 }
 
 func uploadMultipart(t *testing.T, r *gin.Engine, token, folderID, filename string, content []byte) *httptest.ResponseRecorder {
@@ -155,11 +187,13 @@ func TestFilesFlow(t *testing.T) {
 	r, _, repo := setup(t)
 	deviceA := repository.NewID()
 	deviceB := repository.NewID()
-	tokenA := registerDevice(t, r, deviceA)
-	tokenB := registerDevice(t, r, deviceB)
+	passA := "files-test-password-a"
+	passB := "files-test-password-b"
+	tokenA, userA := registerAndLogin(t, r, repo, testUserUsername(deviceA, "a"), passA, deviceA)
+	tokenB, userB := registerAndLogin(t, r, repo, testUserUsername(deviceB, "b"), passB, deviceB)
 
 	folderID := repository.NewID()
-	if err := repo.Resources.InsertFolder(deviceA, folderID, "Docs", ""); err != nil {
+	if err := repo.Resources.InsertFolder(userA, folderID, "Docs", ""); err != nil {
 		t.Fatalf("insert root folder: %v", err)
 	}
 
@@ -188,8 +222,8 @@ func TestFilesFlow(t *testing.T) {
 	rec = uploadMultipart(t, r, tokenA, folderID, "doc.txt", []byte("doc"))
 	expectError(t, rec, http.StatusConflict, "NAME_CONFLICT", "upload-dupe")
 
-	// Création de fichiers du device B
-	if err := repo.Resources.InsertFile(deviceB, repository.NewID(), "secret.txt", "", 4, nil, nil); err != nil {
+	// Création de fichiers du user B
+	if err := repo.Resources.InsertFile(userB, repository.NewID(), "secret.txt", "", 4, nil, nil); err != nil {
 		t.Fatalf("insert B file: %v", err)
 	}
 
@@ -218,7 +252,7 @@ func TestFilesFlow(t *testing.T) {
 		t.Errorf("liste dossier: %+v", files)
 	}
 
-	// B ne voit pas les fichiers de A
+	// B (autre user) ne voit pas les fichiers de A
 	rec, _ = doRequest(t, r, http.MethodGet, "/api/v1/files/"+uploaded.ID, tokenB, nil, "")
 	expectError(t, rec, http.StatusNotFound, "NOT_FOUND", "get-cross-device")
 
@@ -252,15 +286,15 @@ func TestFilesFlow(t *testing.T) {
 func TestSearchFiles(t *testing.T) {
 	r, _, repo := setup(t)
 	device := repository.NewID()
-	token := registerDevice(t, r, device)
+	token, user := registerAndLogin(t, r, repo, testUserUsername(device, "s"), "search-test-password", device)
 
-	if err := repo.Resources.InsertFile(device, repository.NewID(), "vacances-août.jpg", "", 100, nil, nil); err != nil {
+	if err := repo.Resources.InsertFile(user, repository.NewID(), "vacances-août.jpg", "", 100, nil, nil); err != nil {
 		t.Fatalf("insert: %v", err)
 	}
-	if err := repo.Resources.InsertFile(device, repository.NewID(), "rapport-q3.pdf", "", 100, nil, nil); err != nil {
+	if err := repo.Resources.InsertFile(user, repository.NewID(), "rapport-q3.pdf", "", 100, nil, nil); err != nil {
 		t.Fatalf("insert: %v", err)
 	}
-	if err := repo.Resources.InsertFile(device, repository.NewID(), "toto.txt", "", 100, nil, nil); err != nil {
+	if err := repo.Resources.InsertFile(user, repository.NewID(), "toto.txt", "", 100, nil, nil); err != nil {
 		t.Fatalf("insert: %v", err)
 	}
 
@@ -295,9 +329,9 @@ func TestSearchFiles(t *testing.T) {
 }
 
 func TestUploadTooLarge(t *testing.T) {
-	r, _, _ := setup(t)
+	r, _, repo := setup(t)
 	device := repository.NewID()
-	token := registerDevice(t, r, device)
+	token, _ := registerAndLogin(t, r, repo, testUserUsername(device, "l"), "upload-test-password", device)
 
 	rec := uploadMultipart(t, r, token, "", "big.txt", []byte("0123456789ABCDEF"))
 	expectError(t, rec, http.StatusRequestEntityTooLarge, "FILE_TOO_LARGE", "upload-big")
@@ -307,16 +341,16 @@ func TestFoldersListAndScoping(t *testing.T) {
 	r, _, repo := setup(t)
 	deviceA := repository.NewID()
 	deviceB := repository.NewID()
-	tokenA := registerDevice(t, r, deviceA)
-	registerDevice(t, r, deviceB)
+	tokenA, userA := registerAndLogin(t, r, repo, testUserUsername(deviceA, "fa"), "folder-test-password", deviceA)
+	_, userB := registerAndLogin(t, r, repo, testUserUsername(deviceB, "fb"), "folder-test-password-b", deviceB)
 
-	if err := repo.Resources.InsertFolder(deviceA, repository.NewID(), "AA", ""); err != nil {
+	if err := repo.Resources.InsertFolder(userA, repository.NewID(), "AA", ""); err != nil {
 		t.Fatalf("insert folder: %v", err)
 	}
-	if err := repo.Resources.InsertFolder(deviceA, repository.NewID(), "BB", ""); err != nil {
+	if err := repo.Resources.InsertFolder(userA, repository.NewID(), "BB", ""); err != nil {
 		t.Fatalf("insert folder: %v", err)
 	}
-	if err := repo.Resources.InsertFolder(deviceB, repository.NewID(), "CC", ""); err != nil {
+	if err := repo.Resources.InsertFolder(userB, repository.NewID(), "CC", ""); err != nil {
 		t.Fatalf("insert folder B: %v", err)
 	}
 

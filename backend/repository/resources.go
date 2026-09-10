@@ -78,7 +78,7 @@ func (r *Resources) folderExists(ownerID, folderID string) (bool, error) {
 	var exists int
 	err := r.DB.QueryRow(
 		`SELECT 1 FROM resources
-		 WHERE resource_id = $1 AND owner_id = $2 AND type = 'folder' AND deleted_at IS NULL`,
+		 WHERE resource_id = $1 AND user_id = $2 AND type = 'folder' AND deleted_at IS NULL`,
 		folderID, ownerID,
 	).Scan(&exists)
 	if err == sql.ErrNoRows {
@@ -102,7 +102,7 @@ func (r *Resources) insert(ownerID, id, name, parentResourceID, resourceType str
 		parentID = parentResourceID
 	}
 	_, err := r.DB.Exec(
-		`INSERT INTO resources (resource_id, type, name, parent_id, owner_id, size_bytes, mime_type, extension)
+		`INSERT INTO resources (resource_id, type, name, parent_id, user_id, size_bytes, mime_type, extension)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
 		id, resourceType, name, parentID, ownerID, size, mimeType, extension,
 	)
@@ -135,7 +135,7 @@ func (r *Resources) scanFile(scan func(...any) error) (FileRow, error) {
 // root when folderResourceID is empty), plus the total count.
 func (r *Resources) ListFiles(ownerID, folderResourceID string, limit, offset int, sort, order string) ([]FileRow, int, error) {
 	column, direction := sortClause(sort, order)
-	where := `type = 'file' AND deleted_at IS NULL AND owner_id = $1 AND ($2::text = '' AND parent_id IS NULL OR parent_id = $2)`
+	where := `type = 'file' AND deleted_at IS NULL AND user_id = $1 AND ($2::text = '' AND parent_id IS NULL OR parent_id = $2)`
 
 	var total int
 	if err := r.DB.QueryRow(`SELECT COUNT(*) FROM resources WHERE `+where, ownerID, folderResourceID).Scan(&total); err != nil {
@@ -164,7 +164,7 @@ func (r *Resources) ListFiles(ownerID, folderResourceID string, limit, offset in
 func (r *Resources) GetFile(ownerID, resourceID string) (FileRow, error) {
 	row := r.DB.QueryRow(
 		`SELECT `+fileColumns+` FROM resources
-		 WHERE type = 'file' AND deleted_at IS NULL AND owner_id = $1 AND resource_id = $2`,
+		 WHERE type = 'file' AND deleted_at IS NULL AND user_id = $1 AND resource_id = $2`,
 		ownerID, resourceID,
 	)
 	file, err := r.scanFile(row.Scan)
@@ -178,7 +178,7 @@ func (r *Resources) GetFile(ownerID, resourceID string) (FileRow, error) {
 func (r *Resources) DeleteFile(ownerID, resourceID string) (string, error) {
 	result, err := r.DB.Exec(
 		`UPDATE resources SET deleted_at = NOW(), updated_at = NOW()
-		 WHERE type = 'file' AND deleted_at IS NULL AND owner_id = $1 AND resource_id = $2`,
+		 WHERE type = 'file' AND deleted_at IS NULL AND user_id = $1 AND resource_id = $2`,
 		ownerID, resourceID,
 	)
 	if err != nil {
@@ -198,7 +198,7 @@ func (r *Resources) DeleteFile(ownerID, resourceID string) (string, error) {
 // (case-insensitive substring, wildcards escaped), plus the total count.
 func (r *Resources) SearchFiles(ownerID, q string, limit, offset int) ([]FileRow, int, error) {
 	pattern := `%` + escapeLike(q) + `%`
-	where := `type = 'file' AND deleted_at IS NULL AND owner_id = $1 AND name ILIKE $2 ESCAPE '\'`
+	where := `type = 'file' AND deleted_at IS NULL AND user_id = $1 AND name ILIKE $2 ESCAPE '\'`
 
 	var total int
 	if err := r.DB.QueryRow(`SELECT COUNT(*) FROM resources WHERE `+where, ownerID, pattern).Scan(&total); err != nil {
@@ -234,7 +234,7 @@ func (r *Resources) GetFolder(ownerID, resourceID string) (FolderRow, error) {
 	var row FolderRow
 	err := r.DB.QueryRow(
 		`SELECT resource_id, name, COALESCE(parent_id, '') FROM resources
-		 WHERE type = 'folder' AND deleted_at IS NULL AND owner_id = $1 AND resource_id = $2`,
+		 WHERE type = 'folder' AND deleted_at IS NULL AND user_id = $1 AND resource_id = $2`,
 		ownerID, resourceID,
 	).Scan(&row.ID, &row.Name, &row.ParentID)
 	if err == sql.ErrNoRows {
@@ -257,7 +257,7 @@ func (r *Resources) MoveResource(ownerID, resourceID, parentResourceID string) e
 	}
 	result, err := r.DB.Exec(
 		`UPDATE resources SET parent_id = $3, updated_at = NOW()
-		 WHERE resource_id = $1 AND owner_id = $2 AND deleted_at IS NULL`,
+		 WHERE resource_id = $1 AND user_id = $2 AND deleted_at IS NULL`,
 		resourceID, ownerID, parentID,
 	)
 	if err != nil && isUniqueViolation(err) {
@@ -280,7 +280,7 @@ func (r *Resources) MoveResource(ownerID, resourceID, parentResourceID string) e
 func (r *Resources) UpdateName(ownerID, resourceID, name string) error {
 	result, err := r.DB.Exec(
 		`UPDATE resources SET name = $3, updated_at = NOW()
-		 WHERE resource_id = $1 AND owner_id = $2 AND deleted_at IS NULL`,
+		 WHERE resource_id = $1 AND user_id = $2 AND deleted_at IS NULL`,
 		resourceID, ownerID, name,
 	)
 	if err != nil && isUniqueViolation(err) {
@@ -304,7 +304,7 @@ func (r *Resources) UpdateName(ownerID, resourceID, name string) error {
 func (r *Resources) SyncDelete(ownerID, resourceID string) error {
 	_, err := r.DB.Exec(
 		`UPDATE resources SET deleted_at = NOW(), updated_at = NOW()
-		 WHERE resource_id = $1 AND owner_id = $2 AND deleted_at IS NULL`,
+		 WHERE resource_id = $1 AND user_id = $2 AND deleted_at IS NULL`,
 		ownerID, resourceID,
 	)
 	return err
@@ -314,7 +314,7 @@ func (r *Resources) SyncDelete(ownerID, resourceID string) error {
 func (r *Resources) ExistsOwner(ownerID, resourceID string) (bool, error) {
 	var exists int
 	err := r.DB.QueryRow(
-		`SELECT 1 FROM resources WHERE resource_id = $1 AND owner_id = $2 AND deleted_at IS NULL`,
+		`SELECT 1 FROM resources WHERE resource_id = $1 AND user_id = $2 AND deleted_at IS NULL`,
 		resourceID, ownerID,
 	).Scan(&exists)
 	if err == sql.ErrNoRows {
@@ -335,7 +335,7 @@ type OwnedRow struct {
 func (r *Resources) ListOwned(ownerID string, afterMs int64) ([]OwnedRow, error) {
 	rows, err := r.DB.Query(
 		`SELECT resource_id, type, updated_at FROM resources
-		 WHERE owner_id = $1 AND deleted_at IS NULL
+		 WHERE user_id = $1 AND deleted_at IS NULL
 		   AND (EXTRACT(EPOCH FROM updated_at) * 1000)::bigint > $2
 		 ORDER BY updated_at DESC
 		 LIMIT 10000`,
@@ -360,7 +360,7 @@ func (r *Resources) ListOwned(ownerID string, afterMs int64) ([]OwnedRow, error)
 func (r *Resources) ListRootFolders(ownerID string) ([]FolderRow, error) {
 	rows, err := r.DB.Query(
 		`SELECT resource_id, name, COALESCE(parent_id, '') FROM resources
-		 WHERE type = 'folder' AND parent_id IS NULL AND deleted_at IS NULL AND owner_id = $1
+		 WHERE type = 'folder' AND parent_id IS NULL AND deleted_at IS NULL AND user_id = $1
 		 ORDER BY name ASC`,
 		ownerID,
 	)

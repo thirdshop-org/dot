@@ -110,6 +110,74 @@ func TestMigrationsUpDown(t *testing.T) {
 	assertHexCheck(t, conn, "devices", "device_id")
 	assertHexCheck(t, conn, "resources", "resource_id")
 	assertHexCheck(t, conn, "ocr_jobs", "job_id")
+	assertHexCheck(t, conn, "users", "id")
+
+	// --- 000006 : identité utilisateur ----------------------------------
+	usersColumns := []string{"username", "username_normalized", "password_hash", "is_admin"}
+	for _, col := range usersColumns {
+		var tpe string
+		err = conn.QueryRow(`
+			SELECT data_type FROM information_schema.columns
+			WHERE table_schema = 'public' AND table_name = 'users' AND column_name = $1`, col).Scan(&tpe)
+		if err != nil {
+			t.Errorf("colonne users.%s manquante: %v", col, err)
+		}
+	}
+
+	// username_unique : index UNIQUE partiel sur username_normalized
+	var usernameUnique int
+	err = conn.QueryRow(`
+		SELECT COUNT(*) FROM pg_index i
+		JOIN pg_class t ON t.oid = i.indrelid
+		WHERE t.relname = 'users' AND i.indisunique
+		  AND ARRAY(SELECT a.attname FROM unnest(i.indkey) WITH ORDINALITY k(attnum, ord)
+		            JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = k.attnum
+		            ORDER BY k.ord)::text[] = ARRAY['username_normalized']`).Scan(&usernameUnique)
+	if err != nil {
+		t.Fatalf("unique username_normalized: %v", err)
+	}
+	if usernameUnique == 0 {
+		t.Error("contrainte UNIQUE(username_normalized) manquante sur users")
+	}
+
+	// idx_users_email a disparu (unicité V1 = username, jamais email)
+	var emailIdx int
+	err = conn.QueryRow(`
+		SELECT COUNT(*) FROM pg_index i
+		JOIN pg_class t ON t.oid = i.indrelid
+		WHERE t.relname = 'users' AND i.indisunique
+		  AND ARRAY(SELECT a.attname FROM unnest(i.indkey) WITH ORDINALITY k(attnum, ord)
+		            JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = k.attnum
+		            ORDER BY k.ord)::text[] = ARRAY['email']`).Scan(&emailIdx)
+	if err != nil {
+		t.Fatalf("email idx: %v", err)
+	}
+	if emailIdx != 0 {
+		t.Error("index UNIQUE(email) ne doit plus exister après 000006")
+	}
+
+	// --- 000007 : ownership ressources user ------------------------------
+	var plc string
+	err = conn.QueryRow(`
+		SELECT data_type FROM information_schema.columns
+		WHERE table_schema = 'public' AND table_name = 'resources' AND column_name = 'user_id'`).Scan(&plc)
+	if err != nil {
+		t.Errorf("colonne resources.user_id manquante après 000007: %v", err)
+	}
+
+	var resourceFkToUsers int
+	err = conn.QueryRow(`
+		SELECT COUNT(*) FROM pg_constraint c
+		JOIN pg_class t ON t.oid = c.conrelid
+		JOIN pg_class r ON r.oid = c.confrelid
+		WHERE t.relname = 'resources' AND r.relname = 'users' AND c.contype = 'f'
+		  AND pg_get_constraintdef(c.oid) LIKE '%user_id%'`).Scan(&resourceFkToUsers)
+	if err != nil {
+		t.Fatalf("FK resources→users: %v", err)
+	}
+	if resourceFkToUsers == 0 {
+		t.Error("FK resources.user_id → users(id) manquante après 000007")
+	}
 
 	// operation_id outbox = id client (INTEGER) — cf. docs/api-v1.md §6.1
 	var opType string

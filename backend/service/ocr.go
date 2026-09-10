@@ -30,16 +30,18 @@ func NewOcr(repo *repository.Repository, uploadDir, lang string, engine ocr.Engi
 	return &Ocr{Repository: repo, UploadDir: uploadDir, Lang: lang, Engine: engine}
 }
 
-// Create validates the file, queued the job, and starts processing.
-func (o *Ocr) Create(deviceID, fileID string) (OcrJobDTO, error) {
-	if _, err := o.Repository.Resources.GetFile(deviceID, fileID); err != nil {
+// Create valide la ressource (ownership par user), met le job en file et
+// lance le traitement. Le job reste scopé par device (le service génère les
+// jobs du device courant ; l'outbox OCR n'est pas synchronisée entre devices).
+func (o *Ocr) Create(userID, deviceID, fileID string) (OcrJobDTO, error) {
+	if _, err := o.Repository.Resources.GetFile(userID, fileID); err != nil {
 		return OcrJobDTO{}, err
 	}
 	jobID := repository.NewID()
 	if err := o.Repository.OcrJobs.Create(jobID, deviceID, fileID); err != nil {
 		return OcrJobDTO{}, err
 	}
-	go o.process(deviceID, jobID, fileID)
+	go o.process(userID, deviceID, jobID, fileID)
 	return OcrJobDTO{ID: jobID, Status: "queued"}, nil
 }
 
@@ -51,12 +53,12 @@ func (o *Ocr) Get(deviceID, jobID string) (OcrJobDTO, error) {
 	return toOcrJobDTO(row), nil
 }
 
-func (o *Ocr) process(deviceID, jobID, fileID string) {
+func (o *Ocr) process(userID, deviceID, jobID, fileID string) {
 	ctx := context.Background()
 	if err := o.Repository.OcrJobs.TouchProcessing(deviceID, jobID); err != nil {
 		return
 	}
-	path, err := o.physicalPath(deviceID, fileID)
+	path, err := o.physicalPath(userID, fileID)
 	if err != nil {
 		_ = o.Repository.OcrJobs.Fail(deviceID, jobID, "file not readable")
 		return
@@ -69,10 +71,10 @@ func (o *Ocr) process(deviceID, jobID, fileID string) {
 	_ = o.Repository.OcrJobs.Complete(deviceID, jobID, text)
 }
 
-// physicalPath resolves UPLOAD_DIR/<device_id>/<resource_id>.<ext> — the ext
-// is chosen at upload time, so the actual file is matched by prefix.
-func (o *Ocr) physicalPath(deviceID, fileID string) (string, error) {
-	matches, err := filepath.Glob(filepath.Join(o.UploadDir, deviceID, fileID+".*"))
+// physicalPath résout UPLOAD_DIR/<user_id>/<resource_id>.<ext> — l'ext est
+// choisi à l'upload, le fichier réel est retrouvé par préfixe.
+func (o *Ocr) physicalPath(userID, fileID string) (string, error) {
+	matches, err := filepath.Glob(filepath.Join(o.UploadDir, userID, fileID+".*"))
 	if err != nil {
 		return "", err
 	}

@@ -15,11 +15,16 @@ func newTestResources(t *testing.T) *Resources {
 	return &Resources{DB: conn}
 }
 
-func mustInsertDevice(t *testing.T, repo *Resources, deviceID string) {
+func mustInsertUser(t *testing.T, repo *Resources, userID string) {
 	t.Helper()
-	dev := &Devices{DB: repo.DB}
-	if err := dev.Upsert(deviceID); err != nil {
-		t.Fatalf("upsert device: %v", err)
+	users := &Users{DB: repo.DB}
+	username := "user-" + userID[:8]
+	if _, err := users.DB.Exec(
+		`INSERT INTO users (id, username, username_normalized, password_hash, is_admin, created_at)
+		 VALUES ($1, $2, $3, 'test-hash', false, NOW())`,
+		userID, username, username,
+	); err != nil {
+		t.Fatalf("create user: %v", err)
 	}
 }
 
@@ -27,8 +32,8 @@ func TestCRUDScopedByOwner(t *testing.T) {
 	repo := newTestResources(t)
 	owner := NewID()
 	other := NewID()
-	mustInsertDevice(t, repo, owner)
-	mustInsertDevice(t, repo, other)
+	mustInsertUser(t, repo, owner)
+	mustInsertUser(t, repo, other)
 
 	folderID := NewID()
 	if err := repo.InsertFolder(owner, folderID, "Docs", ""); err != nil {
@@ -67,7 +72,7 @@ func TestCRUDScopedByOwner(t *testing.T) {
 	}
 
 	if _, err := repo.GetFile(other, fileID); err != ErrNotFound {
-		t.Errorf("autre device doit voir NOT_FOUND, got %v", err)
+		t.Errorf("autre user doit voir NOT_FOUND, got %v", err)
 	}
 
 	deleted, err := repo.DeleteFile(owner, fileID)
@@ -82,7 +87,7 @@ func TestCRUDScopedByOwner(t *testing.T) {
 func TestNameConflictAndUnknownFolder(t *testing.T) {
 	repo := newTestResources(t)
 	owner := NewID()
-	mustInsertDevice(t, repo, owner)
+	mustInsertUser(t, repo, owner)
 
 	folderID := NewID()
 	if err := repo.InsertFolder(owner, folderID, "Docs", ""); err != nil {

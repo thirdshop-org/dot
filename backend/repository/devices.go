@@ -4,7 +4,8 @@ import (
 	"database/sql"
 )
 
-// Devices persists registered devices (owner scope for every resource row).
+// Devices persists registered devices (idempotence outbox par device, dernier
+// user_id informatif).
 type Devices struct {
 	DB *sql.DB
 }
@@ -28,4 +29,14 @@ func (d *Devices) Exists(deviceID string) (bool, error) {
 		return false, nil
 	}
 	return err == nil, err
+}
+
+// MarkUser mémorise le dernier utilisateur connecté sur ce device (INFORMATIF,
+// jamais autorisant) et rafraîchit last_seen_at. Appelé au login.
+func (d *Devices) MarkUser(deviceID, userID string) error {
+	_, err := d.DB.Exec(
+		`UPDATE devices SET user_id = $2, last_seen_at = NOW() WHERE device_id = $1`,
+		deviceID, userID,
+	)
+	return err
 }

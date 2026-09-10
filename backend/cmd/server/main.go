@@ -44,6 +44,12 @@ func main() {
 	handlers.Auth = authManager
 
 	repo := repository.NewRepository(conn)
+
+	// Premier admin (users vide) — refus de démarrer si identifiants absents.
+	if err := service.EnsureAdmin(repo, cfg.AdminUsername, cfg.AdminPassword); err != nil {
+		log.Fatalln(err)
+	}
+
 	handlers.Store = service.NewResources(
 		repo,
 		cfg.UploadDir,
