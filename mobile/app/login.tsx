@@ -7,7 +7,7 @@ import i18n from '../i18n';
 
 export default function Login() {
   const router = useRouter();
-  const { signIn, user } = useAuth();
+  const { signIn, user, continueWithoutAccount } = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -73,6 +73,15 @@ export default function Login() {
           {submitting ? i18n.t('login_submitting') : i18n.t('login_submit')}
         </Text>
       </Pressable>
+      <Pressable
+        style={styles.skipButton}
+        onPress={() => {
+          continueWithoutAccount();
+          router.replace('/');
+        }}
+      >
+        <Text style={styles.skipButtonText}>{i18n.t('login_skip')}</Text>
+      </Pressable>
     </View>
   );
 }
@@ -117,5 +126,15 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  skipButton: {
+    alignItems: 'center',
+    paddingVertical: 10,
+    marginTop: 4,
+  },
+  skipButtonText: {
+    color: '#1a73e8',
+    fontSize: 15,
+    fontWeight: '500',
   },
 });

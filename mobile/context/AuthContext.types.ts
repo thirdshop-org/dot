@@ -2,7 +2,7 @@ import type { User } from '../api/types';
 
 export type { User };
 
-export type AuthStatus = 'loading' | 'signedOut' | 'signedIn';
+export type AuthStatus = 'loading' | 'signedOut' | 'local' | 'signedIn';
 
 export type AuthContextValue = {
   user: User | null;
@@ -10,4 +10,5 @@ export type AuthContextValue = {
   status: AuthStatus;
   signIn: (username: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
+  continueWithoutAccount: () => void;
 };

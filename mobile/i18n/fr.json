@@ -20,5 +20,7 @@
   "login_switch_title": "Compte déjà connecté",
   "login_switch_message": "Cette connexion remplacera le compte actif sur cet appareil. Continuer ?",
   "login_switch_confirm": "Remplacer",
-  "login_switch_cancel": "Annuler"
+  "login_switch_cancel": "Annuler",
+  "login_skip": "Continuer sans compte",
+  "skip_message": "Mode local — tes dossiers restent sur cet appareil et ne sont pas synchronisés."
 }

@@ -87,9 +87,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setStatus('signedIn');
   };
 
+  const continueWithoutAccount = () => {
+    setStatus('local');
+  };
+
   const value = useMemo(
-    () => ({ user, deviceUserId, status, signIn, signOut }),
-    [user, deviceUserId, status, signIn, signOut],
+    () => ({ user, deviceUserId, status, signIn, signOut, continueWithoutAccount }),
+    [user, deviceUserId, status, signIn, signOut, continueWithoutAccount],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

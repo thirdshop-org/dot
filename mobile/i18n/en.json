@@ -20,5 +20,7 @@
   "login_switch_title": "Account already signed in",
   "login_switch_message": "This sign-in will replace the active account on this device. Continue?",
   "login_switch_confirm": "Replace",
-  "login_switch_cancel": "Cancel"
+  "login_switch_cancel": "Cancel",
+  "login_skip": "Continue without account",
+  "skip_message": "Local mode — your folders stay on this device and are not synced."
 }

@@ -27,9 +27,11 @@ function AuthGate() {
   return (
     <>
       <Stack>
+        <Stack.Screen name="index" options={{ title: i18n.t('files') }} />
+        <Stack.Screen name="folder/[id]" options={{ title: i18n.t('folder') }} />
         <Stack.Screen name="login" options={{ title: i18n.t('login_title') }} />
       </Stack>
-      {/* Toute route est protégée tant qu'aucun compte n'est connecté. */}
+      {/* Rediriger vers la connexion uniquement si l'utilisateur n'a pas de session ET n'est pas en mode local. */}
       {status === 'signedOut' ? <Redirect href="/login" /> : null}
     </>
   );
