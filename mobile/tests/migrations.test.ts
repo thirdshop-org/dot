@@ -80,7 +80,7 @@ async function seedLegacyTree(h: Harness): Promise<void> {
     VALUES ('${SONG_URI}', 'song.mp3', '${MUSIC_URI}', 'mp3', 30, 'audio/mpeg', 0, 3000, 'cloud', 3000);`);
 }
 
-test('fresh migrate v0 → v4 creates full schema and seeds device id', async () => {
+test('fresh migrate v0 → v5 creates full schema and seeds device id', async () => {
   const h = createHarness();
   await migrateDatabase(h);
 
@@ -108,6 +108,11 @@ test('fresh migrate v0 → v4 creates full schema and seeds device id', async ()
     assert.ok(names.length > 0, `table ${table} must exist`);
   }
 
+  const permCols = await columnNames(h, 'resource_permissions');
+  assert.ok(permCols.includes('user_id'), 'resource_permissions must have user_id (v5)');
+  const opCols = await columnNames(h, 'pending_operations');
+  assert.ok(opCols.includes('user_id'), 'pending_operations must have user_id (v5)');
+
   const device = await h.getFirstAsync<{ value: string }>(
     'SELECT "value" FROM user_preferences WHERE "key" = ?',
     DEVICE_USER_ID_KEY,
@@ -115,6 +120,35 @@ test('fresh migrate v0 → v4 creates full schema and seeds device id', async ()
   assert.ok(device && /^[0-9a-f]{32}$/.test(device.value), 'device_user_id seeded as 32-hex');
 
   assert.deepEqual(await foreignKeyViolations(h), [], 'no orphaned FKs after fresh migrate');
+});
+
+test('v5 : UNIQUE de resource_permissions scopé par (user_id, resource_id, resource_type)', async () => {
+  const h = createHarness();
+  await migrateDatabase(h);
+
+  const row = await h.getFirstAsync<{ sql: string }>(
+    `SELECT sql FROM sqlite_master WHERE type = 'table' AND tbl_name = 'resource_permissions'`,
+  );
+  assert.ok(row, 'table sql present');
+  assert.match(row.sql, /UNIQUE\s*\(user_id,\s*resource_id,\s*resource_type\)/);
+
+  // Deux comptes peuvent partager la même ressource sans collision.
+  await h.runAsync(
+    `INSERT INTO resource_permissions (user_id, resource_id, resource_type, effective_access, inherit, owner_id, cached_at, updated_at)
+     VALUES ('u1', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'folder', 'owner', 1, NULL, 1, 1)`,
+  );
+  await h.runAsync(
+    `INSERT INTO resource_permissions (user_id, resource_id, resource_type, effective_access, inherit, owner_id, cached_at, updated_at)
+     VALUES ('u2', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'folder', 'viewer', 0, NULL, 1, 1)`,
+  );
+  await assert.rejects(
+    () =>
+      h.runAsync(
+        `INSERT INTO resource_permissions (user_id, resource_id, resource_type, effective_access, inherit, owner_id, cached_at, updated_at)
+         VALUES ('u1', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'folder', 'editor', 1, NULL, 1, 1)`,
+      ),
+    /UNIQUE constraint failed/,
+  );
 });
 
 test('user_version is transactional (rollback restores previous version)', async () => {

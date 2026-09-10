@@ -13,10 +13,17 @@ import { MIGRATIONS, type MigrationDb } from '../services/db/migrations';
 import type { DbSession } from '../services/db/session';
 import { __setDbForTests } from '../services/db/session';
 import { api, setAuthToken } from '../api/client';
-import { enqueuePendingOperation, getPendingOperations } from '../services/db';
+import {
+  clearActiveUserId,
+  enqueuePendingOperation,
+  getPendingOperations,
+  setActiveUserId,
+} from '../services/db';
 import { pushPendingOps, refreshPermissions, resetPermissionCachedAtForTests } from '../features/syncOutbox';
 
 const BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://localhost:8080/api/v1';
+const ADMIN_USERNAME = process.env.E2E_ADMIN_USERNAME ?? 'admin';
+const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD ?? 'admin';
 
 type Harness = MigrationDb & DbSession;
 
@@ -75,9 +82,10 @@ beforeEach(async () => {
 afterEach(() => {
   __setDbForTests(null);
   setAuthToken(null);
+  clearActiveUserId();
 });
 
-test('bout en bout : register → push outbox → snapshot → relecture serveur', async (t) => {
+test('bout en bout : register + login admin → push outbox → snapshot → relecture serveur', async (t) => {
   try {
     await api.health();
   } catch (error) {
@@ -88,11 +96,15 @@ test('bout en bout : register → push outbox → snapshot → relecture serveur
     throw error;
   }
 
+  // Enregistrement du device (idempotent) puis login = SEULE porte de token.
   deviceId = newDeviceId();
-  const reg = await api.registerDevice(deviceId);
-  setAuthToken(reg.data.token);
+  await api.registerDevice(deviceId);
+  const login = await api.login(ADMIN_USERNAME, ADMIN_PASSWORD, deviceId);
+  setAuthToken(login.data.token);
+  await setActiveUserId(login.data.user.id);
+  assert.equal(login.data.user.is_admin, true, 'l’admin E2E doit exister (ADMIN_*)');
 
-  // 1. Enqueue un CREATE_RESOURCE puis push
+  // 1. Enqueue un CREATE_RESOURCE puis push (scopé au compte connecté)
   const name = `e2e-${deviceId.slice(0, 8)}`;
   const resourceId = newDeviceId();
   const opId = await enqueuePendingOperation({

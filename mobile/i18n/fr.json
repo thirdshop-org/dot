@@ -8,5 +8,17 @@
   "empty_folder": "Dossier vide — le prochain syncDevice l'actualisera.",
   "bytes": "o",
   "kilobytes": "Ko",
-  "megabytes": "Mo"
+  "megabytes": "Mo",
+  "login_title": "Connexion",
+  "login_subtitle": "Connecte-toi à ton compte",
+  "login_username": "Nom d'utilisateur",
+  "login_password": "Mot de passe",
+  "login_submit": "Se connecter",
+  "login_submitting": "Connexion…",
+  "login_error_required": "Nom d'utilisateur et mot de passe requis",
+  "login_error_generic": "Impossible de se connecter pour le moment",
+  "login_switch_title": "Compte déjà connecté",
+  "login_switch_message": "Cette connexion remplacera le compte actif sur cet appareil. Continuer ?",
+  "login_switch_confirm": "Remplacer",
+  "login_switch_cancel": "Annuler"
 }

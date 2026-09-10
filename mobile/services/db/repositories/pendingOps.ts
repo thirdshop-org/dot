@@ -1,4 +1,5 @@
 import { getSession } from '../session';
+import { getActiveUserId } from './preferences';
 import type {
   NewPendingOperation,
   PendingOperation,
@@ -19,10 +20,11 @@ export async function enqueuePendingOperation(
   operation: NewPendingOperation,
 ): Promise<number> {
   const db = await getSession();
+  const activeUserId = await getActiveUserId();
   const row = await db.getFirstAsync<{ id: number }>(
     `INSERT INTO pending_operations
-       (resource_id, resource_type, ref_type, ref_id, operation, payload, status, attempts, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, 'pending', 0, ?)
+       (resource_id, resource_type, ref_type, ref_id, operation, payload, status, attempts, created_at, user_id)
+     VALUES (?, ?, ?, ?, ?, ?, 'pending', 0, ?, ?)
      RETURNING id`,
     operation.resourceId ?? null,
     operation.resourceType ?? null,
@@ -31,6 +33,7 @@ export async function enqueuePendingOperation(
     operation.operation,
     JSON.stringify(operation.payload ?? {}),
     Date.now(),
+    activeUserId,
   );
   return row!.id;
 }
@@ -42,12 +45,16 @@ export async function getPendingOperations(
   const rows = status
     ? await db.getAllAsync<PendingOperationRow>(
         `SELECT ${PENDING_OPERATION_COLUMNS} FROM pending_operations
-         WHERE status = ? ORDER BY created_at ASC, id ASC`,
+         WHERE status = ? AND (user_id = ? OR user_id IS NULL)
+         ORDER BY created_at ASC, id ASC`,
         status,
+        await getActiveUserId(),
       )
     : await db.getAllAsync<PendingOperationRow>(
         `SELECT ${PENDING_OPERATION_COLUMNS} FROM pending_operations
+         WHERE user_id = ? OR user_id IS NULL
          ORDER BY created_at ASC, id ASC`,
+        await getActiveUserId(),
       );
   return rows.map(toPendingOperation);
 }
@@ -57,9 +64,11 @@ export async function getNextQueuedOperation(): Promise<PendingOperation | null>
   const row = await db.getFirstAsync<PendingOperationRow>(
     `SELECT ${PENDING_OPERATION_COLUMNS} FROM pending_operations
      WHERE status = 'pending'
+       AND (user_id = ? OR user_id IS NULL)
        AND (next_retry_at IS NULL OR next_retry_at <= ?)
      ORDER BY created_at ASC, id ASC
      LIMIT 1`,
+    await getActiveUserId(),
     Date.now(),
   );
   return row ? toPendingOperation(row) : null;
@@ -72,9 +81,11 @@ export async function listQueuedOperations(limit: number): Promise<PendingOperat
   const rows = await db.getAllAsync<PendingOperationRow>(
     `SELECT ${PENDING_OPERATION_COLUMNS} FROM pending_operations
      WHERE status = 'pending'
+       AND (user_id = ? OR user_id IS NULL)
        AND (next_retry_at IS NULL OR next_retry_at <= ?)
      ORDER BY created_at ASC, id ASC
      LIMIT ?`,
+    await getActiveUserId(),
     Date.now(),
     limit,
   );

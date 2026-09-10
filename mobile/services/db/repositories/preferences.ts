@@ -1,5 +1,5 @@
 import { getSession } from '../session';
-import { AUTH_TOKEN_KEY, DEVICE_USER_ID_KEY, PREFERENCES_KEY } from '../schema';
+import { ACTIVE_USER_ID_KEY, AUTH_TOKEN_KEY, DEVICE_USER_ID_KEY, PREFERENCES_KEY } from '../schema';
 import type { UserPreferences } from '../types';
 
 const DEFAULT_PREFERENCES: UserPreferences = {
@@ -55,6 +55,36 @@ export async function saveDeviceAuthToken(token: string): Promise<void> {
     AUTH_TOKEN_KEY,
     token,
     Date.now(),
+  );
+}
+
+// Miroir non-sensible du compte connecté (le token vit en SecureStore). NULL
+// = aucun compte actif (mode device-local legacy / tests).
+export async function getActiveUserId(): Promise<string | null> {
+  const db = await getSession();
+  const row = await db.getFirstAsync<{ value: string }>(
+    'SELECT "value" FROM user_preferences WHERE "key" = ?',
+    ACTIVE_USER_ID_KEY,
+  );
+  return row?.value || null;
+}
+
+export async function setActiveUserId(userId: string): Promise<void> {
+  const db = await getSession();
+  await db.runAsync(
+    `INSERT INTO user_preferences ("key", "value", updated_at) VALUES (?, ?, ?)
+     ON CONFLICT("key") DO UPDATE SET "value" = excluded."value", updated_at = excluded.updated_at`,
+    ACTIVE_USER_ID_KEY,
+    userId,
+    Date.now(),
+  );
+}
+
+export async function clearActiveUserId(): Promise<void> {
+  const db = await getSession();
+  await db.runAsync(
+    'DELETE FROM user_preferences WHERE "key" = ?',
+    ACTIVE_USER_ID_KEY,
   );
 }
 

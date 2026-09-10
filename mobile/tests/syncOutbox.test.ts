@@ -7,11 +7,13 @@ import { __setDbForTests } from '../services/db/session';
 import { api, setAuthToken } from '../api/client';
 import {
   enqueuePendingOperation,
+  getActiveUserId,
   getPendingOperations,
   getResourcePermission,
   listQueuedOperations,
   markPendingOperation,
   scheduleRetries,
+  setActiveUserId,
   MAX_PENDING_ATTEMPTS,
 } from '../services/db';
 import {
@@ -331,4 +333,70 @@ test('refreshPermissions garde la référence dans le temps pour after', async (
   await refreshPermissions();
   assert.equal((await getResourcePermission('d'.repeat(32), 'folder'))?.effectiveAccess, 'viewer');
   assert.equal(pathOf(calls[1].url), '/api/v1/sync/permissions?after=42');
+});
+
+test('outbox scopée par compte : seul le compte actif voit/pousse ses ops', async () => {
+  await setActiveUserId('u1');
+  const idA = await enqueue({ operation: 'create_resource', payload: { name: 'A' } });
+  await setActiveUserId('u2');
+  const idB = await enqueue({ operation: 'create_resource', payload: { name: 'B' } });
+
+  assert.equal(await getActiveUserId(), 'u2');
+  const visibleAsU2 = (await getPendingOperations()).map((op) => op.id);
+  assert.deepEqual(visibleAsU2, [idB], 'u2 ne voit que ses opérations');
+
+  await setActiveUserId('u1');
+  assert.deepEqual(
+    (await getPendingOperations()).map((op) => op.id),
+    [idA],
+    'u1 ne voit que ses opérations',
+  );
+
+  stubFetch(() => ok({ applied: 1, failed: null }));
+  await setActiveUserId('u2');
+  const result = await pushPendingOps();
+  assert.deepEqual(result, { pushed: 1, retried: 0 });
+  const body = JSON.parse(String(calls[0].init.body));
+  assert.equal(body.operations.length, 1, 'u2 ne pousse pas les opérations de u1');
+  assert.equal(body.operations[0].operation_id, idB);
+
+  await setActiveUserId('u1');
+  const leftover = await getPendingOperations();
+  assert.deepEqual(leftover.map((op) => op.id), [idA], 'l’op u1 reste intacte et non-poussée');
+});
+
+test('permissions scopées par compte : snapshot et miroir par compte', async () => {
+  const permA = {
+    resource_id: 'a'.repeat(32),
+    resourceType: 'folder',
+    effectiveAccess: 'owner',
+    inherit: true,
+    ownerId: 'u1',
+    sharedById: null,
+    expiresAt: null,
+    cachedAt: 1000,
+    updatedAt: 1000,
+  };
+
+  await setActiveUserId('u1');
+  stubFetch((url) => (new URL(url).searchParams.get('after') === null ? ok([permA]) : ok([])));
+  await refreshPermissions();
+  assert.equal(
+    (await getResourcePermission('a'.repeat(32), 'folder'))?.effectiveAccess,
+    'owner',
+    'u1 voit la permission de son snapshot',
+  );
+
+  // u2 n'a pas encore de snapshot : pas d'`after` (repart du début) et la
+  // permission de u1 n'est pas visible tant que son propre snapshot n'est pas
+  // arrivé.
+  await setActiveUserId('u2');
+  assert.equal(await getResourcePermission('a'.repeat(32), 'folder'), null);
+  await refreshPermissions();
+  assert.equal(pathOf(calls[1].url), '/api/v1/sync/permissions', 'u2 repart sans after');
+  assert.equal(
+    (await getResourcePermission('a'.repeat(32), 'folder'))?.effectiveAccess,
+    'owner',
+    'u2 voit sa propre copie après son snapshot',
+  );
 });

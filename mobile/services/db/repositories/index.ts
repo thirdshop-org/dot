@@ -13,6 +13,9 @@ export {
   getDeviceUserId,
   getDeviceAuthToken,
   saveDeviceAuthToken,
+  getActiveUserId,
+  setActiveUserId,
+  clearActiveUserId,
 } from './preferences';
 export {
   getResourcePermission,

@@ -5,7 +5,9 @@ import type {
   FileDto,
   FolderDto,
   ListFilesParams,
+  LoginResponse,
   OcrJob,
+  ResolvedUser,
   ResourcePermission,
   SyncOperation,
   SyncResult,
@@ -23,6 +25,14 @@ export function setAuthToken(token: string | null): void {
 
 export function hasAuthToken(): boolean {
   return authToken !== null;
+}
+
+// Notification de 401 reçus sur un endpoint protégé (hors login lui-même) —
+// AuthContext s'en sert pour purger la session (token révoqué/expiré).
+let onUnauthorized: (() => void) | null = null;
+
+export function setUnauthorizedHandler(handler: (() => void) | null): void {
+  onUnauthorized = handler;
 }
 
 type QueryParams = Record<string, string | number | boolean | undefined | null>;
@@ -60,7 +70,8 @@ export class ApiError extends Error {
 async function request<T>(
   path: string,
   init: RequestInit = {},
-  timeoutMs: number = DEFAULT_TIMEOUT_MS
+  timeoutMs: number = DEFAULT_TIMEOUT_MS,
+  opts: { skipUnauthorizedHandling?: boolean } = {},
 ): Promise<ApiData<T>> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -74,6 +85,10 @@ async function request<T>(
       });
     } catch {
       throw new ApiError('NETWORK_ERROR', 'Serveur injoignable');
+    }
+
+    if (response.status === 401 && !opts.skipUnauthorizedHandling) {
+      onUnauthorized?.();
     }
 
     const body = (await response.json().catch(() => null)) as
@@ -135,6 +150,26 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ deviceId }),
     }),
+
+  // Seule porte d'émission de token (V1). Le 401 = mauvaises identifiants
+  // (normal sur l'écran de login) : on ne déclenche pas la purge de session.
+  login: (username: string, password: string, deviceId: string) =>
+    request<LoginResponse>('/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password, device_id: deviceId }),
+    }, DEFAULT_TIMEOUT_MS, { skipUnauthorizedHandling: true }),
+
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<{ id: string }>('/users/me/password', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+    }),
+
+  // Résolution exacte d'un destinataire par username — jamais de listing.
+  resolveUser: (username: string) =>
+    request<ResolvedUser>(`/users/resolve${toQuery({ username })}`),
 
   listFiles: (params?: ListFilesParams) =>
     request<FileDto[]>(`/files${toQuery(params)}`),

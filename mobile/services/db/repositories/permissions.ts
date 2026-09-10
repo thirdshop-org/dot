@@ -1,7 +1,7 @@
 import type { DbSession } from '../session';
 import { getSession } from '../session';
 import { PERMISSION_TTL_MS } from '../schema';
-import { getDeviceUserId } from './preferences';
+import { getActiveUserId, getDeviceUserId } from './preferences';
 import type {
   AccessLevel,
   NewResourcePermission,
@@ -44,9 +44,11 @@ export async function getResourcePermission(
 ): Promise<ResourcePermission | null> {
   const db = await getSession();
   const row = await db.getFirstAsync<ResourcePermissionRow>(
-    `SELECT * FROM resource_permissions WHERE resource_id = ? AND resource_type = ?`,
+    `SELECT * FROM resource_permissions
+     WHERE resource_id = ? AND resource_type = ? AND (user_id = ? OR user_id IS NULL)`,
     resourceId,
     resourceType,
+    await getActiveUserId(),
   );
   return row ? toResourcePermission(row) : null;
 }
@@ -58,9 +60,9 @@ export async function saveResourcePermission(
   const now = Date.now();
   await db.runAsync(
     `INSERT INTO resource_permissions
-       (resource_id, resource_type, effective_access, inherit, owner_id, shared_by_id, expires_at, cached_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-     ON CONFLICT(resource_id, resource_type) DO UPDATE SET
+       (user_id, resource_id, resource_type, effective_access, inherit, owner_id, shared_by_id, expires_at, cached_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(user_id, resource_id, resource_type) DO UPDATE SET
        effective_access = excluded.effective_access,
        inherit = excluded.inherit,
        owner_id = excluded.owner_id,
@@ -68,6 +70,7 @@ export async function saveResourcePermission(
        expires_at = excluded.expires_at,
        cached_at = excluded.cached_at,
        updated_at = excluded.updated_at`,
+    await getActiveUserId(),
     permission.resource_id,
     permission.resourceType,
     permission.effectiveAccess,
@@ -140,6 +143,9 @@ export async function canAccess(
   required: AccessLevel,
 ): Promise<AccessCheck> {
   const now = Date.now();
+  // Le device est le propriétaire local de ses propres ressources (device_user_id
+  // seedé en owner_id, cf. v4). Owner = device-local : le check reste volontairement
+  // indépendant du compte connecté (fallback hors-cloud, décision offline).
   const deviceUserId = await getDeviceUserId();
 
   const exactCache = await getResourcePermission(resourceId, resourceType);

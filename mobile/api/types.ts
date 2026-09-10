@@ -44,7 +44,29 @@ export type OcrJob = {
 
 export type DeviceRegistration = {
   deviceId: string;
+};
+
+export type User = {
+  id: string;
+  username: string;
+  is_admin: boolean;
+};
+
+export type LoginRequest = {
+  username: string;
+  password: string;
+  device_id: string;
+};
+
+export type LoginResponse = {
   token: string;
+  expires_at: number;
+  user: User;
+};
+
+export type ResolvedUser = {
+  id: string;
+  username: string;
 };
 
 export type ListParams = {

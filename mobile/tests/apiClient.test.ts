@@ -1,6 +1,6 @@
 import { test, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { api, setAuthToken, ApiError } from '../api/client';
+import { api, setAuthToken, setUnauthorizedHandler, ApiError } from '../api/client';
 import type { ApiData } from '../api/types';
 
 function jsonResponse(status: number, body: unknown, headers?: HeadersInit): Response {
@@ -33,10 +33,12 @@ function pathOf(url: string): string {
 beforeEach(() => {
   calls = [];
   setAuthToken(null);
+  setUnauthorizedHandler(null);
 });
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
+  setUnauthorizedHandler(null);
 });
 
 test('nominal : GET /health', async () => {
@@ -47,13 +49,74 @@ test('nominal : GET /health', async () => {
   assert.deepEqual(res.data, { status: 'healthy' });
 });
 
-test('nominal : POST /devices (register) JSON', async () => {
-  stubFetch(() => ok({ deviceId: 'aaaa', token: 'v4.local.x' }));
+test('nominal : POST /devices (register) — plus aucun token, device-only', async () => {
+  stubFetch(() => ok({ deviceId: 'aaaa' }));
   const res = await api.registerDevice('aaaa');
   assert.equal(pathOf(calls[0].url), '/api/v1/devices');
   assert.equal(calls[0].init.method, 'POST');
   assert.deepEqual(JSON.parse(String(calls[0].init.body)), { deviceId: 'aaaa' });
-  assert.equal(res.data.token, 'v4.local.x');
+  assert.deepEqual(res.data, { deviceId: 'aaaa' });
+  assert.ok(!('token' in res.data), 'POST /devices ne doit plus émettre de token');
+});
+
+test('nominal : POST /auth/login (seule porte de token)', async () => {
+  stubFetch(() =>
+    ok({
+      token: 'v4.local.xyz',
+      expires_at: 1700000000000,
+      user: { id: 'u-1', username: 'alice', is_admin: false },
+    }),
+  );
+  const res = await api.login('alice', 'secret-pass', 'dev-1');
+  assert.equal(pathOf(calls[0].url), '/api/v1/auth/login');
+  assert.equal(calls[0].init.method, 'POST');
+  assert.deepEqual(JSON.parse(String(calls[0].init.body)), {
+    username: 'alice',
+    password: 'secret-pass',
+    device_id: 'dev-1',
+  });
+  assert.equal(res.data.user.id, 'u-1');
+  assert.equal(res.data.user.is_admin, false);
+});
+
+test('auth : 401 de login ne déclenche PAS le handler de purge de session', async () => {
+  let purged = 0;
+  setUnauthorizedHandler(() => {
+    purged++;
+  });
+  stubFetch(() => jsonResponse(401, { error: { code: 'UNAUTHORIZED', message: 'invalid credentials' } }));
+  await assert.rejects(() => api.login('bob', 'wrong', 'dev-1'), (err: unknown) => (err as ApiError).code === 'UNAUTHORIZED');
+  assert.equal(purged, 0, 'mauvais identifiants ≠ session à purger');
+});
+
+test('auth : 401 d’un endpoint protégé déclenche le handler de purge', async () => {
+  let purged = 0;
+  setUnauthorizedHandler(() => {
+    purged++;
+  });
+  setAuthToken('tok-expired');
+  stubFetch(() => jsonResponse(401, { error: { code: 'UNAUTHORIZED', message: 'token invalid' } }));
+  await assert.rejects(() => api.listFiles(), (err: unknown) => (err as ApiError).code === 'UNAUTHORIZED');
+  assert.equal(purged, 1, 'token révoqué → purge de session');
+  setUnauthorizedHandler(null);
+});
+
+test('nominal : PATCH /users/me/password', async () => {
+  stubFetch(() => ok({ id: 'u-1' }));
+  await api.changePassword('old-pass', 'new-pass-8chars');
+  assert.equal(pathOf(calls[0].url), '/api/v1/users/me/password');
+  assert.equal(calls[0].init.method, 'PATCH');
+  assert.deepEqual(JSON.parse(String(calls[0].init.body)), {
+    current_password: 'old-pass',
+    new_password: 'new-pass-8chars',
+  });
+});
+
+test('nominal : GET /users/resolve?username= (résolution exacte)', async () => {
+  stubFetch(() => ok({ id: 'u-9', username: 'bob' }));
+  const res = await api.resolveUser('BOB');
+  assert.equal(pathOf(calls[0].url), '/api/v1/users/resolve?username=BOB');
+  assert.equal(res.data.username, 'bob');
 });
 
 test('nominal : GET /files — query filtrée (undefined/null ignorés)', async () => {
@@ -184,7 +247,7 @@ test('auth : token posé → Authorization: Bearer', async () => {
 
 test('auth : fusion avec Content-Type existant (POST /devices + token)', async () => {
   setAuthToken('tok-123');
-  stubFetch(() => ok({ deviceId: 'a', token: 't' }));
+  stubFetch(() => ok({ deviceId: 'a' }));
   await api.registerDevice('a');
   const headers = new Headers(calls[0].init.headers);
   assert.equal(headers.get('Authorization'), 'Bearer tok-123');

@@ -218,6 +218,47 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_files_uri ON files(uri) WHERE uri IS NOT N
       await db.execAsync('PRAGMA foreign_keys = ON;');
     },
   },
+  {
+    // User-first : pending_operations et resource_permissions deviennent
+    // scopés par compte (`user_id`), NULL = entrées legacy/device-local. Le
+    // UNIQUE de resource_permissions passe à (user_id, resource_id,
+    // resource_type) pour qu'un même fichier partagé à deux comptes ne
+    // collisionne pas côté cache. SQLite ne pouvant pas altérer un UNIQUE, la
+    // table est reconstruite (le schéma v5 se base sur v3/v4 — l'indice
+    // UNIQUE (resource_id, resource_type) a été posé en v3).
+    version: 5,
+    up: async (db) => {
+      await db.execAsync('PRAGMA foreign_keys = OFF;');
+      await db.withExclusiveTransactionAsync(async (txn) => {
+        await txn.execAsync(`
+CREATE TABLE resource_permissions_new (
+  id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+  user_id TEXT,
+  resource_id TEXT NOT NULL,
+  resource_type TEXT NOT NULL CHECK (resource_type IN ('folder', 'file')),
+  effective_access TEXT NOT NULL CHECK (effective_access IN ('owner', 'editor', 'commenter', 'viewer')),
+  inherit INTEGER NOT NULL DEFAULT 1,
+  owner_id TEXT,
+  shared_by_id TEXT,
+  expires_at INTEGER,
+  cached_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  UNIQUE (user_id, resource_id, resource_type)
+);
+INSERT INTO resource_permissions_new (id, user_id, resource_id, resource_type, effective_access, inherit, owner_id, shared_by_id, expires_at, cached_at, updated_at)
+SELECT id, NULL, resource_id, resource_type, effective_access, inherit, owner_id, shared_by_id, expires_at, cached_at, updated_at FROM resource_permissions;
+DROP TABLE resource_permissions;
+ALTER TABLE resource_permissions_new RENAME TO resource_permissions;
+CREATE INDEX IF NOT EXISTS idx_permissions_resource ON resource_permissions(resource_id, resource_type);
+`);
+        await txn.execAsync(`
+ALTER TABLE pending_operations ADD COLUMN user_id TEXT;
+`);
+        await txn.execAsync(`PRAGMA user_version = 5;`);
+      });
+      await db.execAsync('PRAGMA foreign_keys = ON;');
+    },
+  },
 ];
 
 async function readUserVersion(db: MigrationDb): Promise<number> {

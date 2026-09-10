@@ -1,12 +1,18 @@
 export const DATABASE_NAME = 'dot.db';
 
-export const DATABASE_VERSION = 4;
+export const DATABASE_VERSION = 5;
 
 export const PREFERENCES_KEY = 'user_preferences';
 
 export const DEVICE_USER_ID_KEY = 'device_user_id';
 
 export const AUTH_TOKEN_KEY = 'auth_token';
+
+// Miroir non-sensible du compte connecté (voir services/secureStore.ts) : le
+// token lui-même reste en SecureStore ; seul l'id du compte actif est répété en
+// SQLite pour permettre aux repositories de scoper leurs lectures/écritures
+// sans avoir à importer expo-secure-store (tests Node inclus).
+export const ACTIVE_USER_ID_KEY = 'active_user_id';
 
 export const FOLDER_COLUMNS = [
   'resource_id',

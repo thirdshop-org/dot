@@ -1,6 +1,7 @@
 import { api, hasAuthToken } from '../api/client';
 import type { SyncOperation } from '../api/types';
 import {
+  getActiveUserId,
   listQueuedOperations,
   markPendingOperation,
   scheduleRetries,
@@ -69,22 +70,25 @@ export async function pushPendingOps(): Promise<PushResult> {
 
 // ---- permissions snapshot --------------------------------------------------
 
-// Delta monotone en mémoire (réinitialisé au démarrage de l'app) : la valeur
-// max de cached_at du dernier snapshot sert de borne `after` pour le prochain.
-let lastPermissionCachedAt: number | null = null;
+// Delta monotone PAR COMPTE (clé = active_user_id, NULL hors compte) : la
+// valeur max de cached_at du dernier snapshot sert de borne `after` pour le
+// prochain appel. Le snapshot n'est pas rejoué quand on change de compte.
+const lastPermissionCachedAtByUser = new Map<string | null, number>();
 
 export async function refreshPermissions(): Promise<number> {
   if (!hasAuthToken()) return 0;
-  const perms = await api.getSyncPermissions(lastPermissionCachedAt ?? undefined);
+  const activeUserId = await getActiveUserId();
+  const after = lastPermissionCachedAtByUser.get(activeUserId) ?? undefined;
+  const perms = await api.getSyncPermissions(after);
   if (perms.data.length === 0) return 0;
   for (const p of perms.data) {
     await saveResourcePermission(p);
   }
-  lastPermissionCachedAt = Math.max(...perms.data.map((p) => p.cachedAt));
+  lastPermissionCachedAtByUser.set(activeUserId, Math.max(...perms.data.map((p) => p.cachedAt)));
   return perms.data.length;
 }
 
 // Visible uniquement pour les tests unitaires (reset de l'état en mémoire).
 export function resetPermissionCachedAtForTests(): void {
-  lastPermissionCachedAt = null;
+  lastPermissionCachedAtByUser.clear();
 }

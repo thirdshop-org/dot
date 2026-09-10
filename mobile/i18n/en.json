@@ -8,5 +8,17 @@
   "empty_folder": "Empty folder — next syncDevice will refresh it.",
   "bytes": "B",
   "kilobytes": "KB",
-  "megabytes": "MB"
+  "megabytes": "MB",
+  "login_title": "Sign in",
+  "login_subtitle": "Sign in to your account",
+  "login_username": "Username",
+  "login_password": "Password",
+  "login_submit": "Sign in",
+  "login_submitting": "Signing in…",
+  "login_error_required": "Username and password are required",
+  "login_error_generic": "Could not sign in right now",
+  "login_switch_title": "Account already signed in",
+  "login_switch_message": "This sign-in will replace the active account on this device. Continue?",
+  "login_switch_confirm": "Replace",
+  "login_switch_cancel": "Cancel"
 }
