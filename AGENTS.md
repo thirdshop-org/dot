@@ -86,5 +86,4 @@ cd mobile && npm run test:db
 ## References
 
 - `docs/api-v1.md` — **contrat API V1** (autoritatif, consolidé depuis `mobile/api/types.ts`)
-- `README.md` / `V1.md` — specs **obsolètes** (bannières en tête de fichier)
 - `V2.md` — modèle cible Postgres/ReBAC (identifiants en TEXT 32-hex, cf. `docs/api-v1.md`)

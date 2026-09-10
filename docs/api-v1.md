@@ -2,7 +2,7 @@
 
 Status : **autoritatif**. Le client mobile est la source de vérité : `mobile/api/types.ts` + `mobile/api/client.ts` sont implémentés et testés ; le serveur Go doit les matcher exactement (méthode + path + enveloppe), il ne re-négocie pas. Document consolidé à partir de ces deux fichiers — toute divergence de ce doc doit être portée dans le client d'abord.
 
-Références : `V2.md` (modèle cible), `mobile/services/db/` (conventions sync), `README.md`/`V1.md` (**obsolètes**).
+Références : `V2.md` (modèle cible), `mobile/services/db/` (conventions sync), `AGENTS.md` (structure + commandes).
 
 ---
 
