@@ -64,10 +64,10 @@ type OcrJob = { id: string; status: OcrJobStatus; text?: string | null; error?: 
 
 ## 5. OCR
 
-- `POST /ocr/jobs { fileId }` → `OcrJob` immédiat (`status: queued`), traitement **asynchrone**.
-- `GET /ocr/jobs/:id` → statut. Le mobile **poll toutes les 3s** jusqu'à `done`/`failed` (`hooks/useUpload.ts`).
-- Moteur : **Tesseract en appel système**, langue configurable `OCR_LANG` (défaut `fra+eng`). Un stub qui répond indéfiniment `status: "pending"` est un comportement temporaire acceptable (le client ne casse pas).
-- Extraction texte PDF : `ledongthuc/pdf` (déjà en go.mod).
+- `POST /ocr/jobs { fileId }` → `OcrJob` immédiat (`status: queued`), traitement **asynchrone** (goroutine par job côté serveur, V1).
+- `GET /ocr/jobs/:id` → statut. Le mobile **poll toutes les 3s** jusqu'à `done`/`failed` (`hooks/useUpload.ts`). Cycle : `queued → processing → done | failed` ; `done` renvoie `text`, `failed` renvoie `error`.
+- Moteur : **Tesseract en appel système** (`ocr/tesseract.go`), langue `OCR_LANG` (défaut `fra+eng`). Les images sont passées directement à `tesseract` ; les **PDF** subissent une extraction du calque texte (`ledongthuc/pdf`, déjà en go.mod) — un PDF scanné produit un texte vide plutôt qu'un rendu/OCR (hors scope V1).
+- `fileId` inconnu/pas du device → `NOT_FOUND`. Fichier physique introuvable (ex. suppression manuelle sous `UPLOAD_DIR`) → job `failed` `"file not readable"`.
 
 ## 6. Contrat de sync (outbox + snapshot)
 
@@ -133,4 +133,4 @@ type ResourcePermission = {
 
 ## 7. Codes d'erreur courants
 
-`NOT_FOUND`, `NOT_IMPLEMENTED` (501 temporaire sur les routes non construites — état actuel : files CRUD/upload/search, folders, devices, health, **sync/ops + sync/permissions** sont réels ; `ocr/*` en queue), `FILE_TOO_LARGE` (413), `NAME_CONFLICT` (409 — même nom dans le même parent, cf. `UNIQUE(parent_id, name)`, **ou à la racine**, index partiel `(owner_id, name) WHERE parent_id IS NULL`), `NETWORK_ERROR` (côté client), `HTTP_<status>` (fallback). Le serveur doit répondre 501 `{ "error": { "code": "NOT_IMPLEMENTED", "message": "…" } }` sur toute route encore en queue. Statut `SERVICE_UNAVAILABLE` (503) si le backend n'est pas initialisé.
+`NOT_FOUND`, `NOT_IMPLEMENTED` (501 temporaire sur les routes non construites — état actuel : **toutes les routes V1 sont réelles** : files CRUD/upload/search, folders, devices, health, sync/ops, sync/permissions, ocr/jobs), `FILE_TOO_LARGE` (413), `NAME_CONFLICT` (409 — même nom dans le même parent, cf. `UNIQUE(parent_id, name)`, **ou à la racine**, index partiel `(owner_id, name) WHERE parent_id IS NULL`), `NETWORK_ERROR` (côté client), `HTTP_<status>` (fallback). Statut `SERVICE_UNAVAILABLE` (503) si le backend n'est pas initialisé.

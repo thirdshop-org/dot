@@ -8,6 +8,7 @@ import (
 	"github.com/vaultdrop/backend/config"
 	"github.com/vaultdrop/backend/db"
 	"github.com/vaultdrop/backend/handlers"
+	"github.com/vaultdrop/backend/ocr"
 	"github.com/vaultdrop/backend/pkg/auth"
 	"github.com/vaultdrop/backend/repository"
 	"github.com/vaultdrop/backend/service"
@@ -42,11 +43,13 @@ func main() {
 	}
 	handlers.Auth = authManager
 
+	repo := repository.NewRepository(conn)
 	handlers.Store = service.NewResources(
-		repository.NewRepository(conn),
+		repo,
 		cfg.UploadDir,
 		cfg.MaxFileSizeMB*1024*1024,
 	)
+	handlers.Ocr = service.NewOcr(repo, cfg.UploadDir, cfg.OcrLang, ocr.NewTesseract())
 
 	if err := newRouter().Run(fmt.Sprintf(":%d", cfg.Port)); err != nil {
 		log.Fatalln(err)

@@ -13,6 +13,9 @@ import (
 // (cmd/server). Nil until then.
 var Store *service.Resources
 
+// Ocr queues/reads OCR jobs; set once at startup alongside Store.
+var Ocr *service.Ocr
+
 // writeError maps repository/service sentinels to contract error codes.
 func writeError(c *gin.Context, err error) {
 	switch {
