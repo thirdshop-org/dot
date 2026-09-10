@@ -80,9 +80,9 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
+  clearActiveUserId();
   __setDbForTests(null);
   setAuthToken(null);
-  clearActiveUserId();
 });
 
 test('bout en bout : register + login admin → push outbox → snapshot → relecture serveur', async (t) => {
