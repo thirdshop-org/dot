@@ -28,6 +28,8 @@ function AuthGate() {
     <>
       <Stack>
         <Stack.Screen name="index" options={{ title: i18n.t('files') }} />
+        <Stack.Screen name="search" options={{ title: i18n.t('search') }} />
+        <Stack.Screen name="settings" options={{ title: i18n.t('configuration') }} />
         <Stack.Screen name="folder/[id]" options={{ title: i18n.t('folder') }} />
         <Stack.Screen name="login" options={{ title: i18n.t('login_title') }} />
       </Stack>

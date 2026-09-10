@@ -43,7 +43,6 @@ export default function FloatingNavBar() {
   const router = useRouter();
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
-  const { t } = i18n;
 
   return (
     <View style={[styles.wrapper, { bottom: Math.max(insets.bottom, 16) }]}>
@@ -76,7 +75,7 @@ export default function FloatingNavBar() {
                 ]}
                 numberOfLines={1}
               >
-                {t(tab.labelKey)}
+                {i18n.t(tab.labelKey)}
               </Text>
             </Pressable>
           );

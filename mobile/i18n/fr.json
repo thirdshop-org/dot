@@ -2,8 +2,14 @@
   "files": "Fichiers",
   "search": "Recherche",
   "configuration": "Configuration",
+  "nav": {
+    "files": "Fichiers",
+    "search": "Recherche",
+    "settings": "Réglages"
+  },
   "add_folder": "Ajouter un dossier",
   "no_folders_yet": "Aucun dossier pour le moment. Appuie sur « Ajouter un dossier » pour synchroniser un dossier.",
+  "no_files_yet": "Aucun fichier pour le moment. Appuie sur « Ajouter un dossier » pour synchroniser tes fichiers.",
   "folder": "Dossier",
   "empty_folder": "Dossier vide — le prochain syncDevice l'actualisera.",
   "bytes": "o",
