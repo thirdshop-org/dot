@@ -3,6 +3,7 @@ import { useCallback, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { getFolder, getFolderFolders, getFiles } from '../../services/localStorage';
 import type { StoredFile, StoredFolder } from '../../services/db/types';
+import i18n from '../../i18n';
 
 type Row = {
   key: string;
@@ -13,9 +14,9 @@ type Row = {
 };
 
 function formatSize(bytes: number): string {
-  if ( bytes < 1024 ) return `${bytes} o`;
-  if ( bytes < 1024 * 1024 ) return `${(bytes / 1024).toFixed(1)} Ko`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`;
+  if ( bytes < 1024 ) return `${bytes} ${i18n.t('bytes')}`;
+  if ( bytes < 1024 * 1024 ) return `${(bytes / 1024).toFixed(1)} ${i18n.t('kilobytes')}`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} ${i18n.t('megabytes')}`;
 }
 
 export default function FolderScreen() {
@@ -48,7 +49,7 @@ export default function FolderScreen() {
       key: f.resource_id,
       kind: 'folder' as const,
       label: f.name,
-      meta: 'Dossier',
+      meta: i18n.t('folder'),
       resourceId: f.resource_id,
     })),
     ...files.map((f) => ({
@@ -62,7 +63,7 @@ export default function FolderScreen() {
 
   return (
     <View style={styles.container}>
-      <Stack.Screen options={{ title: folder?.name ?? 'Dossier' }} />
+      <Stack.Screen options={{ title: folder?.name ?? i18n.t('folder') }} />
       <FlatList
         data={rows}
         keyExtractor={(item) => item.key}
@@ -79,7 +80,7 @@ export default function FolderScreen() {
         )}
         ListEmptyComponent={
           <Text style={styles.empty}>
-            Dossier vide — le prochain syncDevice l'actualisera.
+            {i18n.t('empty_folder')}
           </Text>
         }
       />

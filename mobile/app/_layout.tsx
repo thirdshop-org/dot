@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Stack } from 'expo-router';
 import { AuthProvider } from '../context/AuthContext';
+import '../i18n';
 
 const queryClient = new QueryClient({
   defaultOptions: {

@@ -1,0 +1,12 @@
+{
+  "files": "Files",
+  "search": "Search",
+  "configuration": "Settings",
+  "add_folder": "Add a folder",
+  "no_folders_yet": "No folders yet. Tap \"Add a folder\" to sync a folder.",
+  "folder": "Folder",
+  "empty_folder": "Empty folder — next syncDevice will refresh it.",
+  "bytes": "B",
+  "kilobytes": "KB",
+  "megabytes": "MB"
+}

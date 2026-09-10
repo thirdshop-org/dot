@@ -1,0 +1,12 @@
+{
+  "files": "Fichiers",
+  "search": "Recherche",
+  "configuration": "Configuration",
+  "add_folder": "Ajouter un dossier",
+  "no_folders_yet": "Aucun dossier pour le moment. Appuie sur « Ajouter un dossier » pour synchroniser un dossier.",
+  "folder": "Dossier",
+  "empty_folder": "Dossier vide — le prochain syncDevice l'actualisera.",
+  "bytes": "o",
+  "kilobytes": "Ko",
+  "megabytes": "Mo"
+}

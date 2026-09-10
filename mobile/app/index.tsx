@@ -6,6 +6,7 @@ import { syncRoot } from '../features/syncDevice';
 import { pickDirectory } from '../services/safDirectory';
 import { getFolders, saveDirectory } from '../services/localStorage';
 import type { StoredFolder } from '../services/db/types';
+import i18n from '../i18n';
 
 export default function Index() {
 
@@ -40,7 +41,7 @@ export default function Index() {
     <View style={styles.container}>
       <StatusBar style="auto" />
       <Pressable style={styles.button} onPress={handlePickDirectory}>
-        <Text style={styles.buttonText}>Ajouter un dossier</Text>
+        <Text style={styles.buttonText}>{i18n.t('add_folder')}</Text>
       </Pressable>
       <FlatList
         data={roots}
@@ -56,7 +57,7 @@ export default function Index() {
         )}
         ListEmptyComponent={
           <Text style={styles.empty}>
-            Aucun dossier pour le moment. Appuie sur « Ajouter un dossier » pour synchroniser un dossier.
+            {i18n.t('no_folders_yet')}
           </Text>
         }
       />
