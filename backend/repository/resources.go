@@ -131,24 +131,20 @@ func (r *Resources) scanFile(scan func(...any) error) (FileRow, error) {
 	return row, err
 }
 
-// ListFiles returns the owner device's files (optionally within a folder),
-// plus the total count matching the filter.
+// ListFiles returns the owner device's files (within a folder, or at the
+// root when folderResourceID is empty), plus the total count.
 func (r *Resources) ListFiles(ownerID, folderResourceID string, limit, offset int, sort, order string) ([]FileRow, int, error) {
 	column, direction := sortClause(sort, order)
-	var folderFilter any
-	if folderResourceID != "" {
-		folderFilter = folderResourceID
-	}
-	where := `type = 'file' AND deleted_at IS NULL AND owner_id = $1 AND ($2::text IS NULL OR parent_id = $2)`
+	where := `type = 'file' AND deleted_at IS NULL AND owner_id = $1 AND ($2::text = '' AND parent_id IS NULL OR parent_id = $2)`
 
 	var total int
-	if err := r.DB.QueryRow(`SELECT COUNT(*) FROM resources WHERE `+where, ownerID, folderFilter).Scan(&total); err != nil {
+	if err := r.DB.QueryRow(`SELECT COUNT(*) FROM resources WHERE `+where, ownerID, folderResourceID).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 	rows, err := r.DB.Query(
 		fmt.Sprintf(`SELECT %s FROM resources WHERE %s ORDER BY %s %s LIMIT $3 OFFSET $4`,
 			fileColumns, where, column, direction),
-		ownerID, folderFilter, limit, offset,
+		ownerID, folderResourceID, limit, offset,
 	)
 	if err != nil {
 		return nil, 0, err
@@ -231,6 +227,133 @@ func (r *Resources) SearchFiles(ownerID, q string, limit, offset int) ([]FileRow
 func escapeLike(q string) string {
 	replacer := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
 	return replacer.Replace(q)
+}
+
+// GetFolder returns a folder row owned by the device (no-rows → ErrNotFound).
+func (r *Resources) GetFolder(ownerID, resourceID string) (FolderRow, error) {
+	var row FolderRow
+	err := r.DB.QueryRow(
+		`SELECT resource_id, name, COALESCE(parent_id, '') FROM resources
+		 WHERE type = 'folder' AND deleted_at IS NULL AND owner_id = $1 AND resource_id = $2`,
+		ownerID, resourceID,
+	).Scan(&row.ID, &row.Name, &row.ParentID)
+	if err == sql.ErrNoRows {
+		return FolderRow{}, ErrNotFound
+	}
+	return row, err
+}
+
+// MoveResource sets parent_id (root when parentResourceID empty). The target
+// folder must exist and belong to the owner. Absent source is a no-op.
+func (r *Resources) MoveResource(ownerID, resourceID, parentResourceID string) error {
+	if parentResourceID != "" {
+		if _, err := r.GetFolder(ownerID, parentResourceID); err != nil {
+			return err
+		}
+	}
+	var parentID any
+	if parentResourceID != "" {
+		parentID = parentResourceID
+	}
+	result, err := r.DB.Exec(
+		`UPDATE resources SET parent_id = $3, updated_at = NOW()
+		 WHERE resource_id = $1 AND owner_id = $2 AND deleted_at IS NULL`,
+		resourceID, ownerID, parentID,
+	)
+	if err != nil && isUniqueViolation(err) {
+		return ErrNameConflict
+	}
+	if err != nil {
+		return err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// UpdateName renames a resource. Absent source is a no-op.
+func (r *Resources) UpdateName(ownerID, resourceID, name string) error {
+	result, err := r.DB.Exec(
+		`UPDATE resources SET name = $3, updated_at = NOW()
+		 WHERE resource_id = $1 AND owner_id = $2 AND deleted_at IS NULL`,
+		resourceID, ownerID, name,
+	)
+	if err != nil && isUniqueViolation(err) {
+		return ErrNameConflict
+	}
+	if err != nil {
+		return err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// SyncDelete soft-deletes a resource; absence is NOT an error (idempotent
+// terminal state for the outbox).
+func (r *Resources) SyncDelete(ownerID, resourceID string) error {
+	_, err := r.DB.Exec(
+		`UPDATE resources SET deleted_at = NOW(), updated_at = NOW()
+		 WHERE resource_id = $1 AND owner_id = $2 AND deleted_at IS NULL`,
+		ownerID, resourceID,
+	)
+	return err
+}
+
+// ExistsOwner reports whether a non-deleted resource belongs to the device.
+func (r *Resources) ExistsOwner(ownerID, resourceID string) (bool, error) {
+	var exists int
+	err := r.DB.QueryRow(
+		`SELECT 1 FROM resources WHERE resource_id = $1 AND owner_id = $2 AND deleted_at IS NULL`,
+		resourceID, ownerID,
+	).Scan(&exists)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	return err == nil, err
+}
+
+// OwnedRow is a snapshot row: resource identity + freshness.
+type OwnedRow struct {
+	ID        string
+	Type      string
+	UpdatedAt time.Time
+}
+
+// ListOwned returns the device's non-deleted resources whose updated_at
+// (in epoch ms) is strictly greater than afterMs (0 = all).
+func (r *Resources) ListOwned(ownerID string, afterMs int64) ([]OwnedRow, error) {
+	rows, err := r.DB.Query(
+		`SELECT resource_id, type, updated_at FROM resources
+		 WHERE owner_id = $1 AND deleted_at IS NULL
+		   AND (EXTRACT(EPOCH FROM updated_at) * 1000)::bigint > $2
+		 ORDER BY updated_at DESC
+		 LIMIT 10000`,
+		ownerID, afterMs,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make([]OwnedRow, 0)
+	for rows.Next() {
+		var row OwnedRow
+		if err := rows.Scan(&row.ID, &row.Type, &row.UpdatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, row)
+	}
+	return out, rows.Err()
 }
 
 // ListRootFolders returns the owner device's top-level folders (parent_id NULL).

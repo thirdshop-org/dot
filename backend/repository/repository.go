@@ -6,13 +6,15 @@ import (
 
 // Repository bundles all tables' repos.
 type Repository struct {
-	Resources *Resources
-	Devices   *Devices
+	Resources  *Resources
+	Devices    *Devices
+	Operations *Operations
 }
 
 func NewRepository(conn *sql.DB) *Repository {
 	return &Repository{
-		Resources: &Resources{DB: conn},
-		Devices:   &Devices{DB: conn},
+		Resources:  &Resources{DB: conn},
+		Devices:    &Devices{DB: conn},
+		Operations: &Operations{DB: conn},
 	}
 }

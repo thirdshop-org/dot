@@ -15,8 +15,8 @@ import (
 
 // OpenTestDatabase ensures the test database exists, resets its schema, runs
 // all migrations, and returns a live connection (closed via t.Cleanup).
-// Tests are skipped when Postgres is unreachable. `databaseURL` empty falls
-// back to TEST_DATABASE_URL, then to the global default.
+// Tests are skipped only when Postgres itself is unreachable. `databaseURL`
+// empty falls back to TEST_DATABASE_URL, then to the global default.
 func OpenTestDatabase(t *testing.T, databaseURL string) *sql.DB {
 	t.Helper()
 
@@ -30,7 +30,15 @@ func OpenTestDatabase(t *testing.T, databaseURL string) *sql.DB {
 		databaseURL = "postgres://vaultdrop:vaultdrop@localhost:5432/vaultdrop_test?sslmode=disable"
 	}
 
-	probe, err := sql.Open("postgres", databaseURL)
+	// Postgres joignable ? (sinon on skippe, sans être gênés par l'existence
+	// ou non de la base cible)
+	parsed, err := url.Parse(databaseURL)
+	if err != nil {
+		t.Fatalf("parse url: %v", err)
+	}
+	maintenance := *parsed
+	maintenance.Path = "/postgres"
+	probe, err := sql.Open("postgres", maintenance.String())
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}

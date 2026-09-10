@@ -109,8 +109,19 @@ func TestMigrationsUpDown(t *testing.T) {
 
 	assertHexCheck(t, conn, "devices", "device_id")
 	assertHexCheck(t, conn, "resources", "resource_id")
-	assertHexCheck(t, conn, "operations", "operation_id")
 	assertHexCheck(t, conn, "ocr_jobs", "job_id")
+
+	// operation_id outbox = id client (INTEGER) — cf. docs/api-v1.md §6.1
+	var opType string
+	err = conn.QueryRow(`
+		SELECT data_type FROM information_schema.columns
+		WHERE table_schema = 'public' AND table_name = 'operations' AND column_name = 'operation_id'`).Scan(&opType)
+	if err != nil {
+		t.Fatalf("operation_id type: %v", err)
+	}
+	if opType != "bigint" {
+		t.Errorf("operation_id attendu bigint, got %s", opType)
+	}
 
 	var resourceTypeCheck int
 	err = conn.QueryRow(`

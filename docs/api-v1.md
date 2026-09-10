@@ -93,7 +93,13 @@ type OcrJob = { id: string; status: OcrJobStatus; text?: string | null; error?: 
 - **Idempotence** : contrainte d'unicité serveur `(device_id, operation_id)`. Pour chaque op : si déjà traitée → **no-op** (comptée comme appliquée, les doublons arrivent à cause du backoff/retry). Sinon appliquée si valide.
 - **Ordre** : les opérations sont appliquées **séquentiellement**, dans l'ordre du batch. Le serveur **s'arrête à la première erreur non-idempotente** et renvoie l'index atteint — le client reprend à cet index.
 - Réponse : `2xx` avec `{ "applied": int, "failed": { "operation_id": int, "code": string, "message": string } | null }` (`applied` = index de la prochaine op à envoyer).
-- Côté client, le `pushStatus` (pending/synced/failed) des shares/share_links est **dérivé** de l'état des opérations de l'outbox ; dead-letter après `MAX_PENDING_ATTEMPTS` (= 5).
+- Côté client, le `pushStatus` (pending/synced/failed) des shares/share_links est **dérivé** de l'état des opérations de l'outbox ; dead-letter après `MAX_PENDING_ATTEMPTS` (= 5). **Côté serveur, les ops `share | revoke_share | update_share | create_link | revoke_link` sont accusées réception mais ne créent aucun état** (V1 single-owner, pas de table shares serveur) — la dérivation du pushStatus reste purement client.
+- Sémantique d'application (côté serveur) :
+  - `create_resource` : crée la ressource ; **déjà présente → no-op** (rejeu idempotent). `payload.name` obligatoire.
+  - `update_metadata` / `move_resource` : ressource absente → **no-op** (état terminal atteint) ; dossier cible de `move_resource` absent → `NOT_FOUND` ; déplacement dans soi-même → `INVALID_REQUEST`.
+  - `delete_resource` : **idempotent** — suppression d'une ressource absente = succès.
+  - Validation (deuxième champ `operation_id`, hex32 pour `resource_id`, enum `operation`) → échec `INVALID_REQUEST` avec arrêt du batch.
+  - Nom déjà pris (même parent, ou à la racine) → échec `NAME_CONFLICT`.**
 
 ### 6.2 Snapshot — `GET /sync/permissions?after=<cached_at_ms>`
 
@@ -127,4 +133,4 @@ type ResourcePermission = {
 
 ## 7. Codes d'erreur courants
 
-`NOT_FOUND`, `NOT_IMPLEMENTED` (501 temporaire sur les routes non construites — état actuel : files CRUD/upload/search, folders, devices, health sont réels ; `ocr/*`, `sync/*` en queue), `FILE_TOO_LARGE` (413), `NAME_CONFLICT` (409 — même nom dans le même parent, cf. `UNIQUE(parent_id, name)`), `NETWORK_ERROR` (côté client), `HTTP_<status>` (fallback). Le serveur doit répondre 501 `{ "error": { "code": "NOT_IMPLEMENTED", "message": "…" } }` sur toute route encore en queue. Statut `SERVICE_UNAVAILABLE` (503) si le backend n'est pas initialisé.
+`NOT_FOUND`, `NOT_IMPLEMENTED` (501 temporaire sur les routes non construites — état actuel : files CRUD/upload/search, folders, devices, health, **sync/ops + sync/permissions** sont réels ; `ocr/*` en queue), `FILE_TOO_LARGE` (413), `NAME_CONFLICT` (409 — même nom dans le même parent, cf. `UNIQUE(parent_id, name)`, **ou à la racine**, index partiel `(owner_id, name) WHERE parent_id IS NULL`), `NETWORK_ERROR` (côté client), `HTTP_<status>` (fallback). Le serveur doit répondre 501 `{ "error": { "code": "NOT_IMPLEMENTED", "message": "…" } }` sur toute route encore en queue. Statut `SERVICE_UNAVAILABLE` (503) si le backend n'est pas initialisé.

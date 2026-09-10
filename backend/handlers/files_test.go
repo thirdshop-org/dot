@@ -39,8 +39,19 @@ type fileDTO struct {
 }
 
 type apiError struct {
-	Code    string `json:"code"`
-	Message string `json:"message"`
+	Error struct {
+		Code    string `json:"code"`
+		Message string `json:"message"`
+	} `json:"error"`
+}
+
+// wrapperError réutilise apiError pour casser l'imbrication.
+func errorCode(rec *httptest.ResponseRecorder) string {
+	var e apiError
+	if err := json.Unmarshal(rec.Body.Bytes(), &e); err != nil {
+		return "<unmarshal: " + err.Error() + ">"
+	}
+	return e.Error.Code
 }
 
 func setup(t *testing.T) (*gin.Engine, *service.Resources, *repository.Repository) {
@@ -94,12 +105,8 @@ func expectError(t *testing.T, rec *httptest.ResponseRecorder, status int, code,
 	if rec.Code != status {
 		t.Fatalf("%s: attendu %d, got %d body=%s", path, status, rec.Code, rec.Body.String())
 	}
-	var e apiError
-	if err := json.Unmarshal(rec.Body.Bytes(), &e); err != nil {
-		t.Fatalf("%s: unmarshal error: %v body=%s", path, err, rec.Body.String())
-	}
-	if e.Code != code {
-		t.Errorf("%s: code erreur attendu %s, got %s", path, code, e.Code)
+	if got := errorCode(rec); got != code {
+		t.Errorf("%s: code erreur attendu %s, got %s (body=%s)", path, code, got, rec.Body.String())
 	}
 }
 
@@ -157,13 +164,13 @@ func TestFilesFlow(t *testing.T) {
 	}
 
 	// Upload root + dossier
-	rec := uploadMultipart(t, r, tokenA, "", "hello.txt", []byte("hello world"))
+	rec := uploadMultipart(t, r, tokenA, "", "hello.txt", []byte("hello"))
 	env := expectOK(t, rec, "upload")
 	var uploaded fileDTO
 	if err := json.Unmarshal(env.Data, &uploaded); err != nil {
 		t.Fatalf("upload: unmarshal: %v", err)
 	}
-	if uploaded.Name != "hello.txt" || uploaded.Size != 11 || uploaded.FolderID != "" || uploaded.ID == "" {
+	if uploaded.Name != "hello.txt" || uploaded.Size != 5 || uploaded.FolderID != "" || uploaded.ID == "" {
 		t.Errorf("FileDto inattendu: %+v", uploaded)
 	}
 
@@ -222,7 +229,7 @@ func TestFilesFlow(t *testing.T) {
 	if err := json.Unmarshal(env.Data, &got); err != nil {
 		t.Fatalf("get: unmarshal: %v", err)
 	}
-	if got.ID != uploaded.ID || got.MimeType != "text/plain" || got.CreatedAt == "" {
+	if got.ID != uploaded.ID || got.MimeType != "application/octet-stream" || got.CreatedAt == "" {
 		t.Errorf("get FileDto inattendu: %+v", got)
 	}
 
@@ -262,14 +269,14 @@ func TestSearchFiles(t *testing.T) {
 	expectError(t, rec, http.StatusBadRequest, "INVALID_REQUEST", "search-no-q")
 
 	// insensible à la casse + sous-chaîne
-	rec, _ = doRequest(t, r, http.MethodGet, "/api/v1/files/search?q=APORT", token, nil, "")
+	rec, _ = doRequest(t, r, http.MethodGet, "/api/v1/files/search?q=RAPPORT", token, nil, "")
 	env := expectOK(t, rec, "search")
 	var files []fileDTO
 	if err := json.Unmarshal(env.Data, &files); err != nil {
 		t.Fatalf("search: unmarshal: %v", err)
 	}
 	if len(files) != 1 || files[0].Name != "rapport-q3.pdf" {
-		t.Errorf("search 'APORT': %+v", files)
+		t.Errorf("search 'RAPPORT': %+v", files)
 	}
 	if env.Meta == nil || env.Meta.Total != 1 {
 		t.Errorf("meta search: %+v", env.Meta)

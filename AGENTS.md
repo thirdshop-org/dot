@@ -33,10 +33,10 @@ cd mobile && npm run test:db
 - Entry point: `backend/cmd/server/main.go` (wiring gin + config + routes)
 - `config/` — env (`godotenv`, optionnel) + defaults: `PORT`, `DATABASE_URL`, `UPLOAD_DIR`, `MAX_FILE_SIZE_MB`, `OCR_LANG`, secret paseto
 - `models/` — domain entities (users, devices, documents/resources, clients)
-- `service/` — business logic (permissions, upload, create folder, move)
-- `handlers/` — HTTP handlers (health, devices register + paseto, files CRUD/upload — réels ; search/OCR/sync stubs 501)
-- `repository/` — Postgres persistence réelle (`repository.Resources` : insert/list/get/soft-delete scoping `owner_id`, `repository.Devices.Upsert`) ; IDs are TEXT 32-hex, `NewID()` = `crypto/rand` 16 octets hex (jamais UUID conversion, cf. `docs/api-v1.md`)
-- `db/` — package migrations (`golang-migrate/v4`, embarquées via `embed` dans `db/migrations/*.sql`) : `db.MigrateDatabase(url)` au boot du serveur ; test harness `db/migrations_test.go` (up → assertions schéma → down, `TEST_DATABASE_URL`, skip si PG indisponible)
+- `service/` — business logic (permissions, upload, create folder, move, **sync outbox + snapshot**)
+- `handlers/` — HTTP handlers (health, devices register + paseto, files CRUD/upload/search, folders, **sync/ops + sync/permissions** — réels ; OCR stubs 501)
+- `repository/` — Postgres persistence réelle (`repository.Resources` : insert/list/get/soft-delete scoping `owner_id`, **search, move, rename, root-name unique index**, `repository.Devices.Upsert`, `repository.Operations` : trace outbox idempotente `(device_id, operation_id)`, `ListOwned` pour le snapshot) ; IDs sont TEXT 32-hex, `NewID()` = `crypto/rand` 16 octets hex (jamais UUID conversion, cf. `docs/api-v1.md`)
+- `db/` — package migrations (`golang-migrate/v4`, embarquées via `embed` dans `db/migrations/*.sql`) : `db.MigrateDatabase(url)` au boot du serveur ; test harness `db/migrations_test.go` (up → assertions schéma → down, `TEST_DATABASE_URL`, skip si PG indisponible) ; `dbtest/` — helper cross-package pour les tests repo/handlers (crée la DB test si absente, reset schema, migrate ; skip si PG down)
 - `ocr/` — OCR engine behind an interface (Tesseract system call, `OCR_LANG` défaut `fra+eng`)
 - Response helpers: `pkg/api/response.go`
 - File uploads stored in `backend/uploads/`
