@@ -42,6 +42,11 @@ export type OcrJob = {
   error?: string | null;
 };
 
+export type DeviceRegistration = {
+  deviceId: string;
+  token: string;
+};
+
 export type ListParams = {
   page?: number;
   pageSize?: number;

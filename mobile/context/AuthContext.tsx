@@ -1,7 +1,12 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useSyncDevice } from '../features/syncDevice';
-import { getDeviceUserId } from '../services/localStorage';
+import { api, setAuthToken } from '../api/client';
+import {
+  getDeviceAuthToken,
+  getDeviceUserId,
+  saveDeviceAuthToken,
+} from '../services/localStorage';
 import type { AuthContextValue, User } from './AuthContext.types';
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -13,15 +18,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let active = true;
-    (async () => {
-      try {
-        const id = await getDeviceUserId();
-        if (active) setDeviceUserId(id);
-      } catch (error) {
-        console.warn('device identity unavailable', error);
-      }
-    })();
 
+    const bootstrap = async () => {
+      const id = await getDeviceUserId();
+      if (active) setDeviceUserId(id);
+
+      try {
+        let token = await getDeviceAuthToken();
+        if ( !token ) {
+          const { data } = await api.registerDevice(id);
+          token = data.token;
+          await saveDeviceAuthToken(token);
+        }
+        setAuthToken(token);
+      } catch (error) {
+        console.warn('device registration failed (offline?)', error);
+      }
+    };
+
+    bootstrap();
     useSyncDevice();
 
     return () => {

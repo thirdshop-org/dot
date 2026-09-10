@@ -1,5 +1,5 @@
 import { getSession } from '../session';
-import { DEVICE_USER_ID_KEY, PREFERENCES_KEY } from '../schema';
+import { AUTH_TOKEN_KEY, DEVICE_USER_ID_KEY, PREFERENCES_KEY } from '../schema';
 import type { UserPreferences } from '../types';
 
 const DEFAULT_PREFERENCES: UserPreferences = {
@@ -34,6 +34,26 @@ export async function saveUserPreferences(preferences: UserPreferences): Promise
      ON CONFLICT("key") DO UPDATE SET "value" = excluded."value", updated_at = excluded.updated_at`,
     PREFERENCES_KEY,
     JSON.stringify(preferences),
+    Date.now(),
+  );
+}
+
+export async function getDeviceAuthToken(): Promise<string | null> {
+  const db = await getSession();
+  const row = await db.getFirstAsync<{ value: string }>(
+    'SELECT "value" FROM user_preferences WHERE "key" = ?',
+    AUTH_TOKEN_KEY,
+  );
+  return row?.value ?? null;
+}
+
+export async function saveDeviceAuthToken(token: string): Promise<void> {
+  const db = await getSession();
+  await db.runAsync(
+    `INSERT INTO user_preferences ("key", "value", updated_at) VALUES (?, ?, ?)
+     ON CONFLICT("key") DO UPDATE SET "value" = excluded."value", updated_at = excluded.updated_at`,
+    AUTH_TOKEN_KEY,
+    token,
     Date.now(),
   );
 }

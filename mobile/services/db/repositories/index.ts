@@ -11,6 +11,8 @@ export {
   saveUserPreferences,
   getUserPreferences,
   getDeviceUserId,
+  getDeviceAuthToken,
+  saveDeviceAuthToken,
 } from './preferences';
 export {
   getResourcePermission,

@@ -16,7 +16,8 @@ Références : `V2.md` (modèle cible), `mobile/services/db/` (conventions sync)
 
 ## 2. Identité et identifiants (invariants)
 
-- **Device-first** : le device s'enregistre (`POST /devices`) et reçoit un token **paseto** qu'il stocke localement. Requêtes suivantes : `Authorization: Bearer <token>` ; le serveur en résout le `device_id`. V1 : pas de comptes utilisateurs (`users.user_id` reste NULL sur `devices`).
+- **Device-first** : le device s'enregistre (`POST /devices`) avec son identité **générée localement** (`device_user_id` 32-hex mobile) et reçoit en échange un token **paseto** v4-local qu'il stocke. Requêtes suivantes : `Authorization: Bearer <token>` (toutes les routes **sauf `/health`**), résolu en `device_id` par middleware. V1 : pas de comptes utilisateurs (`users.user_id` reste NULL sur `devices`).
+- La ré-émission est tolérée (le server décide de ré-énoncer un token ; la déduplication/persistance des devices arrive avec la table `devices`).
 - **Identifiants** : `resource_id`, `device_user_id`, `token` de share-link = **TEXT opaque 32-hex minuscule**, `^[0-9a-f]{32}$`. Le mobile génère toujours `lower(hex(randomblob(16)))` ; le serveur stocke **tel quel**, sans conversion UUID (cf. note V2.md). Contrainte serveur : `CHECK (col ~ '^[0-9a-f]{32}$')` sur toutes les colonnes id + FK.
 - Horodatages échangés en **millisecondes epoch** (le mobile utilise `Date.now()`).
 
@@ -25,7 +26,7 @@ Références : `V2.md` (modèle cible), `mobile/services/db/` (conventions sync)
 | Méthode | Path | Requête | Réponse `data` | Statut absence |
 |---|---|---|---|---|
 | GET | `/health` | — | `{ "status": "healthy" }` | — |
-| POST | `/devices` | `{}` | `{ "deviceId": "…32-hex", "token": "paseto…" }` | — |
+| POST | `/devices` | `{ "deviceId": "…32-hex" }` (client-generated) | `{ "deviceId": "…32-hex", "token": "v4.local…" }` | `INVALID_DEVICE_ID` |
 | GET | `/files` | query `folderId?`, `page?`, `pageSize?`, `sort?` | `FileDto[]` (+ `meta`) | — |
 | GET | `/files/:id` | — | `FileDto` | `NOT_FOUND` |
 | DELETE | `/files/:id` | — | `{ "id": "…" }` | `NOT_FOUND` |

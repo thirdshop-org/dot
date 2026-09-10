@@ -6,6 +6,8 @@ export const PREFERENCES_KEY = 'user_preferences';
 
 export const DEVICE_USER_ID_KEY = 'device_user_id';
 
+export const AUTH_TOKEN_KEY = 'auth_token';
+
 export const FOLDER_COLUMNS = [
   'resource_id',
   'uri',

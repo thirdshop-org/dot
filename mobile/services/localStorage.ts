@@ -1,6 +1,8 @@
 export {
   getUserPreferences,
   getDeviceUserId,
+  getDeviceAuthToken,
+  saveDeviceAuthToken,
   getFolders,
   getFolderFolders,
   getFolder,

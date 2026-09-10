@@ -1,6 +1,7 @@
 import type {
   ApiData,
   ApiErrorBody,
+  DeviceRegistration,
   FileDto,
   FolderDto,
   ListFilesParams,
@@ -10,6 +11,12 @@ import type {
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://localhost:8080/api/v1';
 
 export const DEFAULT_TIMEOUT_MS = 15_000;
+
+let authToken: string | null = null;
+
+export function setAuthToken(token: string | null): void {
+  authToken = token;
+}
 
 type QueryParams = Record<string, string | number | boolean | undefined | null>;
 
@@ -22,6 +29,15 @@ function toQuery(params?: QueryParams): string {
   }
   const query = search.toString();
   return query ? `?${query}` : '';
+}
+
+function mergeHeaders(init?: HeadersInit): HeadersInit | undefined {
+  if ( !authToken ) return init;
+  const merged = new Headers(init);
+  if ( !merged.has('Authorization') ) {
+    merged.set('Authorization', `Bearer ${authToken}`);
+  }
+  return merged;
 }
 
 export class ApiError extends Error {
@@ -46,6 +62,7 @@ async function request<T>(
     try {
       response = await fetch(`${API_BASE_URL}${path}`, {
         ...init,
+        headers: mergeHeaders(init.headers),
         signal: controller.signal,
       });
     } catch {
@@ -75,6 +92,13 @@ export const api = {
   getApiBaseUrl: () => API_BASE_URL,
 
   health: () => request<{ status: string }>('/health'),
+
+  registerDevice: (deviceId: string) =>
+    request<DeviceRegistration>('/devices', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deviceId }),
+    }),
 
   listFiles: (params?: ListFilesParams) =>
     request<FileDto[]>(`/files${toQuery(params)}`),

@@ -7,29 +7,34 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/vaultdrop/backend/config"
 	"github.com/vaultdrop/backend/handlers"
+	"github.com/vaultdrop/backend/pkg/auth"
 )
 
 func newRouter() *gin.Engine {
 
 	r := gin.Default()
 
-	api := r.Group("/api/v1")
+	public := r.Group("/api/v1")
 	{
-		api.GET("/health", handlers.Health)
-		api.POST("/devices", handlers.DevicesRegister)
+		public.GET("/health", handlers.Health)
+		public.POST("/devices", handlers.DevicesRegister)
+	}
 
-		api.GET("/files", handlers.FilesList)
-		api.GET("/files/search", handlers.FilesSearch)
-		api.GET("/files/:id", handlers.FilesGet)
-		api.DELETE("/files/:id", handlers.FilesDelete)
-		api.GET("/files/folders", handlers.FoldersList)
-		api.POST("/files/upload", handlers.FilesUpload)
+	protected := r.Group("/api/v1")
+	protected.Use(handlers.RequireDevice)
+	{
+		protected.GET("/files", handlers.FilesList)
+		protected.GET("/files/search", handlers.FilesSearch)
+		protected.GET("/files/:id", handlers.FilesGet)
+		protected.DELETE("/files/:id", handlers.FilesDelete)
+		protected.GET("/files/folders", handlers.FoldersList)
+		protected.POST("/files/upload", handlers.FilesUpload)
 
-		api.POST("/ocr/jobs", handlers.OcrJobsCreate)
-		api.GET("/ocr/jobs/:id", handlers.OcrJobsGet)
+		protected.POST("/ocr/jobs", handlers.OcrJobsCreate)
+		protected.GET("/ocr/jobs/:id", handlers.OcrJobsGet)
 
-		api.POST("/sync/ops", handlers.SyncOpsPush)
-		api.GET("/sync/permissions", handlers.SyncPermissionsGet)
+		protected.POST("/sync/ops", handlers.SyncOpsPush)
+		protected.GET("/sync/permissions", handlers.SyncPermissionsGet)
 	}
 
 	return r
@@ -43,6 +48,12 @@ func main() {
 	if err != nil {
 		log.Fatalln(err)
 	}
+
+	authManager, err := auth.NewManager(cfg.AuthSecret)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	handlers.Auth = authManager
 
 	if err := newRouter().Run(fmt.Sprintf(":%d", cfg.Port)); err != nil {
 		log.Fatalln(err)
