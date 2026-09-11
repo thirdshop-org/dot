@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.vaultdrop.mobile.auth.TokenProvider
 import com.vaultdrop.mobile.data.local.entity.FileEntity
+import com.vaultdrop.mobile.data.local.referenceDate
 import com.vaultdrop.mobile.data.remote.ApiException
 import com.vaultdrop.mobile.data.repository.FileRepository
 import com.vaultdrop.mobile.data.repository.FolderRepository
@@ -36,7 +37,7 @@ class FolderListViewModel @Inject constructor(
         refresh()
     }
 
-    /** Grille d'accueil : tous les fichiers visibles, groupés par jour (addedAt). */
+    /** Grille d'accueil : tous les fichiers visibles, groupés par jour (date de référence). */
     private fun observeFiles() {
         viewModelScope.launch {
             fileRepository.observeAllVisible().collect { files ->
@@ -45,16 +46,16 @@ class FolderListViewModel @Inject constructor(
         }
     }
 
-    /** Miroir de `groupFilesByDay` (app/index.tsx) : sections triées du plus récent
-     *  au plus vieux, fichiers d'un jour triés par date décroissante, en paires. */
+    /** Sections triées du plus récent au plus vieux, fichiers d'un jour triés par date
+     *  décroissante, en paires. La date de référence = modification SAF, sinon ajout. */
     private fun groupFilesByDay(files: List<FileEntity>): List<FileSection> {
         val zone = ZoneId.systemDefault()
         return files
-            .groupBy { startOfDay(it.addedAt, zone) }
+            .groupBy { startOfDay(it.referenceDate, zone) }
             .entries
             .sortedByDescending { it.key }
             .map { (day, list) ->
-                val rows = list.sortedByDescending { it.addedAt }
+                val rows = list.sortedByDescending { it.referenceDate }
                     .chunked(2)
                     .map { pair ->
                         FilePair(

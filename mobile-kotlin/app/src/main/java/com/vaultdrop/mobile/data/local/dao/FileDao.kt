@@ -15,7 +15,7 @@ interface FileDao {
     @Query("SELECT * FROM files WHERE folder_resource_id = :folderResourceId AND \"exists\" = 1 ORDER BY name ASC")
     fun observeByFolder(folderResourceId: String): Flow<List<FileEntity>>
 
-    @Query("SELECT * FROM files WHERE \"exists\" = 1 ORDER BY added_at DESC, name ASC")
+    @Query("SELECT * FROM files WHERE \"exists\" = 1 ORDER BY COALESCE(last_modified, added_at) DESC, name ASC")
     fun observeAllVisible(): Flow<List<FileEntity>>
 
     @Query("SELECT * FROM files WHERE resource_id = :resourceId LIMIT 1")
@@ -37,7 +37,7 @@ interface FileDao {
         SELECT * FROM files
         WHERE "exists" = 1
           AND (:category IS NULL OR category = :category)
-        ORDER BY added_at DESC, name ASC
+        ORDER BY COALESCE(last_modified, added_at) DESC, name ASC
         LIMIT :limit
     """)
     fun recentFiles(category: String?, limit: Int): Flow<List<FileEntity>>

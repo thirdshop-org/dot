@@ -3,7 +3,7 @@ package com.vaultdrop.mobile.ui.document
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.vaultdrop.mobile.data.local.entity.FileEntity
-import com.vaultdrop.mobile.data.local.orderedByAddedAtDesc
+import com.vaultdrop.mobile.data.local.orderedByReferenceDateDesc
 import com.vaultdrop.mobile.data.repository.FileRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,7 +27,7 @@ class DocumentViewerViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             fileRepository.observeAllVisible().collect { files ->
-                _documents.value = files.orderedByAddedAtDesc()
+                _documents.value = files.orderedByReferenceDateDesc()
             }
         }
     }

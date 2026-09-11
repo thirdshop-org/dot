@@ -39,7 +39,7 @@ class FileRepository @Inject constructor(
             category = category,
         )
 
-    /** Les `limit` fichiers les plus récemment ajoutés, filtrés par catégorie. */
+    /** Les `limit` fichiers les plus récents (date de référence), filtrés par catégorie. */
     fun recentFiles(category: String?, limit: Int = RECENT_LIMIT): Flow<List<FileEntity>> =
         fileDao.recentFiles(category = category, limit = limit)
 
