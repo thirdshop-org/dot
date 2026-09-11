@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BrokenImage
 import androidx.compose.material3.CircularProgressIndicator
@@ -58,6 +60,8 @@ fun PdfPageViewer(
     contentResolver: ContentResolver,
     onOpenExternalFailed: () -> Unit,
     modifier: Modifier = Modifier,
+    listState: LazyListState = rememberLazyListState(),
+    onPageCountChanged: ((Int) -> Unit)? = null,
 ) {
     val uri = file.uri
     if (uri == null) {
@@ -80,6 +84,7 @@ fun PdfPageViewer(
         loadFailed = false
         if (document.load()) {
             pageCount = document.pageCount
+            onPageCountChanged?.invoke(pageCount)
         } else {
             loadFailed = true
         }
@@ -101,6 +106,7 @@ fun PdfPageViewer(
             val maxHeightPx = with(density) { maxHeight.toPx().toInt() }
 
             LazyColumn(
+                state = listState,
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),

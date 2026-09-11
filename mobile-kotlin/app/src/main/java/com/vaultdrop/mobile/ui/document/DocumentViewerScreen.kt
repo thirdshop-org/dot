@@ -1,6 +1,11 @@
 package com.vaultdrop.mobile.ui.document
 
+import android.app.Activity
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -8,8 +13,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Card
@@ -21,26 +28,41 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.vaultdrop.mobile.R
 import com.vaultdrop.mobile.data.local.entity.FileEntity
+import com.vaultdrop.mobile.domain.FileCategory
+import com.vaultdrop.mobile.ui.components.categoryValue
 import com.vaultdrop.mobile.ui.document.content.DocumentContentViewer
+import com.vaultdrop.mobile.ui.document.content.PdfPageViewer
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.ZoneId
@@ -52,6 +74,9 @@ import java.util.Locale
  * Consultation d'un document : lecteur intégré (PDF / image / texte) ou fallback
  * externe, carte de métadonnées, navigation au swipe entre les documents (même
  * fil que l'écran d'accueil).
+ *
+ * Les PDF locaux passent en mode plein écran sur tap : barres système et barre
+ * d'outils masquées, document verrouillé, indication de page en bas.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -86,36 +111,139 @@ fun DocumentViewerScreen(
         }
     }
 
+    var fullscreen by rememberSaveable { mutableStateOf(false) }
+    val canFullscreen = currentFile?.canPdfFullscreen() == true
+
+    // Mode immersif : masque les barres système en plein écran, les restaure
+    // à la sortie ou si l'écran est composé autrement.
+    val view = LocalView.current
+    DisposableEffect(fullscreen, canFullscreen) {
+        val window = (view.context as? Activity)?.window
+        if (window != null) {
+            val controller = WindowCompat.getInsetsController(window, view)
+            if (fullscreen && canFullscreen) {
+                controller.systemBarsBehavior =
+                    WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                controller.hide(WindowInsetsCompat.Type.systemBars())
+            } else {
+                controller.show(WindowInsetsCompat.Type.systemBars())
+            }
+        }
+        onDispose {
+            val restoredWindow = (view.context as? Activity)?.window
+            if (restoredWindow != null) {
+                WindowCompat.getInsetsController(restoredWindow, view)
+                    .show(WindowInsetsCompat.Type.systemBars())
+            }
+        }
+    }
+
+    // En plein écran, retour système = retour à la vue classique plutôt que de
+    // quitter le document.
+    BackHandler(enabled = fullscreen && canFullscreen) { fullscreen = false }
+
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = currentFile?.name ?: stringResource(R.string.document),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.back),
+            if (!(fullscreen && canFullscreen)) {
+                TopAppBar(
+                    title = {
+                        Text(
+                            text = currentFile?.name ?: stringResource(R.string.document),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
-                    }
-                },
-            )
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = stringResource(R.string.back),
+                            )
+                        }
+                    },
+                )
+            }
         },
     ) { padding ->
-        HorizontalPager(
-            state = pagerState,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
-        ) { page ->
-            val file = documents.getOrNull(page)
-            if (file != null) DocumentViewerPage(file = file, onOpenExternalFailed = onOpenExternalFailed)
+        val current = currentFile
+        if (fullscreen && canFullscreen && current != null) {
+            PdfFullscreenReader(
+                file = current,
+                onOpenExternalFailed = onOpenExternalFailed,
+                onExitFullscreen = { fullscreen = false },
+                modifier = Modifier.fillMaxSize(),
+            )
+        } else {
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+            ) { page ->
+                val file = documents.getOrNull(page)
+                if (file != null) {
+                    DocumentViewerPage(
+                        file = file,
+                        onOpenExternalFailed = onOpenExternalFailed,
+                        onEnterFullscreen = file.canPdfFullscreen()
+                            .takeIf { it }
+                            ?.let { { fullscreen = true } },
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Lecture PDF focus : le document remplit l'écran (fond noir), un tap quitte le
+ * plein écran, le défilement vertical reste actif et une pastille indique la
+ * page courante.
+ */
+@Composable
+private fun PdfFullscreenReader(
+    file: FileEntity,
+    onOpenExternalFailed: () -> Unit,
+    onExitFullscreen: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val contentResolver = LocalContext.current.contentResolver
+    val listState = rememberLazyListState()
+    var pageCount by remember(file.resourceId) { mutableIntStateOf(0) }
+    val currentPage by remember { derivedStateOf { listState.firstVisibleItemIndex + 1 } }
+
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .pointerInput(file.resourceId) {
+                detectTapGestures(onTap = { onExitFullscreen() })
+            },
+    ) {
+        PdfPageViewer(
+            file = file,
+            contentResolver = contentResolver,
+            onOpenExternalFailed = onOpenExternalFailed,
+            modifier = Modifier.fillMaxSize(),
+            listState = listState,
+            onPageCountChanged = { pageCount = it },
+        )
+        if (pageCount > 0) {
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 16.dp),
+                shape = RoundedCornerShape(percent = 50),
+                color = MaterialTheme.colorScheme.inverseSurface.copy(alpha = 0.85f),
+            ) {
+                Text(
+                    text = "$currentPage / $pageCount",
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.inverseOnSurface,
+                )
+            }
         }
     }
 }
@@ -124,6 +252,7 @@ fun DocumentViewerScreen(
 private fun DocumentViewerPage(
     file: FileEntity,
     onOpenExternalFailed: () -> Unit,
+    onEnterFullscreen: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -131,15 +260,24 @@ private fun DocumentViewerPage(
             .fillMaxSize()
             .padding(16.dp),
     ) {
-        // Lecteur central : dispatch par catégorie (PDF / image / texte /
-        // délégation externe), état dédié pour les fichiers cloud-only.
-        DocumentContentViewer(
-            file = file,
-            onOpenExternalFailed = onOpenExternalFailed,
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .weight(1f),
-        )
+                .weight(1f)
+                .then(
+                    if (onEnterFullscreen != null) Modifier.pointerInput(onEnterFullscreen) {
+                        detectTapGestures(onTap = { onEnterFullscreen() })
+                    } else Modifier,
+                ),
+        ) {
+            // Lecteur central : dispatch par catégorie (PDF / image / texte /
+            // délégation externe), état dédié pour les fichiers cloud-only.
+            DocumentContentViewer(
+                file = file,
+                onOpenExternalFailed = onOpenExternalFailed,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
 
         Spacer(Modifier.height(16.dp))
 
@@ -186,6 +324,10 @@ private fun fileTypeLabel(file: FileEntity): String =
     file.extension?.takeIf { it.isNotBlank() }?.uppercase(Locale.getDefault())
         ?: file.mimeType?.uppercase(Locale.getDefault())
         ?: "—"
+
+/** Vrai si le fichier est un PDF avec un contenu local consultable en plein écran. */
+private fun FileEntity.canPdfFullscreen(): Boolean =
+    uri != null && categoryValue() == FileCategory.PDF
 
 private fun formatDateTime(millis: Long): String {
     val locale = Locale.getDefault()
