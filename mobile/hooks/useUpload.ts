@@ -32,7 +32,7 @@ export function useCreateOcrJob() {
   return useMutation({
     mutationFn: (fileId: string) => api.createOcrJob(fileId),
     onSuccess: (result) => {
-      queryClient.setQueryData(['ocr', result.data.id], result.data);
+      queryClient.setQueryData(['ocr', result.data.id], result);
     },
   });
 }

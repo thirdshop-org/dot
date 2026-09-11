@@ -1,4 +1,4 @@
-import { listDirectory, listFoldersChunked, yieldToMainThread } from '../services/safDirectory';
+import { listEntries, listFoldersChunked, yieldToMainThread } from '../services/safWalk';
 import type { FileEntry } from '../services/safDirectory.types';
 import {
   checkpointDatabase,
@@ -37,55 +37,77 @@ function storedToEntry(stored: StoredFile): FileEntry {
 }
 
 function isChildOf(uri: string, rootUri: string): boolean {
-  return uri.startsWith(rootUri);
+  return uri === rootUri || uri.startsWith(rootUri + '/');
 }
 
-export async function syncRoot(rootResourceId: string): Promise<SyncResult> {
-  const root = await getFolder(rootResourceId);
-  if (!root) throw new Error('unknown root folder');
-  if (!root.uri) throw new Error(`root '${root.name}' has no physical uri`);
+// Single-flight : toutes les marches SAF (`syncRoot` manuel et boucle de fond)
+// sont sérialisées sur une chaîne module-level. Sans cela, deux `withTransaction`
+// concurrents entrelacent leurs upserts et heurtent l'index partiel unique sur
+// `uri` → `SQLITE_CONSTRAINT` → transaction annulée (FEEDBACK #8).
+let chain: Promise<unknown> = Promise.resolve();
 
+function enqueue<T>(work: () => Promise<T>): Promise<T> {
+  const p = chain.then(work, work);
+  chain = p.catch(() => {});
+  return p;
+}
+
+async function doSyncRoot(root: StoredFolder): Promise<SyncResult> {
+  const rootUri = root.uri;
+  if (!rootUri) throw new Error(`root '${root.name}' has no physical uri`);
+
+  // Phase 1 — listing SAF (I/O disque, HORS transaction) : la phase d'écriture
+  // ne doit verrouiller la base que pour les writes SQL purs, pas pendant tout
+  // le parcours (FEEDBACK #9 : l'UI lit la DB pendant un walk de plusieurs minutes).
+  const folders = (
+    await listFoldersChunked(rootUri, { recursive: true, includeRoot: true })
+  ).sort((a, b) => uriDepth(a.uri) - uriDepth(b.uri));
+
+  const fileEntries = new Map<string, FileEntry[]>();
+  let lastYield = Date.now();
+  for (const folder of folders) {
+    if (!folder.uri) continue;
+    if (Date.now() - lastYield >= 16) {
+      lastYield = Date.now();
+      await yieldToMainThread();
+    }
+    fileEntries.set(
+      folder.uri,
+      listEntries(folder.uri).filter((entry) => !entry.isDirectory),
+    );
+  }
+
+  // Phase 2 — writes DB (transaction courte, SQL pur).
   return withTransaction(async () => {
     const seen = new Set<string>();
-
-    const folders = (
-      await listFoldersChunked(root.uri as string, { recursive: true, includeRoot: true })
-    ).sort((a, b) => uriDepth(a.uri) - uriDepth(b.uri));
-
     const resourceIdByUri = new Map<string, string>();
-    const savedFolders: StoredFolder[] = [];
+    let files = 0;
+
     for (const folder of folders) {
       seen.add(folder.uri);
       const parentUri = dirname(folder.uri);
       const parentResourceId =
-        folder.uri === root.uri ? null : (resourceIdByUri.get(parentUri) ?? root.resource_id);
+        folder.uri === rootUri ? null : (resourceIdByUri.get(parentUri) ?? root.resource_id);
       const saved = await saveFolder(
         { uri: folder.uri, name: folder.name, exists: folder.exists },
         { parentResourceId },
       );
       resourceIdByUri.set(folder.uri, saved.resource_id);
-      savedFolders.push(saved);
     }
 
-    let lastYield = Date.now();
-    let files = 0;
-    for (const folder of savedFolders) {
+    for (const folder of folders) {
       if (!folder.uri) continue;
-      if (Date.now() - lastYield >= 16) {
-        lastYield = Date.now();
-        await yieldToMainThread();
-      }
-      for (const entry of listDirectory(folder.uri)) {
-        if (entry.isDirectory) continue;
+      const entries = fileEntries.get(folder.uri) ?? [];
+      for (const entry of entries) {
         seen.add(entry.uri);
-        await saveFile(entry, folder.resource_id);
+        await saveFile(entry, resourceIdByUri.get(folder.uri)!);
         files++;
       }
     }
 
     let missing = 0;
     for (const folder of await getFolders()) {
-      if (folder.uri && isChildOf(folder.uri, root.uri as string) && folder.exists && !seen.has(folder.uri)) {
+      if (folder.uri && isChildOf(folder.uri, rootUri) && folder.exists && !seen.has(folder.uri)) {
         await saveFolder(
           { uri: folder.uri, name: folder.name, exists: false, resource_id: folder.resource_id },
           { syncStatus: folder.syncStatus },
@@ -94,7 +116,7 @@ export async function syncRoot(rootResourceId: string): Promise<SyncResult> {
       }
     }
     for (const file of await getFiles()) {
-      if (file.uri && isChildOf(file.uri, root.uri as string) && file.exists && !seen.has(file.uri)) {
+      if (file.uri && isChildOf(file.uri, rootUri) && file.exists && !seen.has(file.uri)) {
         await saveFile(storedToEntry(file), file.folder_resource_id, {
           resource_id: file.resource_id,
           syncStatus: file.syncStatus,
@@ -103,20 +125,28 @@ export async function syncRoot(rootResourceId: string): Promise<SyncResult> {
       }
     }
 
-    return { rootUri: root.uri as string, folders: folders.length, files, missing };
+    return { rootUri, folders: folders.length, files, missing };
   });
 }
 
+export async function syncRoot(rootResourceId: string): Promise<SyncResult> {
+  const root = await getFolder(rootResourceId);
+  if (!root) throw new Error('unknown root folder');
+  return enqueue(() => doSyncRoot(root));
+}
+
 export async function syncDevice(): Promise<SyncResult[]> {
-  const roots = (await getFolders()).filter(
-    (folder) => folder.parent_resource_id === null && folder.uri !== null,
-  );
-  const results: SyncResult[] = [];
-  for (const root of roots) {
-    results.push(await syncRoot(root.resource_id));
-  }
-  await checkpointDatabase();
-  return results;
+  return enqueue(async () => {
+    const roots = (await getFolders()).filter(
+      (folder) => folder.parent_resource_id === null && folder.uri !== null,
+    );
+    const results: SyncResult[] = [];
+    for (const root of roots) {
+      results.push(await doSyncRoot(root));
+    }
+    await checkpointDatabase();
+    return results;
+  });
 }
 
 export function useSyncDevice(intervalMs = 30_000): () => void {

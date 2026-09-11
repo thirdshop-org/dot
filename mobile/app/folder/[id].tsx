@@ -34,8 +34,8 @@ export default function FolderScreen() {
       return;
     }
     setFolder(current);
-    setSubfolders(await getFolderFolders(id));
-    setFiles(await getFiles(id));
+    setSubfolders((await getFolderFolders(id)).filter(f => f.exists));
+    setFiles((await getFiles(id)).filter(f => f.exists));
   }, [id, router]);
 
   useFocusEffect(

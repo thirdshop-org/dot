@@ -150,6 +150,9 @@ export async function canAccess(
 
   const exactCache = await getResourcePermission(resourceId, resourceType);
   if (exactCache) {
+    if (exactCache.ownerId === deviceUserId) {
+      return { allowed: true, access: 'owner', source: 'owner', stale: false, expiresAt: null };
+    }
     if (exactCache.expiresAt != null && exactCache.expiresAt < now) {
       return {
         allowed: false,

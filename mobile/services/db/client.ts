@@ -107,9 +107,20 @@ export async function checkpointDatabase(): Promise<void> {
   }
 }
 
+type WithTransactionImpl = <T>(work: (db: SQLiteDatabase) => Promise<T>) => Promise<T>;
+
+let withTransactionOverride: WithTransactionImpl | null = null;
+
+/** Test-only seam : les tests Node n'ont pas expo-sqlite, `syncRoot`/`syncDevice`
+ * substituent leur transaction par un simple `work()`. `null` en production. */
+export function __setWithTransactionForTests(impl: WithTransactionImpl | null): void {
+  withTransactionOverride = impl;
+}
+
 export async function withTransaction<T>(
   work: (db: SQLiteDatabase) => Promise<T>,
 ): Promise<T> {
+  if (withTransactionOverride) return withTransactionOverride(work);
   return withDatabaseRetry(async (db) => {
     let result!: T;
     await db.withTransactionAsync(async () => {

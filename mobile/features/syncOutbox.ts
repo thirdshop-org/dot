@@ -1,4 +1,4 @@
-import { api, hasAuthToken } from '../api/client';
+import { api, hasAuthToken, ApiError } from '../api/client';
 import type { SyncOperation } from '../api/types';
 import {
   getActiveUserId,
@@ -17,6 +17,13 @@ const SYNC_BATCH_SIZE = 50;
 // (réseau, proxy, 5xx).  Aucun compteur d'attempts n'est incrémenté pour éviter
 // les dead-letters prématurées.
 const TRANSIENT_RETRY_MS = 15_000;
+
+function isTransientError(error: unknown): boolean {
+  if (!(error instanceof ApiError)) return true;
+  if (error.code === 'NETWORK_ERROR' || error.code.startsWith('HTTP_5')) return true;
+  if (error.code.startsWith('HTTP_4')) return false;
+  return true;
+}
 
 function toSyncOperation(op: PendingOperation): SyncOperation {
   return {
@@ -43,12 +50,19 @@ export async function pushPendingOps(): Promise<PushResult> {
   let result;
   try {
     result = (await api.syncOps(queued.map(toSyncOperation))).data;
-  } catch {
-    // Erreur transitoire : repousser sans toucher aux attempts
-    // (aucun dead-letter prématuré).
-    const retryAt = Date.now() + TRANSIENT_RETRY_MS;
-    await scheduleRetries(queued.map((op) => op.id), retryAt);
-    return { pushed: 0, retried: queued.length };
+  } catch (error) {
+    if (isTransientError(error)) {
+      const retryAt = Date.now() + TRANSIENT_RETRY_MS;
+      await scheduleRetries(queued.map((op) => op.id), retryAt);
+      return { pushed: 0, retried: queued.length };
+    }
+    const firstOp = queued[0];
+    await markPendingOperation(
+      firstOp.id,
+      'failed',
+      error instanceof ApiError ? `${error.code}: ${error.message}` : String(error),
+    );
+    return { pushed: 0, retried: 0 };
   }
 
   // `applied` = INDEX : les opérations [0, applied) sont confirmées côté serveur.

@@ -67,3 +67,9 @@ export async function listFoldersChunked(
   await visit(directoryUri);
   return result;
 }
+
+export function listEntries(directoryUri: string): DirectoryEntry[] {
+  const impl = walkImpl;
+  if (!impl) throw new Error('SafWalkImpl not configured');
+  return impl.list(directoryUri);
+}

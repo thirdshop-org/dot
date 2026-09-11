@@ -82,7 +82,7 @@ export default function Index() {
   const [sections, setSections] = useState<FileSection[]>([]);
 
   const load = useCallback(async () => {
-    const files = await getFiles();
+    const files = (await getFiles()).filter(f => f.exists);
     setSections(groupFilesByDay(files));
   }, []);
 
