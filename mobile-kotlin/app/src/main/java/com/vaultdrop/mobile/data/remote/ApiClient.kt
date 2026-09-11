@@ -5,6 +5,7 @@ import com.squareup.moshi.Moshi
 import com.vaultdrop.mobile.data.remote.dto.ApiEnvelope
 import com.vaultdrop.mobile.data.remote.dto.ApiErrorEnvelope
 import com.vaultdrop.mobile.data.remote.dto.DeviceRegistrationDto
+import com.vaultdrop.mobile.data.remote.dto.FileDto
 import com.vaultdrop.mobile.data.remote.dto.FolderDto
 import com.vaultdrop.mobile.data.remote.dto.LoginRequestDto
 import com.vaultdrop.mobile.data.remote.dto.LoginResponseDto
@@ -47,6 +48,9 @@ class ApiClient @Inject constructor(
     var onUnauthorized: (() -> Unit)? = null
 
     suspend fun listFolders(): List<FolderDto> = unwrap({ apiService.listFolders() })
+
+    suspend fun listFiles(folderId: String? = null, page: Int? = null, pageSize: Int? = null): List<FileDto> =
+        unwrap({ apiService.listFiles(folderId, page, pageSize) })
 
     suspend fun registerDevice(deviceId: String): String =
         unwrap({ apiService.registerDevice(DeviceRegistrationDto(deviceId)) }).deviceId

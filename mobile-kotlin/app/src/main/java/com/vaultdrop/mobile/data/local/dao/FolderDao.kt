@@ -20,6 +20,9 @@ interface FolderDao {
     @Query("SELECT * FROM folders WHERE parent_resource_id IS NULL ORDER BY name ASC")
     suspend fun getRootFolders(): List<FolderEntity>
 
+    @Query("SELECT * FROM folders WHERE parent_resource_id = :parentResourceId AND \"exists\" = 1 ORDER BY name ASC")
+    fun observeByParent(parentResourceId: String): Flow<List<FolderEntity>>
+
     @Query("SELECT * FROM folders WHERE parent_resource_id = :parentResourceId ORDER BY name ASC")
     suspend fun getByParent(parentResourceId: String): List<FolderEntity>
 

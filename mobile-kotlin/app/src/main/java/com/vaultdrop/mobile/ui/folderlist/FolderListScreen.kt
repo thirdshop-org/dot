@@ -40,6 +40,7 @@ import com.vaultdrop.mobile.data.local.entity.FolderEntity
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FolderListScreen(
+    onOpenFolder: (String) -> Unit,
     viewModel: FolderListViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -58,6 +59,7 @@ fun FolderListScreen(
     ) { padding ->
         FolderListContent(
             uiState = uiState,
+            onOpenFolder = onOpenFolder,
             modifier = Modifier.padding(padding),
         )
     }
@@ -66,6 +68,7 @@ fun FolderListScreen(
 @Composable
 private fun FolderListContent(
     uiState: FolderListUiState,
+    onOpenFolder: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     when {
@@ -103,7 +106,7 @@ private fun FolderListContent(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 items(uiState.folders, key = { it.resourceId }) { folder ->
-                    FolderRow(folder)
+                    FolderRow(folder, onClick = { onOpenFolder(folder.resourceId) })
                 }
             }
         }
@@ -111,8 +114,9 @@ private fun FolderListContent(
 }
 
 @Composable
-private fun FolderRow(folder: FolderEntity) {
+private fun FolderRow(folder: FolderEntity, onClick: () -> Unit) {
     Card(
+        onClick = onClick,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {

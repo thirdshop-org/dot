@@ -3,6 +3,7 @@ package com.vaultdrop.mobile.di
 import android.content.Context
 import androidx.room.Room
 import com.vaultdrop.mobile.data.local.AppDatabase
+import com.vaultdrop.mobile.data.local.dao.FileDao
 import com.vaultdrop.mobile.data.local.dao.FolderDao
 import com.vaultdrop.mobile.data.local.dao.UserPreferenceDao
 import com.vaultdrop.mobile.data.local.migration.Migrations
@@ -29,4 +30,7 @@ object DatabaseModule {
 
     @Provides
     fun provideUserPreferenceDao(db: AppDatabase): UserPreferenceDao = db.userPreferenceDao()
+
+    @Provides
+    fun provideFileDao(db: AppDatabase): FileDao = db.fileDao()
 }

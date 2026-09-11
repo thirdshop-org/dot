@@ -23,6 +23,10 @@ class FolderRepository @Inject constructor(
 
     fun observeRootFolders(): Flow<List<FolderEntity>> = folderDao.observeRootFolders()
 
+    /** Sous-dossiers visibles d'un dossier (filtre `exists = 1` dans le DAO). */
+    fun observeSubFolders(parentResourceId: String): Flow<List<FolderEntity>> =
+        folderDao.observeByParent(parentResourceId)
+
     suspend fun getRootFolders(): List<FolderEntity> = folderDao.getRootFolders()
 
     suspend fun getFolder(resourceId: String): FolderEntity? =
@@ -43,6 +47,7 @@ class FolderRepository @Inject constructor(
     private suspend fun toEntity(dto: FolderDto, now: Long): FolderEntity {
         val existing = folderDao.getByResourceId(dto.id)
         return FolderEntity(
+            id = existing?.id ?: 0L,
             resourceId = dto.id,
             uri = null,
             name = dto.name,
@@ -68,6 +73,7 @@ class FolderRepository @Inject constructor(
             ?: input.uri?.let { folderDao.getByUri(it) }
 
         val entity = FolderEntity(
+            id = existing?.id ?: 0L,
             resourceId = existing?.resourceId ?: input.resourceId ?: generateId.newResourceId(),
             uri = input.uri,
             name = input.name,

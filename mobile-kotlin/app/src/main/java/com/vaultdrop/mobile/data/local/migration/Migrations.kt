@@ -9,6 +9,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  * v1 : table `folders` (créée par Room à partir de l'entité).
  * v2 : table `user_preferences` — clé/valeur pour l'identité device, le miroir
  *   du compte actif et les préférences utilisateur.
+ * v3 : table `files` — miroir de `FileRow` JS (métadonnées locales + cloud).
  */
 object Migrations {
 
@@ -27,5 +28,33 @@ object Migrations {
         }
     }
 
-    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2)
+    private val MIGRATION_2_3 = object : Migration(2, 3) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `files` (
+                    `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    `resource_id` TEXT NOT NULL,
+                    `uri` TEXT,
+                    `name` TEXT NOT NULL,
+                    `folder_resource_id` TEXT NOT NULL,
+                    `extension` TEXT,
+                    `size` INTEGER NOT NULL,
+                    `mime_type` TEXT,
+                    `exists` INTEGER,
+                    `last_modified` INTEGER,
+                    `owner_id` TEXT,
+                    `sync_status` TEXT NOT NULL DEFAULT 'local',
+                    `added_at` INTEGER NOT NULL,
+                    `updated_at` INTEGER NOT NULL
+                )
+                """.trimIndent(),
+            )
+            db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_files_resource_id` ON `files` (`resource_id`)")
+            db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_files_uri` ON `files` (`uri`)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_files_folder_resource_id` ON `files` (`folder_resource_id`)")
+        }
+    }
+
+    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3)
 }

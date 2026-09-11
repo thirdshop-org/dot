@@ -8,8 +8,12 @@
     <string name="no_folders_yet">Aucun dossier pour le moment. Appuie sur « Ajouter un dossier » pour synchroniser un dossier.</string>
     <string name="no_files_yet">Aucun fichier pour le moment. Appuie sur « Ajouter un dossier » pour synchroniser tes fichiers.</string>
     <string name="empty_folder">Dossier vide — le prochain syncDevice l\'actualisera.</string>
+    <string name="unit_bytes">o</string>
+    <string name="unit_kilobytes">ko</string>
+    <string name="unit_megabytes">Mo</string>
     <string name="error_loading">Impossible de charger les dossiers</string>
     <string name="refresh">Actualiser</string>
+    <string name="back">Retour</string>
 
     <!-- Login -->
     <string name="login_title">Connexion</string>

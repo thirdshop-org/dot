@@ -37,6 +37,18 @@ data class ApiErrorEnvelope(
     @Json(name = "error") val error: ApiErrorBody? = null,
 )
 
+/** Miroir de `api/types.ts` — `FileDto`. */
+data class FileDto(
+    @Json(name = "id") val id: String,
+    @Json(name = "name") val name: String,
+    @Json(name = "size") val size: Long,
+    @Json(name = "mimeType") val mimeType: String? = null,
+    @Json(name = "folderId") val folderId: String? = null,
+    @Json(name = "tags") val tags: List<String>? = null,
+    @Json(name = "createdAt") val createdAt: String? = null,
+    @Json(name = "updatedAt") val updatedAt: String? = null,
+)
+
 /** Miroir de `api/types.ts` — `FolderDto`. */
 data class FolderDto(
     @Json(name = "id") val id: String,

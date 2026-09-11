@@ -7,8 +7,12 @@
     <string name="no_folders_yet">No folders yet. Tap "Add a folder" to sync a folder.</string>
     <string name="no_files_yet">No files yet. Tap "Add a folder" to sync your files.</string>
     <string name="empty_folder">Empty folder — next sync will refresh it.</string>
+    <string name="unit_bytes">B</string>
+    <string name="unit_kilobytes">KB</string>
+    <string name="unit_megabytes">MB</string>
     <string name="error_loading">Could not load folders</string>
     <string name="refresh">Refresh</string>
+    <string name="back">Back</string>
 
     <!-- Login -->
     <string name="login_title">Sign in</string>
