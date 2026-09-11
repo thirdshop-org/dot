@@ -11,11 +11,11 @@ import com.vaultdrop.mobile.data.local.entity.UserPreferenceEntity
 
 /*
  * DB SQLite locale, `dot.db` (même nom que la version Expo).
- * v1: folders ; v2: user_preferences ; v3: files.
+ * v1: folders ; v2: user_preferences ; v3: files ; v4: category sur files.
  */
 @Database(
     entities = [FolderEntity::class, UserPreferenceEntity::class, FileEntity::class],
-    version = 3,
+    version = 4,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {

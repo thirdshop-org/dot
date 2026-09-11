@@ -65,6 +65,7 @@ fun NavGraph() {
             SearchScreen(
                 selectedTab = selectedTab,
                 onTabSelected = onTabSelected,
+                onOpenDocument = { id -> navController.navigate(Routes.document(id)) },
             )
         }
         composable(Routes.SETTINGS) {

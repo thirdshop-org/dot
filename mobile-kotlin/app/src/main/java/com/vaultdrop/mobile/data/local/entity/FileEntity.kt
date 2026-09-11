@@ -21,6 +21,7 @@ import androidx.room.PrimaryKey
         Index(value = ["resource_id"], unique = true),
         Index(value = ["uri"], unique = true),
         Index(value = ["folder_resource_id"]),
+        Index(value = ["category"]),
     ],
 )
 data class FileEntity(
@@ -46,6 +47,8 @@ data class FileEntity(
     val lastModified: Long? = null,
     @ColumnInfo(name = "owner_id")
     val ownerId: String? = null,
+    @ColumnInfo(name = "category")
+    val category: String? = null,
     @ColumnInfo(name = "sync_status")
     val syncStatus: String = "local",
     @ColumnInfo(name = "added_at")

@@ -10,6 +10,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  * v2 : table `user_preferences` — clé/valeur pour l'identité device, le miroir
  *   du compte actif et les préférences utilisateur.
  * v3 : table `files` — miroir de `FileRow` JS (métadonnées locales + cloud).
+ * v4 : ajout colonne `category` + index sur `files`.
  */
 object Migrations {
 
@@ -44,7 +45,7 @@ object Migrations {
                     `exists` INTEGER,
                     `last_modified` INTEGER,
                     `owner_id` TEXT,
-                    `sync_status` TEXT NOT NULL DEFAULT 'local',
+                    `sync_status` TEXT NOT NULL,
                     `added_at` INTEGER NOT NULL,
                     `updated_at` INTEGER NOT NULL
                 )
@@ -56,5 +57,14 @@ object Migrations {
         }
     }
 
-    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3)
+    private val MIGRATION_3_4 = object : Migration(3, 4) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            // Pas de `DEFAULT NULL` explicite : Room s'attend à l'absence de défaut
+            // (une colonne TEXT nullable a déjà NULL comme défaut implicite).
+            db.execSQL("ALTER TABLE `files` ADD COLUMN `category` TEXT")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_files_category` ON `files` (`category`)")
+        }
+    }
+
+    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
 }

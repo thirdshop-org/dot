@@ -132,18 +132,25 @@ class SafScanner @Inject constructor(
             while (cursor.moveToNext()) {
                 val docId = cursor.getString(iDoc)
                 if (docId == dirDocId) continue // certains providers renvoient le dossier lui-même
-                val uri = DocumentsContract.buildDocumentUriUsingTree(treeUri, docId).toString()
-                val mime = if (iMime >= 0) cursor.getString(iMime) else null
                 val name = if (iName >= 0) cursor.getString(iName)
-                else docId.substringAfterLast('/')
+                    else docId.substringAfterLast('/')
+                val mime = if (iMime >= 0) cursor.getString(iMime) else null
+
+                if (name.startsWith(".")) continue
 
                 if (mime == DocumentsContract.Document.MIME_TYPE_DIR) {
+                    val uri = DocumentsContract.buildDocumentUriUsingTree(treeUri, docId).toString()
                     folders += ChildDir(docId, uri, name)
                 } else {
+                    val size = if (iSize >= 0 && !cursor.isNull(iSize)) cursor.getLong(iSize) else 0L
+                    if (size == 0L) continue
+                    if (KNOWN_NOISE_EXTENSIONS.any { name.endsWith(it, ignoreCase = true) }) continue
+
+                    val uri = DocumentsContract.buildDocumentUriUsingTree(treeUri, docId).toString()
                     files += FileNode(
                         uri = uri,
                         name = name,
-                        size = if (iSize >= 0 && !cursor.isNull(iSize)) cursor.getLong(iSize) else 0L,
+                        size = size,
                         mimeType = mime,
                         lastModified = if (iLast >= 0 && !cursor.isNull(iLast)) cursor.getLong(iLast) else null,
                     )
@@ -172,5 +179,14 @@ class SafScanner @Inject constructor(
     private companion object {
         /** Nombre de dossiers visités entre deux `yield()` (coopération inter-coroutines). */
         const val YIELD_EVERY = 64
+
+        /** Extensions de bruit système / OS / téléchargements incomplets à ignorer. */
+        val KNOWN_NOISE_EXTENSIONS = setOf(
+            ".tmp", ".log", ".bak", ".dat", ".db", ".db-wal", ".db-shm",
+            ".nomedia", ".thumbnails",
+            ".apk", ".dex", ".odex",
+            ".part", ".crdownload",
+            ".DS_Store",
+        )
     }
 }

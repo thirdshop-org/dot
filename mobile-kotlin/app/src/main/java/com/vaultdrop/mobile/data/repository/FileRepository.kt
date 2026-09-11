@@ -6,6 +6,7 @@ import com.vaultdrop.mobile.data.local.entity.FileStatus
 import com.vaultdrop.mobile.data.remote.ApiClient
 import com.vaultdrop.mobile.data.remote.dto.FileDto
 import com.vaultdrop.mobile.domain.GenerateId
+import com.vaultdrop.mobile.domain.computeCategory
 import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -31,6 +32,13 @@ class FileRepository @Inject constructor(
     /** Fichiers visibles de toute l'arborescence — écran d'accueil (grille par date). */
     fun observeAllVisible(): Flow<List<FileEntity>> = fileDao.observeAllVisible()
 
+    /** Recherche/filtrage par nom et catégorie (utilisé par SearchViewModel). */
+    fun searchFiles(query: String?, category: String?): Flow<List<FileEntity>> =
+        fileDao.searchWithFilters(
+            query = query?.trim()?.takeIf { it.isNotEmpty() },
+            category = category,
+        )
+
     suspend fun getFile(resourceId: String): FileEntity? =
         fileDao.getByResourceId(resourceId)
 
@@ -49,6 +57,8 @@ class FileRepository @Inject constructor(
         val existing = input.resourceId?.let { fileDao.getByResourceId(it) }
             ?: fileDao.getByUri(input.uri)
 
+        val category = computeCategory(input.mimeType, input.extension).dbValue
+
         val entity = FileEntity(
             id = existing?.id ?: 0L,
             resourceId = existing?.resourceId ?: input.resourceId ?: generateId.newResourceId(),
@@ -58,6 +68,7 @@ class FileRepository @Inject constructor(
             extension = input.extension ?: existing?.extension,
             size = input.size,
             mimeType = input.mimeType,
+            category = category,
             exists = if (input.exists) 1 else 0,
             lastModified = input.lastModified,
             ownerId = ownerId ?: existing?.ownerId,
@@ -88,15 +99,18 @@ class FileRepository @Inject constructor(
 
     private suspend fun toEntity(dto: FileDto, folderResourceId: String, now: Long): FileEntity {
         val existing = fileDao.getByResourceId(dto.id)
+        val extension = dto.name.substringAfterLast('.', "")
+            .takeIf { it.isNotEmpty() && it != dto.name }
         return FileEntity(
             id = existing?.id ?: 0L,
             resourceId = dto.id,
             uri = null,
             name = dto.name,
             folderResourceId = dto.folderId ?: folderResourceId,
-            extension = dto.name.substringAfterLast('.', "").takeIf { it.isNotEmpty() && it != dto.name },
+            extension = extension,
             size = dto.size,
             mimeType = dto.mimeType,
+            category = computeCategory(dto.mimeType, extension).dbValue,
             exists = 1,
             lastModified = existing?.lastModified,
             ownerId = existing?.ownerId,

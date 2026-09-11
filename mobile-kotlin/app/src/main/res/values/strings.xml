@@ -27,8 +27,21 @@
     <string name="nav_files">Fichiers</string>
     <string name="nav_search">Recherche</string>
     <string name="nav_settings">Réglages</string>
-    <string name="search">Recherche</string>
     <string name="settings">Réglages</string>
+
+    <!-- Recherche -->
+    <string name="search">Recherche</string>
+    <string name="search_hint">Rechercher un document…</string>
+    <string name="search_empty">Saisis une recherche ou choisis une catégorie</string>
+    <string name="search_no_results">Aucun résultat</string>
+    <string name="category_all">Tous</string>
+    <string name="category_pdf">PDF</string>
+    <string name="category_office">Bureautique</string>
+    <string name="category_image">Image</string>
+    <string name="category_text">Texte</string>
+    <string name="category_video">Vidéo</string>
+    <string name="category_audio">Audio</string>
+    <string name="category_other">Autre</string>
 
     <!-- Login -->
     <string name="login_title">Connexion</string>

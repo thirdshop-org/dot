@@ -24,6 +24,15 @@ interface FileDao {
     @Query("SELECT * FROM files WHERE uri = :uri LIMIT 1")
     suspend fun getByUri(uri: String): FileEntity?
 
+    @Query("""
+        SELECT * FROM files
+        WHERE "exists" = 1
+          AND (:query IS NULL OR name LIKE '%' || :query || '%')
+          AND (:category IS NULL OR category = :category)
+        ORDER BY name ASC
+    """)
+    fun searchWithFilters(query: String?, category: String?): Flow<List<FileEntity>>
+
     @Upsert
     suspend fun upsert(file: FileEntity)
 
