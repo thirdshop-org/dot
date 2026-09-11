@@ -1,0 +1,26 @@
+<resources>
+    <string name="app_name">VaultDrop</string>
+
+    <!-- Écran Fichiers -->
+    <string name="files">Fichiers</string>
+    <string name="folder">Dossier</string>
+    <string name="add_folder">Ajouter un dossier</string>
+    <string name="no_folders_yet">Aucun dossier pour le moment. Appuie sur « Ajouter un dossier » pour synchroniser un dossier.</string>
+    <string name="no_files_yet">Aucun fichier pour le moment. Appuie sur « Ajouter un dossier » pour synchroniser tes fichiers.</string>
+    <string name="empty_folder">Dossier vide — le prochain syncDevice l\'actualisera.</string>
+    <string name="error_loading">Impossible de charger les dossiers</string>
+    <string name="refresh">Actualiser</string>
+
+    <!-- Login -->
+    <string name="login_title">Connexion</string>
+    <string name="login_subtitle">Connecte-toi à ton compte</string>
+    <string name="login_username">Nom d\'utilisateur</string>
+    <string name="login_password">Mot de passe</string>
+    <string name="login_submit">Se connecter</string>
+    <string name="login_submitting">Connexion…</string>
+    <string name="login_error_required">Nom d\'utilisateur et mot de passe requis</string>
+    <string name="login_error_generic">Impossible de se connecter pour le moment</string>
+    <string name="login_error_unauthorized">Nom d\'utilisateur ou mot de passe incorrect</string>
+    <string name="login_skip">Continuer sans compte</string>
+    <string name="skip_message">Mode local — tes dossiers restent sur cet appareil et ne sont pas synchronisés.</string>
+</resources>

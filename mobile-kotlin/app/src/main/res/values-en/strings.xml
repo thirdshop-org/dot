@@ -1,0 +1,25 @@
+<resources>
+    <string name="app_name">VaultDrop</string>
+
+    <string name="files">Files</string>
+    <string name="folder">Folder</string>
+    <string name="add_folder">Add a folder</string>
+    <string name="no_folders_yet">No folders yet. Tap "Add a folder" to sync a folder.</string>
+    <string name="no_files_yet">No files yet. Tap "Add a folder" to sync your files.</string>
+    <string name="empty_folder">Empty folder — next sync will refresh it.</string>
+    <string name="error_loading">Could not load folders</string>
+    <string name="refresh">Refresh</string>
+
+    <!-- Login -->
+    <string name="login_title">Sign in</string>
+    <string name="login_subtitle">Sign in to your account</string>
+    <string name="login_username">Username</string>
+    <string name="login_password">Password</string>
+    <string name="login_submit">Sign in</string>
+    <string name="login_submitting">Signing in…</string>
+    <string name="login_error_required">Username and password are required</string>
+    <string name="login_error_generic">Could not sign in right now</string>
+    <string name="login_error_unauthorized">Incorrect username or password</string>
+    <string name="login_skip">Continue without account</string>
+    <string name="skip_message">Local mode — your folders stay on this device and are not synced.</string>
+</resources>
