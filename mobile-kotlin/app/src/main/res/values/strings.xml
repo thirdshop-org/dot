@@ -28,6 +28,9 @@
     <string name="nav_search">Recherche</string>
     <string name="nav_settings">Réglages</string>
     <string name="settings">Réglages</string>
+    <string name="settings_dark_mode">Mode sombre</string>
+    <string name="settings_dark_mode_on">Thème sombre actif</string>
+    <string name="settings_dark_mode_off">Thème clair actif</string>
 
     <!-- Recherche -->
     <string name="search">Recherche</string>

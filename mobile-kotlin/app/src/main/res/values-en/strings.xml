@@ -27,6 +27,9 @@
     <string name="nav_search">Search</string>
     <string name="nav_settings">Settings</string>
     <string name="settings">Settings</string>
+    <string name="settings_dark_mode">Dark mode</string>
+    <string name="settings_dark_mode_on">Dark theme active</string>
+    <string name="settings_dark_mode_off">Light theme active</string>
 
     <!-- Search -->
     <string name="search">Search</string>

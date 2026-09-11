@@ -4,6 +4,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import com.vaultdrop.mobile.domain.ThemePreference
 
 private val LightColors = lightColorScheme(
     primary = BrandBlue,
@@ -16,6 +17,19 @@ private val DarkColors = darkColorScheme(
     primary = BondBlueLight,
     onPrimary = androidx.compose.ui.graphics.Color.Black,
 )
+
+@Composable
+fun VaultDropTheme(
+    theme: ThemePreference,
+    content: @Composable () -> Unit,
+) {
+    val darkTheme = when (theme) {
+        ThemePreference.DARK -> true
+        ThemePreference.LIGHT -> false
+        ThemePreference.SYSTEM -> isSystemInDarkTheme()
+    }
+    VaultDropTheme(darkTheme = darkTheme, content = content)
+}
 
 @Composable
 fun VaultDropTheme(
