@@ -2,9 +2,15 @@ package com.vaultdrop.mobile.features.sync
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.vaultdrop.mobile.data.repository.FolderRepository
+import com.vaultdrop.mobile.data.repository.SaveFolderInput
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import timber.log.Timber
@@ -24,9 +30,18 @@ import javax.inject.Inject
 @HiltViewModel
 class SyncViewModel @Inject constructor(
     private val deviceSync: DeviceSync,
+    private val folderRepository: FolderRepository,
 ) : ViewModel() {
 
     private var loopJob: Job? = null
+
+    data class ImportState(
+        val isImporting: Boolean = false,
+        val error: String? = null,
+    )
+
+    private val _importState = MutableStateFlow(ImportState())
+    val importState: StateFlow<ImportState> = _importState.asStateFlow()
 
     /** Démarre la boucle une seule fois (idempotent). */
     fun ensureStarted() {
@@ -42,6 +57,37 @@ class SyncViewModel @Inject constructor(
                     }
                     .onFailure { e -> Timber.w(e, "syncAll failed, retrying later") }
                 delay(INTERVAL_MS)
+            }
+        }
+    }
+
+    /**
+     * Import volontaire d'un dossier SAF (ajout + marche récursive).
+     *
+     * Scope Activity (VaultDropApp) : survit aux changements d'onglets — un
+     * walk lancé ici n'est pas annulé quand l'utilisateur quitte l'écran
+     * Fichiers, et `importState` continue d'être visible partout.
+     *
+     * Single-flight : tant qu'un import tourne (ou attend le mutex de
+     * [DeviceSync]), les appels suivants sont ignorés.
+     */
+    fun importRoot(uri: String, name: String) {
+        if (_importState.value.isImporting) return
+        viewModelScope.launch {
+            _importState.value = ImportState(isImporting = true)
+            try {
+                val saved = folderRepository.saveFolder(
+                    SaveFolderInput(uri = uri, name = name, exists = true),
+                )
+                val result = deviceSync.syncRoot(saved.resourceId)
+                Timber.d("syncRoot %s", result)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Timber.w(e, "syncRoot failed")
+                _importState.value = ImportState(error = e.message ?: "Erreur lors de l'ajout du dossier")
+            } finally {
+                _importState.value = _importState.value.copy(isImporting = false)
             }
         }
     }

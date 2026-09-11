@@ -1,13 +1,21 @@
 package com.vaultdrop.mobile.ui.navigation
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.vaultdrop.mobile.features.sync.SyncViewModel
 import com.vaultdrop.mobile.ui.document.DocumentViewerScreen
 import com.vaultdrop.mobile.ui.folderdetail.FolderDetailScreen
 import com.vaultdrop.mobile.ui.folderlist.FolderListScreen
@@ -35,11 +43,13 @@ private fun String?.toNavTab(): NavTab = when (this) {
 }
 
 @Composable
-fun NavGraph() {
+fun NavGraph(syncViewModel: SyncViewModel) {
     val navController = rememberNavController()
 
     val backStackEntry by navController.currentBackStackEntryAsState()
     val selectedTab = backStackEntry?.destination?.route.toNavTab()
+
+    val importState by syncViewModel.importState.collectAsStateWithLifecycle()
 
     val onTabSelected: (NavTab) -> Unit = { tab ->
         if (tab.route != selectedTab.route) {
@@ -50,58 +60,71 @@ fun NavGraph() {
         }
     }
 
-    NavHost(
-        navController = navController,
-        startDestination = Routes.FILES,
-    ) {
-        composable(Routes.FILES) {
-            FolderListScreen(
-                selectedTab = selectedTab,
-                onTabSelected = onTabSelected,
-                onOpenDocument = { id -> navController.navigate(Routes.document(id)) },
-            )
+    Box(modifier = Modifier.fillMaxSize()) {
+        NavHost(
+            navController = navController,
+            startDestination = Routes.FILES,
+        ) {
+            composable(Routes.FILES) {
+                FolderListScreen(
+                    selectedTab = selectedTab,
+                    onTabSelected = onTabSelected,
+                    onOpenDocument = { id -> navController.navigate(Routes.document(id)) },
+                    syncViewModel = syncViewModel,
+                )
+            }
+            composable(Routes.SEARCH) {
+                SearchScreen(
+                    selectedTab = selectedTab,
+                    onTabSelected = onTabSelected,
+                    onOpenDocument = { id -> navController.navigate(Routes.document(id)) },
+                )
+            }
+            composable(Routes.SETTINGS) {
+                SettingsScreen(
+                    selectedTab = selectedTab,
+                    onTabSelected = onTabSelected,
+                )
+            }
+            composable(
+                route = Routes.FOLDER_DETAIL,
+                arguments = listOf(
+                    navArgument(Routes.ARG_FOLDER) { type = NavType.StringType },
+                ),
+            ) { backStackEntry ->
+                val folderId = checkNotNull(
+                    backStackEntry.arguments?.getString(Routes.ARG_FOLDER),
+                )
+                FolderDetailScreen(
+                    folderResourceId = folderId,
+                    onBack = { navController.popBackStack() },
+                    onOpenFolder = { id -> navController.navigate(Routes.folder(id)) },
+                    onOpenDocument = { id -> navController.navigate(Routes.document(id)) },
+                )
+            }
+            composable(
+                route = Routes.DOCUMENT,
+                arguments = listOf(
+                    navArgument(Routes.ARG_DOCUMENT) { type = NavType.StringType },
+                ),
+            ) { backStackEntry ->
+                val documentId = checkNotNull(
+                    backStackEntry.arguments?.getString(Routes.ARG_DOCUMENT),
+                )
+                DocumentViewerScreen(
+                    initialResourceId = documentId,
+                    onBack = { navController.popBackStack() },
+                )
+            }
         }
-        composable(Routes.SEARCH) {
-            SearchScreen(
-                selectedTab = selectedTab,
-                onTabSelected = onTabSelected,
-                onOpenDocument = { id -> navController.navigate(Routes.document(id)) },
-            )
-        }
-        composable(Routes.SETTINGS) {
-            SettingsScreen(
-                selectedTab = selectedTab,
-                onTabSelected = onTabSelected,
-            )
-        }
-        composable(
-            route = Routes.FOLDER_DETAIL,
-            arguments = listOf(
-                navArgument(Routes.ARG_FOLDER) { type = NavType.StringType },
-            ),
-        ) { backStackEntry ->
-            val folderId = checkNotNull(
-                backStackEntry.arguments?.getString(Routes.ARG_FOLDER),
-            )
-            FolderDetailScreen(
-                folderResourceId = folderId,
-                onBack = { navController.popBackStack() },
-                onOpenFolder = { id -> navController.navigate(Routes.folder(id)) },
-                onOpenDocument = { id -> navController.navigate(Routes.document(id)) },
-            )
-        }
-        composable(
-            route = Routes.DOCUMENT,
-            arguments = listOf(
-                navArgument(Routes.ARG_DOCUMENT) { type = NavType.StringType },
-            ),
-        ) { backStackEntry ->
-            val documentId = checkNotNull(
-                backStackEntry.arguments?.getString(Routes.ARG_DOCUMENT),
-            )
-            DocumentViewerScreen(
-                initialResourceId = documentId,
-                onBack = { navController.popBackStack() },
+
+        // Bandeau global : visible sur tous les onglets tant qu'un import SAF
+        // est en cours (indique que la marche continue hors écran Fichiers).
+        if (importState.isImporting) {
+            LinearProgressIndicator(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth(),
             )
         }
     }

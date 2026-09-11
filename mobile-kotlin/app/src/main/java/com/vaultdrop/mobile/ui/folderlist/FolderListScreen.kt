@@ -51,6 +51,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.vaultdrop.mobile.R
 import com.vaultdrop.mobile.data.local.entity.FileEntity
+import com.vaultdrop.mobile.features.sync.SyncViewModel
 import com.vaultdrop.mobile.ui.navigation.FloatingNavBar
 import com.vaultdrop.mobile.ui.navigation.NavTab
 import java.util.Locale
@@ -61,9 +62,11 @@ fun FolderListScreen(
     selectedTab: NavTab,
     onTabSelected: (NavTab) -> Unit,
     onOpenDocument: (String) -> Unit,
+    syncViewModel: SyncViewModel,
     viewModel: FolderListViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val importState by syncViewModel.importState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val folderLabel = stringResource(R.string.folder)
 
@@ -78,7 +81,7 @@ fun FolderListScreen(
                 Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
             )
         }
-        viewModel.savePickedFolder(
+        syncViewModel.importRoot(
             uri = uri.toString(),
             name = uri.displayName(context) ?: uri.lastPathSegment ?: folderLabel,
         )
@@ -101,6 +104,8 @@ fun FolderListScreen(
     ) { padding ->
         FolderListContent(
             uiState = uiState,
+            isImporting = importState.isImporting,
+            error = uiState.error ?: importState.error,
             onAddFolder = { pickFolderLauncher.launch(null) },
             onOpenDocument = onOpenDocument,
             modifier = Modifier.padding(padding),
@@ -126,6 +131,8 @@ private fun Uri.displayName(context: Context): String? = runCatching {
 @Composable
 private fun FolderListContent(
     uiState: FolderListUiState,
+    isImporting: Boolean,
+    error: String?,
     onAddFolder: () -> Unit,
     onOpenDocument: (String) -> Unit,
     modifier: Modifier = Modifier,
@@ -137,7 +144,7 @@ private fun FolderListContent(
         item(key = "actions") {
             Button(
                 onClick = onAddFolder,
-                enabled = !uiState.isScanning,
+                enabled = !isImporting,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 12.dp),
@@ -148,8 +155,8 @@ private fun FolderListContent(
             }
         }
 
-        if (uiState.isScanning) {
-            item(key = "scanning") {
+        if (isImporting) {
+            item(key = "importing") {
                 LinearProgressIndicator(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -158,10 +165,10 @@ private fun FolderListContent(
             }
         }
 
-        uiState.error?.let { error ->
+        error?.let { message ->
             item(key = "error") {
                 Text(
-                    text = error,
+                    text = message,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.error,
                     modifier = Modifier
@@ -171,7 +178,7 @@ private fun FolderListContent(
             }
         }
 
-        if (uiState.sections.isEmpty() && !uiState.isScanning) {
+        if (uiState.sections.isEmpty() && !isImporting) {
             item(key = "empty") {
                 Text(
                     text = stringResource(R.string.no_files_yet),

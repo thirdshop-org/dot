@@ -46,7 +46,7 @@ fun VaultDropApp(
     when (authState) {
         AuthState.Loading -> SplashScreen()
         AuthState.SignedOut -> LoginScreen()
-        AuthState.Local -> NavGraph()
-        is AuthState.SignedIn -> NavGraph()
+        AuthState.Local -> NavGraph(syncViewModel = syncViewModel)
+        is AuthState.SignedIn -> NavGraph(syncViewModel = syncViewModel)
     }
 }

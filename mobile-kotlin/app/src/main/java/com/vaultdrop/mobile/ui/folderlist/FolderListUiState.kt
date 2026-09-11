@@ -20,7 +20,5 @@ data class FilePair(
 data class FolderListUiState(
     val sections: List<FileSection> = emptyList(),
     val isRefreshing: Boolean = false,
-    /** true pendant l'exploration SAF d'une racine (marche récursive en cours). */
-    val isScanning: Boolean = false,
     val error: String? = null,
 )
