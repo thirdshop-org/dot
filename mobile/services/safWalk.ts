@@ -52,19 +52,31 @@ export async function listFoldersChunked(
   }
 
   let lastYield = Date.now();
-  const visit = async (uri: string) => {
+  if (Date.now() - lastYield >= budgetMs) {
+    lastYield = Date.now();
+    await impl.yield();
+  }
+  // Stack of Folders identified by uri; push in reverse so the first-listed
+  // descendant is popped first, preserving the DFS pre-order of the recursive
+  // traversal (a folder's subtree is fully explored before its later siblings).
+  const stack: Folder[] = impl
+    .list(directoryUri)
+    .filter((entry): entry is Folder => entry.isDirectory)
+    .reverse();
+  while (stack.length > 0) {
     if (Date.now() - lastYield >= budgetMs) {
       lastYield = Date.now();
       await impl.yield();
     }
-    for (const entry of impl.list(uri)) {
-      if (entry.isDirectory) {
-        result.push(entry);
-        await visit(entry.uri);
-      }
+    const folder = stack.pop()!;
+    result.push(folder);
+    const children = impl
+      .list(folder.uri)
+      .filter((entry): entry is Folder => entry.isDirectory);
+    for (let i = children.length - 1; i >= 0; i--) {
+      stack.push(children[i]);
     }
-  };
-  await visit(directoryUri);
+  }
   return result;
 }
 

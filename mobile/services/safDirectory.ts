@@ -4,13 +4,13 @@ import type {
   FileEntry,
   Folder,
   FolderInfo,
-  PickDirectoryOptions,
 } from './safDirectory.types';
 import { __setSafWalkImpl, yieldToMainThread } from './safWalk';
 export { listFoldersChunked, yieldToMainThread, DEFAULT_WALK_BUDGET_MS } from './safWalk';
 
+// Bootstrap: wire the real SAF implementation for the Expo runtime.
 __setSafWalkImpl({
-  list: listDirectory,
+  list: listDirectoryEntries,
   info: getFolderInfo,
   yield: yieldToMainThread,
 });
@@ -20,41 +20,21 @@ export async function pickDirectory(initialUri?: string): Promise<Folder | null>
     const directory = await Directory.pickDirectoryAsync(initialUri);
     if (!directory || !directory.uri) return null;
     return toFolder({ uri: directory.uri, name: directory.name, exists: directory.exists });
-  } catch {
+  } catch (error) {
+    console.warn('[safDirectory] pickDirectory failed:', error);
     return null;
   }
 }
 
-export function listDirectory(directoryUri: string): DirectoryEntry[] {
+export function listDirectoryEntries(directoryUri: string): DirectoryEntry[] {
   const directory = new Directory(directoryUri);
   if (!directory.exists) return [];
   try {
     return directory.list().map(toEntry);
-  } catch {
+  } catch (error) {
+    console.warn('[safDirectory] listDirectoryEntries failed:', error);
     return [];
   }
-}
-
-export function listFolders(directoryUri: string, options: PickDirectoryOptions = {}): Folder[] {
-  const { recursive = false, includeRoot = false } = options;
-  if (!recursive) {
-    return listDirectory(directoryUri).filter((entry): entry is Folder => entry.isDirectory);
-  }
-
-  const result: Folder[] = [];
-  if (includeRoot) {
-    result.push({ ...getFolderInfo(directoryUri), isDirectory: true });
-  }
-  const visit = (uri: string) => {
-    for (const entry of listDirectory(uri)) {
-      if (entry.isDirectory) {
-        result.push(entry);
-        visit(entry.uri);
-      }
-    }
-  };
-  visit(directoryUri);
-  return result;
 }
 
 export function getFolderInfo(directoryUri: string): FolderInfo {
@@ -66,6 +46,7 @@ export function getFolderInfo(directoryUri: string): FolderInfo {
   };
 }
 
+/** Creates a directory. Intentionally lets exceptions propagate (permissions, quota, etc). */
 export function createDirectory(directoryUri: string, name: string): Folder {
   const directory = new Directory(Paths.join(directoryUri, name));
   directory.create({ idempotent: true, intermediates: true });
@@ -73,7 +54,10 @@ export function createDirectory(directoryUri: string, name: string): Folder {
 }
 
 export function fileFromUri(uri: string): FileEntry {
-  const file = new File(uri);
+  return toFileEntry(new File(uri));
+}
+
+function toFileEntry(file: File): FileEntry {
   return {
     uri: file.uri,
     name: file.name,
@@ -87,21 +71,12 @@ export function fileFromUri(uri: string): FileEntry {
 }
 
 function toEntry(item: Directory | File): DirectoryEntry {
-  if (item instanceof Directory) {
-    return toFolder({ uri: item.uri, name: item.name, exists: item.exists });
-  }
-  return {
-    uri: item.uri,
-    name: item.name,
-    isDirectory: false,
-    extension: item.extension,
-    exists: item.exists,
-    size: item.size,
-    type: item.type,
-    lastModified: item.lastModified,
-  };
+  return item instanceof Directory
+    ? toFolder({ uri: item.uri, name: item.name, exists: item.exists })
+    : toFileEntry(item);
 }
 
+// Perf: avoids constructing a Directory when all fields are already provided by the caller.
 function toFolder({ uri, name, exists }: { uri: string; name?: string; exists?: boolean }): Folder {
   const directory = exists === undefined ? new Directory(uri) : null;
   return {

@@ -2,6 +2,7 @@ export type Folder = {
   uri: string;
   name: string;
   isDirectory: true;
+  /** `undefined` when neither caller nor Directory fallback provided a value. */
   exists?: boolean;
 };
 
