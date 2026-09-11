@@ -11,14 +11,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -46,6 +44,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.vaultdrop.mobile.R
 import com.vaultdrop.mobile.data.local.entity.FileEntity
 import com.vaultdrop.mobile.domain.FileCategory
+import com.vaultdrop.mobile.ui.components.FileCategoryIcon
+import com.vaultdrop.mobile.ui.components.color
+import com.vaultdrop.mobile.ui.components.icon
 import com.vaultdrop.mobile.ui.navigation.FloatingNavBar
 import com.vaultdrop.mobile.ui.navigation.NavTab
 import java.util.Locale
@@ -118,6 +119,7 @@ private fun SearchContent(
                     label = categoryLabel(category),
                     selected = uiState.selectedCategory == category.dbValue,
                     onClick = { onCategorySelect(category.dbValue) },
+                    category = category,
                 )
             }
         }
@@ -135,11 +137,21 @@ private fun CategoryChip(
     label: String,
     selected: Boolean,
     onClick: () -> Unit,
+    category: FileCategory? = null,
 ) {
     FilterChip(
         selected = selected,
         onClick = onClick,
         label = { Text(label) },
+        leadingIcon = category?.let { cat ->
+            {
+                Icon(
+                    imageVector = cat.icon,
+                    contentDescription = null,
+                    tint = cat.color,
+                )
+            }
+        },
         colors = FilterChipDefaults.filterChipColors(
             containerColor = Color(0xFFF7F8FA),
         ),
@@ -227,12 +239,7 @@ private fun SearchResultCard(file: FileEntity, onClick: () -> Unit, modifier: Mo
             modifier = Modifier.padding(12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(
-                imageVector = Icons.Filled.InsertDriveFile,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(28.dp),
-            )
+            FileCategoryIcon(file = file, size = 28.dp)
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(

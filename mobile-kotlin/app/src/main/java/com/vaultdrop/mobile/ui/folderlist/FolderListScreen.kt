@@ -17,14 +17,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -52,6 +50,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.vaultdrop.mobile.R
 import com.vaultdrop.mobile.data.local.entity.FileEntity
 import com.vaultdrop.mobile.features.sync.SyncViewModel
+import com.vaultdrop.mobile.ui.components.FileCategoryIcon
 import com.vaultdrop.mobile.ui.navigation.FloatingNavBar
 import com.vaultdrop.mobile.ui.navigation.NavTab
 import java.util.Locale
@@ -246,12 +245,7 @@ private fun FileCard(file: FileEntity, onClick: () -> Unit, modifier: Modifier =
         modifier = modifier,
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
-            Icon(
-                imageVector = Icons.Filled.InsertDriveFile,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(36.dp),
-            )
+            FileCategoryIcon(file = file, size = 36.dp)
             Spacer(Modifier.height(8.dp))
             Text(
                 text = file.name,

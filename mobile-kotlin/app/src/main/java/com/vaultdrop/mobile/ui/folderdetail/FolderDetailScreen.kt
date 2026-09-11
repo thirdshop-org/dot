@@ -13,7 +13,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -38,6 +37,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.vaultdrop.mobile.R
 import com.vaultdrop.mobile.data.local.entity.FileEntity
 import com.vaultdrop.mobile.data.local.entity.FolderEntity
+import com.vaultdrop.mobile.ui.components.FileCategoryIcon
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -192,12 +192,7 @@ private fun FileRow(file: FileEntity, onClick: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Icon(
-                imageVector = Icons.Filled.InsertDriveFile,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(24.dp),
-            )
+            FileCategoryIcon(file = file, size = 24.dp)
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = file.name,
