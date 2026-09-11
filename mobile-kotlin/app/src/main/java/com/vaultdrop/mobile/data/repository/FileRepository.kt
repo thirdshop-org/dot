@@ -5,6 +5,7 @@ import com.vaultdrop.mobile.data.local.entity.FileEntity
 import com.vaultdrop.mobile.data.local.entity.FileStatus
 import com.vaultdrop.mobile.data.remote.ApiClient
 import com.vaultdrop.mobile.data.remote.dto.FileDto
+import com.vaultdrop.mobile.domain.GenerateId
 import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -20,6 +21,7 @@ import javax.inject.Singleton
 class FileRepository @Inject constructor(
     private val fileDao: FileDao,
     private val apiClient: ApiClient,
+    private val generateId: GenerateId,
 ) {
 
     /** Fichiers visibles du dossier, locaux + cloud — source de l'UI. */
@@ -28,6 +30,45 @@ class FileRepository @Inject constructor(
 
     suspend fun getFile(resourceId: String): FileEntity? =
         fileDao.getByResourceId(resourceId)
+
+    suspend fun getAll(): List<FileEntity> = fileDao.getAll()
+
+    /**
+     * Upsert local d'un fichier SAF — miroir de `saveFile()` JS : déduplication
+     * par `resource_id` ou `uri`, conservation de l'identité/sync_status/owner.
+     */
+    suspend fun saveLocalFile(
+        input: SaveFileInput,
+        folderResourceId: String,
+        ownerId: String? = null,
+    ): FileEntity {
+        val now = System.currentTimeMillis()
+        val existing = input.resourceId?.let { fileDao.getByResourceId(it) }
+            ?: fileDao.getByUri(input.uri)
+
+        val entity = FileEntity(
+            id = existing?.id ?: 0L,
+            resourceId = existing?.resourceId ?: input.resourceId ?: generateId.newResourceId(),
+            uri = input.uri,
+            name = input.name,
+            folderResourceId = folderResourceId,
+            extension = input.extension ?: existing?.extension,
+            size = input.size,
+            mimeType = input.mimeType,
+            exists = if (input.exists) 1 else 0,
+            lastModified = input.lastModified,
+            ownerId = ownerId ?: existing?.ownerId,
+            syncStatus = existing?.syncStatus ?: input.syncStatus ?: FileStatus.LOCAL,
+            addedAt = existing?.addedAt ?: now,
+            updatedAt = now,
+        )
+        fileDao.upsert(entity)
+        return entity
+    }
+
+    /** Marque un fichier disparu de l'arborescence (`exists = 0`) — jamais supprimé. */
+    suspend fun markMissing(resourceId: String, updatedAt: Long) =
+        fileDao.markMissing(resourceId, updatedAt)
 
     /**
      * `GET /files?folderId=...` (1re page, tri serveur) puis upsert cloud de
@@ -66,3 +107,16 @@ class FileRepository @Inject constructor(
         private const val PAGE_SIZE = 50
     }
 }
+
+data class SaveFileInput(
+    val uri: String,
+    val name: String,
+    val extension: String? = null,
+    val size: Long,
+    val mimeType: String? = null,
+    val lastModified: Long? = null,
+    val exists: Boolean = true,
+    val resourceId: String? = null,
+    /** Fallback de sync_status pour une nouvelle ligne (défaut local). */
+    val syncStatus: String? = null,
+)

@@ -5,6 +5,7 @@ import com.vaultdrop.mobile.data.local.entity.FolderEntity
 import com.vaultdrop.mobile.data.local.entity.FolderStatus
 import com.vaultdrop.mobile.data.remote.ApiClient
 import com.vaultdrop.mobile.data.remote.dto.FolderDto
+import com.vaultdrop.mobile.domain.DeviceIdentity
 import com.vaultdrop.mobile.domain.GenerateId
 import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
@@ -19,6 +20,7 @@ class FolderRepository @Inject constructor(
     private val folderDao: FolderDao,
     private val apiClient: ApiClient,
     private val generateId: GenerateId,
+    private val deviceIdentity: DeviceIdentity,
 ) {
 
     fun observeRootFolders(): Flow<List<FolderEntity>> = folderDao.observeRootFolders()
@@ -28,6 +30,8 @@ class FolderRepository @Inject constructor(
         folderDao.observeByParent(parentResourceId)
 
     suspend fun getRootFolders(): List<FolderEntity> = folderDao.getRootFolders()
+
+    suspend fun getAll(): List<FolderEntity> = folderDao.getAll()
 
     suspend fun getFolder(resourceId: String): FolderEntity? =
         folderDao.getByResourceId(resourceId)
@@ -63,10 +67,15 @@ class FolderRepository @Inject constructor(
     /**
      * Upsert local d'un dossier physique (SAF) — établi par UX volontairement :
      * ajoute une ligne avec sa `uri` si absente, ou met à jour ses champs.
+     *
+     * `parentResourceId` non-null écrase le parent existant (un déplacement dans
+     * l'arborescence SAF est reflété) ; null préserve le parent courant. `ownerId`
+     * optionnel évite de relire l'identité device à chaque ligne d'un walk.
      */
     suspend fun saveFolder(
         input: SaveFolderInput,
         parentResourceId: String? = null,
+        ownerId: String? = null,
     ): FolderEntity {
         val now = System.currentTimeMillis()
         val existing = input.resourceId?.let { folderDao.getByResourceId(it) }
@@ -78,8 +87,8 @@ class FolderRepository @Inject constructor(
             uri = input.uri,
             name = input.name,
             exists = input.exists?.let { if (it) 1 else 0 },
-            parentResourceId = existing?.parentResourceId ?: parentResourceId,
-            ownerId = existing?.ownerId,
+            parentResourceId = parentResourceId ?: existing?.parentResourceId,
+            ownerId = ownerId ?: existing?.ownerId ?: deviceIdentity.getOrCreate(),
             syncStatus = existing?.syncStatus ?: FolderStatus.LOCAL,
             addedAt = existing?.addedAt ?: now,
             updatedAt = now,
@@ -87,6 +96,10 @@ class FolderRepository @Inject constructor(
         folderDao.upsert(entity)
         return entity
     }
+
+    /** Marque un dossier disparu de l'arborescence (`exists = 0`) — jamais supprimé. */
+    suspend fun markMissing(resourceId: String, updatedAt: Long) =
+        folderDao.markMissing(resourceId, updatedAt)
 }
 
 data class SaveFolderInput(
