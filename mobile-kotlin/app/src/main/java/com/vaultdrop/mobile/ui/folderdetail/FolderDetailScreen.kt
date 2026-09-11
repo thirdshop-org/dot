@@ -46,6 +46,7 @@ fun FolderDetailScreen(
     folderResourceId: String,
     onBack: () -> Unit,
     onOpenFolder: (String) -> Unit,
+    onOpenDocument: (String) -> Unit,
     viewModel: FolderDetailViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -80,6 +81,7 @@ fun FolderDetailScreen(
             isRefreshing = uiState.isRefreshing,
             error = uiState.error,
             onOpenFolder = onOpenFolder,
+            onOpenDocument = onOpenDocument,
             modifier = Modifier.padding(padding),
         )
     }
@@ -92,6 +94,7 @@ private fun FolderDetailContent(
     isRefreshing: Boolean,
     error: String?,
     onOpenFolder: (String) -> Unit,
+    onOpenDocument: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val empty = subFolders.isEmpty() && files.isEmpty() && !isRefreshing
@@ -105,7 +108,7 @@ private fun FolderDetailContent(
             FolderRow(folder, onClick = { onOpenFolder(folder.resourceId) })
         }
         items(files, key = { it.resourceId }) { file ->
-            FileRow(file)
+            FileRow(file, onClick = { onOpenDocument(file.resourceId) })
         }
         when {
             empty -> {
@@ -176,8 +179,9 @@ private fun FolderRow(folder: FolderEntity, onClick: () -> Unit) {
 }
 
 @Composable
-private fun FileRow(file: FileEntity) {
+private fun FileRow(file: FileEntity, onClick: () -> Unit) {
     Card(
+        onClick = onClick,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {

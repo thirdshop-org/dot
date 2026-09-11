@@ -8,6 +8,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.vaultdrop.mobile.ui.document.DocumentViewerScreen
 import com.vaultdrop.mobile.ui.folderdetail.FolderDetailScreen
 import com.vaultdrop.mobile.ui.folderlist.FolderListScreen
 import com.vaultdrop.mobile.ui.search.SearchScreen
@@ -19,8 +20,11 @@ object Routes {
     const val SETTINGS = "settings"
     const val FOLDER_DETAIL = "folder/{folderResourceId}"
     const val ARG_FOLDER = "folderResourceId"
+    const val DOCUMENT = "document/{documentResourceId}"
+    const val ARG_DOCUMENT = "documentResourceId"
 
     fun folder(folderResourceId: String): String = "folder/$folderResourceId"
+    fun document(documentResourceId: String): String = "document/$documentResourceId"
 }
 
 private fun String?.toNavTab(): NavTab = when (this) {
@@ -54,6 +58,7 @@ fun NavGraph() {
             FolderListScreen(
                 selectedTab = selectedTab,
                 onTabSelected = onTabSelected,
+                onOpenDocument = { id -> navController.navigate(Routes.document(id)) },
             )
         }
         composable(Routes.SEARCH) {
@@ -81,6 +86,21 @@ fun NavGraph() {
                 folderResourceId = folderId,
                 onBack = { navController.popBackStack() },
                 onOpenFolder = { id -> navController.navigate(Routes.folder(id)) },
+                onOpenDocument = { id -> navController.navigate(Routes.document(id)) },
+            )
+        }
+        composable(
+            route = Routes.DOCUMENT,
+            arguments = listOf(
+                navArgument(Routes.ARG_DOCUMENT) { type = NavType.StringType },
+            ),
+        ) { backStackEntry ->
+            val documentId = checkNotNull(
+                backStackEntry.arguments?.getString(Routes.ARG_DOCUMENT),
+            )
+            DocumentViewerScreen(
+                initialResourceId = documentId,
+                onBack = { navController.popBackStack() },
             )
         }
     }

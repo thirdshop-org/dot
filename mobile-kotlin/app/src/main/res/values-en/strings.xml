@@ -14,6 +14,14 @@
     <string name="refresh">Refresh</string>
     <string name="back">Back</string>
 
+    <!-- Document viewer -->
+    <string name="document">Document</string>
+    <string name="document_reader_coming">Document reader coming soon</string>
+    <string name="document_size">Size</string>
+    <string name="document_type">Type</string>
+    <string name="document_added_at">Added on</string>
+    <string name="document_modified_at">Modified on</string>
+
     <!-- Navigation -->
     <string name="nav_files">Files</string>
     <string name="nav_search">Search</string>

@@ -15,6 +15,14 @@
     <string name="refresh">Actualiser</string>
     <string name="back">Retour</string>
 
+    <!-- Consultation de documents -->
+    <string name="document">Document</string>
+    <string name="document_reader_coming">Lecteur de documents à venir</string>
+    <string name="document_size">Taille</string>
+    <string name="document_type">Type</string>
+    <string name="document_added_at">Ajouté le</string>
+    <string name="document_modified_at">Modifié le</string>
+
     <!-- Navigation -->
     <string name="nav_files">Fichiers</string>
     <string name="nav_search">Recherche</string>

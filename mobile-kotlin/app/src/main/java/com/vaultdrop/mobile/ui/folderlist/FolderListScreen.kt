@@ -60,6 +60,7 @@ import java.util.Locale
 fun FolderListScreen(
     selectedTab: NavTab,
     onTabSelected: (NavTab) -> Unit,
+    onOpenDocument: (String) -> Unit,
     viewModel: FolderListViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -101,6 +102,7 @@ fun FolderListScreen(
         FolderListContent(
             uiState = uiState,
             onAddFolder = { pickFolderLauncher.launch(null) },
+            onOpenDocument = onOpenDocument,
             modifier = Modifier.padding(padding),
         )
     }
@@ -125,6 +127,7 @@ private fun Uri.displayName(context: Context): String? = runCatching {
 private fun FolderListContent(
     uiState: FolderListUiState,
     onAddFolder: () -> Unit,
+    onOpenDocument: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(
@@ -193,9 +196,17 @@ private fun FolderListContent(
                         .padding(bottom = 12.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    FileCard(file = row.left, modifier = Modifier.weight(1f))
+                    FileCard(
+                        file = row.left,
+                        onClick = { onOpenDocument(row.left.resourceId) },
+                        modifier = Modifier.weight(1f),
+                    )
                     if (row.right != null) {
-                        FileCard(file = row.right, modifier = Modifier.weight(1f))
+                        FileCard(
+                            file = row.right,
+                            onClick = { onOpenDocument(row.right.resourceId) },
+                            modifier = Modifier.weight(1f),
+                        )
                     } else {
                         Spacer(Modifier.weight(1f))
                     }
@@ -216,10 +227,11 @@ private fun SectionHeader(label: String) {
     )
 }
 
-/** Carte fichier — miroir du `FileCard` de l'écran d'accueil JS (non cliquable). */
+/** Carte fichier — le clic ouvre la consultation du document. */
 @Composable
-private fun FileCard(file: FileEntity, modifier: Modifier = Modifier) {
+private fun FileCard(file: FileEntity, onClick: () -> Unit, modifier: Modifier = Modifier) {
     Card(
+        onClick = onClick,
         colors = CardDefaults.cardColors(containerColor = Color(0xFFF7F8FA)),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         border = BorderStroke(1.dp, Color(0xFFEAEAEA)),
