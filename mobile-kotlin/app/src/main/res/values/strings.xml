@@ -33,6 +33,7 @@
     <string name="search">Recherche</string>
     <string name="search_hint">Rechercher un document…</string>
     <string name="search_empty">Saisis une recherche ou choisis une catégorie</string>
+    <string name="search_recent">Documents récents</string>
     <string name="search_no_results">Aucun résultat</string>
     <string name="category_all">Tous</string>
     <string name="category_pdf">PDF</string>

@@ -39,6 +39,10 @@ class FileRepository @Inject constructor(
             category = category,
         )
 
+    /** Les `limit` fichiers les plus récemment ajoutés, filtrés par catégorie. */
+    fun recentFiles(category: String?, limit: Int = RECENT_LIMIT): Flow<List<FileEntity>> =
+        fileDao.recentFiles(category = category, limit = limit)
+
     suspend fun getFile(resourceId: String): FileEntity? =
         fileDao.getByResourceId(resourceId)
 
@@ -122,6 +126,7 @@ class FileRepository @Inject constructor(
 
     companion object {
         private const val PAGE_SIZE = 50
+        private const val RECENT_LIMIT = 5
     }
 }
 

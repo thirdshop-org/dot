@@ -33,6 +33,15 @@ interface FileDao {
     """)
     fun searchWithFilters(query: String?, category: String?): Flow<List<FileEntity>>
 
+    @Query("""
+        SELECT * FROM files
+        WHERE "exists" = 1
+          AND (:category IS NULL OR category = :category)
+        ORDER BY added_at DESC, name ASC
+        LIMIT :limit
+    """)
+    fun recentFiles(category: String?, limit: Int): Flow<List<FileEntity>>
+
     @Upsert
     suspend fun upsert(file: FileEntity)
 

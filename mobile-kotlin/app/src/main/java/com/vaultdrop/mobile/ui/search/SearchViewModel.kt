@@ -31,8 +31,13 @@ class SearchViewModel @Inject constructor(
         _selectedCategory,
     ) { query, category -> CategoryQuery(query, category) }
         .flatMapLatest { (query, category) ->
-            fileRepository.searchFiles(query, category)
-                .map { files -> SearchUiState(query, category, files) }
+            val trimmed = query.trim()
+            val flow = if (trimmed.isEmpty()) {
+                fileRepository.recentFiles(category)
+            } else {
+                fileRepository.searchFiles(trimmed, category)
+            }
+            flow.map { files -> SearchUiState(query, category, files) }
         }
         .stateIn(
             scope = viewModelScope,

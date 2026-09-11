@@ -164,10 +164,10 @@ private fun SearchResults(
     onOpenDocument: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val hasQueryOrCategory = uiState.query.isNotBlank() || uiState.selectedCategory != null
+    val hasQuery = uiState.query.isNotBlank()
 
     when {
-        !hasQueryOrCategory -> Box(
+        !hasQuery && uiState.results.isEmpty() -> Box(
             modifier = modifier.fillMaxSize(),
             contentAlignment = Alignment.Center,
         ) {
@@ -180,7 +180,7 @@ private fun SearchResults(
             )
         }
 
-        uiState.results.isEmpty() -> Box(
+        hasQuery && uiState.results.isEmpty() -> Box(
             modifier = modifier.fillMaxSize(),
             contentAlignment = Alignment.Center,
         ) {
@@ -196,6 +196,16 @@ private fun SearchResults(
             contentPadding = PaddingValues(bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
+            if (!hasQuery) {
+                item(key = "recent-header") {
+                    Text(
+                        text = stringResource(R.string.search_recent),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                }
+            }
             items(uiState.results, key = { it.resourceId }) { file ->
                 SearchResultCard(file = file, onClick = { onOpenDocument(file.resourceId) })
             }
