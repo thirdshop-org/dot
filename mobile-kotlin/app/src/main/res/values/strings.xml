@@ -15,6 +15,13 @@
     <string name="refresh">Actualiser</string>
     <string name="back">Retour</string>
 
+    <!-- Navigation -->
+    <string name="nav_files">Fichiers</string>
+    <string name="nav_search">Recherche</string>
+    <string name="nav_settings">Réglages</string>
+    <string name="search">Recherche</string>
+    <string name="settings">Réglages</string>
+
     <!-- Login -->
     <string name="login_title">Connexion</string>
     <string name="login_subtitle">Connecte-toi à ton compte</string>

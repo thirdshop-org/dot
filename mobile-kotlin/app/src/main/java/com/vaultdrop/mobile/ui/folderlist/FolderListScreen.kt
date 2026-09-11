@@ -36,10 +36,14 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.vaultdrop.mobile.R
 import com.vaultdrop.mobile.data.local.entity.FolderEntity
+import com.vaultdrop.mobile.ui.navigation.FloatingNavBar
+import com.vaultdrop.mobile.ui.navigation.NavTab
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FolderListScreen(
+    selectedTab: NavTab,
+    onTabSelected: (NavTab) -> Unit,
     onOpenFolder: (String) -> Unit,
     viewModel: FolderListViewModel = hiltViewModel(),
 ) {
@@ -55,6 +59,9 @@ fun FolderListScreen(
                     }
                 },
             )
+        },
+        bottomBar = {
+            FloatingNavBar(selected = selectedTab, onSelect = onTabSelected)
         },
     ) { padding ->
         FolderListContent(
