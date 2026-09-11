@@ -3,7 +3,9 @@ package com.vaultdrop.mobile.ui.folderlist
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.vaultdrop.mobile.auth.TokenProvider
+import com.vaultdrop.mobile.data.local.entity.FileEntity
 import com.vaultdrop.mobile.data.remote.ApiException
+import com.vaultdrop.mobile.data.repository.FileRepository
 import com.vaultdrop.mobile.data.repository.FolderRepository
 import com.vaultdrop.mobile.data.repository.SaveFolderInput
 import com.vaultdrop.mobile.features.sync.DeviceSync
@@ -14,11 +16,17 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import timber.log.Timber
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
+import java.util.Locale
 import javax.inject.Inject
 
 @HiltViewModel
 class FolderListViewModel @Inject constructor(
     private val folderRepository: FolderRepository,
+    private val fileRepository: FileRepository,
     private val tokenProvider: TokenProvider,
     private val deviceSync: DeviceSync,
 ) : ViewModel() {
@@ -27,17 +35,49 @@ class FolderListViewModel @Inject constructor(
     val uiState: StateFlow<FolderListUiState> = _uiState.asStateFlow()
 
     init {
-        observeFolders()
+        observeFiles()
         refresh()
     }
 
-    private fun observeFolders() {
+    /** Grille d'accueil : tous les fichiers visibles, groupés par jour (addedAt). */
+    private fun observeFiles() {
         viewModelScope.launch {
-            folderRepository.observeRootFolders().collect { folders ->
-                _uiState.update { it.copy(folders = folders) }
+            fileRepository.observeAllVisible().collect { files ->
+                _uiState.update { it.copy(sections = groupFilesByDay(files)) }
             }
         }
     }
+
+    /** Miroir de `groupFilesByDay` (app/index.tsx) : sections triées du plus récent
+     *  au plus vieux, fichiers d'un jour triés par date décroissante, en paires. */
+    private fun groupFilesByDay(files: List<FileEntity>): List<FileSection> {
+        val zone = ZoneId.systemDefault()
+        return files
+            .groupBy { startOfDay(it.addedAt, zone) }
+            .entries
+            .sortedByDescending { it.key }
+            .map { (day, list) ->
+                val rows = list.sortedByDescending { it.addedAt }
+                    .chunked(2)
+                    .map { pair ->
+                        FilePair(
+                            key = pair.joinToString { it.resourceId },
+                            left = pair[0],
+                            right = pair.getOrNull(1),
+                        )
+                    }
+                FileSection(dayKey = day, dayLabel = formatDayLabel(day, zone), rows = rows)
+            }
+    }
+
+    private fun startOfDay(millis: Long, zone: ZoneId): Long =
+        Instant.ofEpochMilli(millis).atZone(zone).toLocalDate()
+            .atStartOfDay(zone).toInstant().toEpochMilli()
+
+    private fun formatDayLabel(millis: Long, zone: ZoneId): String =
+        DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)
+            .withLocale(Locale.getDefault())
+            .format(Instant.ofEpochMilli(millis).atZone(zone).toLocalDate())
 
     fun refresh() {
         viewModelScope.launch {

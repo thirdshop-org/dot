@@ -7,27 +7,28 @@ import android.provider.DocumentsContract
 import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -38,8 +39,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -49,16 +50,16 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.vaultdrop.mobile.R
-import com.vaultdrop.mobile.data.local.entity.FolderEntity
+import com.vaultdrop.mobile.data.local.entity.FileEntity
 import com.vaultdrop.mobile.ui.navigation.FloatingNavBar
 import com.vaultdrop.mobile.ui.navigation.NavTab
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FolderListScreen(
     selectedTab: NavTab,
     onTabSelected: (NavTab) -> Unit,
-    onOpenFolder: (String) -> Unit,
     viewModel: FolderListViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -99,7 +100,6 @@ fun FolderListScreen(
     ) { padding ->
         FolderListContent(
             uiState = uiState,
-            onOpenFolder = onOpenFolder,
             onAddFolder = { pickFolderLauncher.launch(null) },
             modifier = Modifier.padding(padding),
         )
@@ -124,82 +124,80 @@ private fun Uri.displayName(context: Context): String? = runCatching {
 @Composable
 private fun FolderListContent(
     uiState: FolderListUiState,
-    onOpenFolder: (String) -> Unit,
     onAddFolder: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(modifier = modifier.fillMaxSize()) {
-        Button(
-            onClick = onAddFolder,
-            enabled = !uiState.isScanning,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-        ) {
-            Icon(Icons.Filled.Add, contentDescription = null)
-            Spacer(Modifier.width(8.dp))
-            Text(stringResource(R.string.add_folder))
+    LazyColumn(
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(horizontal = 16.dp),
+    ) {
+        item(key = "actions") {
+            Button(
+                onClick = onAddFolder,
+                enabled = !uiState.isScanning,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 12.dp),
+            ) {
+                Icon(Icons.Filled.Add, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.add_folder))
+            }
         }
 
         if (uiState.isScanning) {
-            LinearProgressIndicator(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-            )
+            item(key = "scanning") {
+                LinearProgressIndicator(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 12.dp),
+                )
+            }
         }
 
         uiState.error?.let { error ->
-            Text(
-                text = error,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.error,
-                textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-            )
+            item(key = "error") {
+                Text(
+                    text = error,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 12.dp),
+                )
+            }
         }
 
-        when {
-            uiState.folders.isEmpty() && uiState.isRefreshing -> {
-                Box(
+        if (uiState.sections.isEmpty() && !uiState.isScanning) {
+            item(key = "empty") {
+                Text(
+                    text = stringResource(R.string.no_files_yet),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
                     modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth(),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    CircularProgressIndicator()
-                }
-            }
-
-            uiState.folders.isEmpty() -> {
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
                         .fillMaxWidth()
-                        .padding(24.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = stringResource(R.string.no_folders_yet),
-                        style = MaterialTheme.typography.bodyLarge,
-                        textAlign = TextAlign.Center,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+                        .padding(vertical = 32.dp),
+                )
             }
+        }
 
-            else -> {
-                LazyColumn(
+        uiState.sections.forEach { section ->
+            item(key = "header-${section.dayKey}") {
+                SectionHeader(section.dayLabel)
+            }
+            items(section.rows, key = { it.key }) { row ->
+                Row(
                     modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth(),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    items(uiState.folders, key = { it.resourceId }) { folder ->
-                        FolderRow(folder, onClick = { onOpenFolder(folder.resourceId) })
+                    FileCard(file = row.left, modifier = Modifier.weight(1f))
+                    if (row.right != null) {
+                        FileCard(file = row.right, modifier = Modifier.weight(1f))
+                    } else {
+                        Spacer(Modifier.weight(1f))
                     }
                 }
             }
@@ -208,32 +206,61 @@ private fun FolderListContent(
 }
 
 @Composable
-private fun FolderRow(folder: FolderEntity, onClick: () -> Unit) {
+private fun SectionHeader(label: String) {
+    Text(
+        text = label,
+        style = MaterialTheme.typography.labelLarge,
+        fontWeight = FontWeight.SemiBold,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(top = 16.dp, bottom = 4.dp),
+    )
+}
+
+/** Carte fichier — miroir du `FileCard` de l'écran d'accueil JS (non cliquable). */
+@Composable
+private fun FileCard(file: FileEntity, modifier: Modifier = Modifier) {
     Card(
-        onClick = onClick,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFF7F8FA)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        border = BorderStroke(1.dp, Color(0xFFEAEAEA)),
+        shape = RoundedCornerShape(10.dp),
+        modifier = modifier,
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
+        Column(modifier = Modifier.padding(12.dp)) {
             Icon(
-                imageVector = Icons.Filled.Folder,
+                imageVector = Icons.Filled.InsertDriveFile,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(28.dp),
+                modifier = Modifier.size(36.dp),
             )
+            Spacer(Modifier.height(8.dp))
             Text(
-                text = folder.name,
-                style = MaterialTheme.typography.titleMedium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+                text = file.name,
+                style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.Medium,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = formatSize(file.size),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }
+}
+
+/** Miroir de `formatSize` (app/index.tsx). */
+@Composable
+private fun formatSize(bytes: Long): String {
+    if (bytes < 1_024) {
+        return "$bytes ${stringResource(R.string.unit_bytes)}"
+    }
+    if (bytes < 1_024 * 1_024) {
+        val kb = bytes / 1_024f
+        return String.format(Locale.getDefault(), "%.1f %s", kb, stringResource(R.string.unit_kilobytes))
+    }
+    val mb = bytes / (1_024f * 1_024f)
+    return String.format(Locale.getDefault(), "%.1f %s", mb, stringResource(R.string.unit_megabytes))
 }

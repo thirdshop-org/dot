@@ -54,7 +54,6 @@ fun NavGraph() {
             FolderListScreen(
                 selectedTab = selectedTab,
                 onTabSelected = onTabSelected,
-                onOpenFolder = { id -> navController.navigate(Routes.folder(id)) },
             )
         }
         composable(Routes.SEARCH) {

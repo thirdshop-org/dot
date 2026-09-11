@@ -15,6 +15,9 @@ interface FileDao {
     @Query("SELECT * FROM files WHERE folder_resource_id = :folderResourceId AND \"exists\" = 1 ORDER BY name ASC")
     fun observeByFolder(folderResourceId: String): Flow<List<FileEntity>>
 
+    @Query("SELECT * FROM files WHERE \"exists\" = 1 ORDER BY added_at DESC, name ASC")
+    fun observeAllVisible(): Flow<List<FileEntity>>
+
     @Query("SELECT * FROM files WHERE resource_id = :resourceId LIMIT 1")
     suspend fun getByResourceId(resourceId: String): FileEntity?
 

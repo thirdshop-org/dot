@@ -1,9 +1,24 @@
 package com.vaultdrop.mobile.ui.folderlist
 
-import com.vaultdrop.mobile.data.local.entity.FolderEntity
+import com.vaultdrop.mobile.data.local.entity.FileEntity
+
+/** Section d'un jour dans la grille d'accueil — miroir de `FileSection` (app/index.tsx). */
+data class FileSection(
+    /** Début du jour en millis (fuseau local) — clé stable de la section. */
+    val dayKey: Long,
+    val dayLabel: String,
+    val rows: List<FilePair>,
+)
+
+/** Rangée de grille : 2 cartes maximum, la droite est facultative. */
+data class FilePair(
+    val key: String,
+    val left: FileEntity,
+    val right: FileEntity? = null,
+)
 
 data class FolderListUiState(
-    val folders: List<FolderEntity> = emptyList(),
+    val sections: List<FileSection> = emptyList(),
     val isRefreshing: Boolean = false,
     /** true pendant l'exploration SAF d'une racine (marche récursive en cours). */
     val isScanning: Boolean = false,
