@@ -70,6 +70,17 @@ class AuthViewModel @Inject constructor(
         _authState.value = AuthState.Local
     }
 
+    /** Purge la session et revient en mode local (sans repasser par le login). */
+    fun signOutToLocal() {
+        viewModelScope.launch {
+            Timber.d("auth: session purgée (mode local)")
+            withContext(Dispatchers.IO) {
+                sessionManager.clear()
+            }
+            _authState.value = AuthState.Local
+        }
+    }
+
     fun signOut() {
         viewModelScope.launch {
             Timber.d("auth: session purgée (signOut)")

@@ -16,6 +16,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.vaultdrop.mobile.features.sync.SyncViewModel
+import com.vaultdrop.mobile.ui.auth.AuthViewModel
 import com.vaultdrop.mobile.ui.document.DocumentViewerScreen
 import com.vaultdrop.mobile.ui.folderdetail.FolderDetailScreen
 import com.vaultdrop.mobile.ui.folderlist.FolderListScreen
@@ -43,7 +44,10 @@ private fun String?.toNavTab(): NavTab = when (this) {
 }
 
 @Composable
-fun NavGraph(syncViewModel: SyncViewModel) {
+fun NavGraph(
+    authViewModel: AuthViewModel,
+    syncViewModel: SyncViewModel,
+) {
     val navController = rememberNavController()
 
     val backStackEntry by navController.currentBackStackEntryAsState()
@@ -84,6 +88,7 @@ fun NavGraph(syncViewModel: SyncViewModel) {
                 SettingsScreen(
                     selectedTab = selectedTab,
                     onTabSelected = onTabSelected,
+                    authViewModel = authViewModel,
                 )
             }
             composable(

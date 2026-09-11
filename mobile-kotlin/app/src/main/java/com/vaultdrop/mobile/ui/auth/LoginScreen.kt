@@ -108,7 +108,7 @@ fun LoginScreen(
         loginUi.error?.let { error ->
             Spacer(Modifier.height(12.dp))
             Text(
-                text = stringResource(errorResFor(error)),
+                text = stringResource(authErrorResFor(error)),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.error,
                 textAlign = TextAlign.Center,
@@ -126,10 +126,4 @@ fun LoginScreen(
             textAlign = TextAlign.Center,
         )
     }
-}
-
-private fun errorResFor(code: String): Int = when (code) {
-    "REQUIRED" -> R.string.login_error_required
-    "UNAUTHORIZED" -> R.string.login_error_unauthorized
-    else -> R.string.login_error_generic
 }

@@ -8,9 +8,6 @@ plugins {
     alias(libs.plugins.hilt)
 }
 
-val apiBaseUrl: String = providers.gradleProperty("VAULTDROP_API_BASE_URL")
-    .getOrElse("http://10.0.2.2:8080/api/v1")
-
 android {
     namespace = "com.vaultdrop.mobile"
     compileSdk = 35
@@ -21,8 +18,6 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "0.1.0"
-
-        buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
     }
 
     buildTypes {
@@ -79,6 +74,8 @@ dependencies {
 
     implementation(libs.androidx.security.crypto)
     implementation(libs.timber)
+
+    implementation(libs.coil.compose)
 
     debugImplementation(libs.androidx.compose.ui.tooling)
 }

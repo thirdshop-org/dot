@@ -17,11 +17,19 @@
 
     <!-- Consultation de documents -->
     <string name="document">Document</string>
-    <string name="document_reader_coming">Lecteur de documents à venir</string>
     <string name="document_size">Taille</string>
     <string name="document_type">Type</string>
     <string name="document_added_at">Ajouté le</string>
     <string name="document_modified_at">Modifié le</string>
+    <string name="document_open_with">Ouvrir avec</string>
+    <string name="document_open_with_hint">Aucun lecteur intégré — ouvre ce fichier dans une application externe.</string>
+    <string name="document_open_error">Aucune application ne peut ouvrir ce fichier.</string>
+    <string name="document_cloud_only">Disponible uniquement sur le cloud</string>
+    <string name="document_cloud_only_hint">Ce fichier n\'est pas téléchargé sur cet appareil. Connecte-toi à ton serveur pour le rendre disponible.</string>
+    <string name="document_truncated_notice">Aperçu tronqué — le fichier complet n\'est pas affiché.</string>
+    <string name="document_loading">Lecture du document…</string>
+    <string name="document_cannot_read">Impossible de lire ce document.</string>
+    <string name="document_page_unreadable">Page illisible</string>
 
     <!-- Navigation -->
     <string name="nav_files">Fichiers</string>
@@ -31,6 +39,14 @@
     <string name="settings_dark_mode">Mode sombre</string>
     <string name="settings_dark_mode_on">Thème sombre actif</string>
     <string name="settings_dark_mode_off">Thème clair actif</string>
+    <string name="settings_server">Serveur</string>
+    <string name="settings_server_url">Adresse du serveur</string>
+    <string name="settings_test_connection">Tester la connexion</string>
+    <string name="settings_test_success">Serveur joignable</string>
+    <string name="settings_test_failure">Serveur injoignable — vérifie l\'adresse et ta connexion.</string>
+    <string name="settings_connect">Se connecter</string>
+    <string name="settings_disconnect">Se déconnecter</string>
+    <string name="settings_connected_as">Connecté en tant que %1$s</string>
 
     <!-- Recherche -->
     <string name="search">Recherche</string>

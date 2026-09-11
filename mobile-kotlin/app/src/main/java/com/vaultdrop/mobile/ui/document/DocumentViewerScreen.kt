@@ -1,9 +1,6 @@
 package com.vaultdrop.mobile.ui.document
 
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -13,7 +10,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Card
@@ -23,6 +19,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -30,9 +28,10 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -41,7 +40,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.vaultdrop.mobile.R
 import com.vaultdrop.mobile.data.local.entity.FileEntity
-import com.vaultdrop.mobile.ui.components.FileCategoryIcon
+import com.vaultdrop.mobile.ui.document.content.DocumentContentViewer
+import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -49,9 +49,9 @@ import java.time.format.FormatStyle
 import java.util.Locale
 
 /**
- * Consultation d'un document : titre + métadonnées, navigation au swipe entre
- * les documents (même fil que l'écran d'accueil). Le lecteur sera intégré par
- * la suite dans la zone centrale.
+ * Consultation d'un document : lecteur intégré (PDF / image / texte) ou fallback
+ * externe, carte de métadonnées, navigation au swipe entre les documents (même
+ * fil que l'écran d'accueil).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -77,7 +77,17 @@ fun DocumentViewerScreen(
 
     val currentFile = documents.getOrNull(pagerState.currentPage)
 
+    val context = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    val onOpenExternalFailed: () -> Unit = {
+        scope.launch {
+            snackbarHostState.showSnackbar(context.getString(R.string.document_open_error))
+        }
+    }
+
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {
@@ -105,36 +115,31 @@ fun DocumentViewerScreen(
                 .padding(padding),
         ) { page ->
             val file = documents.getOrNull(page)
-            if (file != null) DocumentViewerPage(file)
+            if (file != null) DocumentViewerPage(file = file, onOpenExternalFailed = onOpenExternalFailed)
         }
     }
 }
 
 @Composable
-private fun DocumentViewerPage(file: FileEntity, modifier: Modifier = Modifier) {
+private fun DocumentViewerPage(
+    file: FileEntity,
+    onOpenExternalFailed: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     Column(
         modifier = modifier
             .fillMaxSize()
             .padding(16.dp),
     ) {
-        // Emplacement du futur lecteur de documents.
-        Box(
+        // Lecteur central : dispatch par catégorie (PDF / image / texte /
+        // délégation externe), état dédié pour les fichiers cloud-only.
+        DocumentContentViewer(
+            file = file,
+            onOpenExternalFailed = onOpenExternalFailed,
             modifier = Modifier
                 .fillMaxWidth()
-                .weight(1f)
-                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp)),
-            contentAlignment = Alignment.Center,
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                FileCategoryIcon(file = file, size = 64.dp)
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    text = stringResource(R.string.document_reader_coming),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
+                .weight(1f),
+        )
 
         Spacer(Modifier.height(16.dp))
 

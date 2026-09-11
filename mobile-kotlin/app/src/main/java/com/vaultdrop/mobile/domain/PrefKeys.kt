@@ -6,4 +6,5 @@ object PrefKeys {
     const val ACTIVE_USER_ID = "active_user_id"
     const val SYNC_MODE = "sync_mode"
     const val THEME = "theme"
+    const val SERVER_URL = "server_url"
 }
