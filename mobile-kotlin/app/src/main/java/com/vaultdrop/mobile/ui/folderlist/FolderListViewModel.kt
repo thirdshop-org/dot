@@ -156,14 +156,22 @@ class FolderListViewModel @Inject constructor(
         }
     }
 
-    /** Remonte au parent du dossier courant (reste à la racine si déjà en haut). */
+    /** Remonte au parent du dossier courant (s'arrête à la racine VaultDrop). */
     fun browseUp() {
         val current = _browseFolderId.value
         viewModelScope.launch {
             val parent = current?.let { folderRepository.getFolder(it)?.parentResourceId }
-            _browseFolderId.value = parent
-            val name = parent?.let { folderRepository.getFolder(it)?.name }
-            _uiState.update { it.copy(browseFolderId = parent, browseFolderName = name) }
+            // La racine par défaut (VaultDrop) est le plafond : remonter à son
+            // niveau ou plus haut ramène à l'explorateur de premier niveau.
+            if (parent != null && parent != _defaultRootId.value) {
+                _browseFolderId.value = parent
+                val name = folderRepository.getFolder(parent)?.name
+                _uiState.update { it.copy(browseFolderId = parent, browseFolderName = name) }
+            } else {
+                _browseFolderId.value = null
+                val rootName = _defaultRootId.value?.let { folderRepository.getFolder(it)?.name }
+                _uiState.update { it.copy(browseFolderId = null, browseFolderName = rootName) }
+            }
         }
     }
 
