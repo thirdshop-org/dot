@@ -29,7 +29,7 @@ class SafFolderCreator @Inject constructor(
      * ou null si le parent est absente ou si la création échoue.
      */
     suspend fun createFolder(parentUri: String?, name: String): Uri? {
-        val parentDocumentUri = toDocumentUri(parentUri) ?: return null
+        val parentDocumentUri = SafUris.toDocumentUri(parentUri) ?: return null
         val created = runCatching {
             DocumentsContract.createDocument(
                 resolver,
@@ -51,22 +51,5 @@ class SafFolderCreator @Inject constructor(
         }.onFailure { Timber.w(it, "persistable uri permission absent for new folder") }
 
         return created
-    }
-
-    /**
-     * `DocumentsContract.createDocument` attend un URI *document*, pas un URI
-     * *tree*. Convertit un tree URI en document URI (équivalent au dossier
-     * racine de l'arbre) — les deux autorités sont identiques.
-     */
-    private fun toDocumentUri(uri: String?): Uri? {
-        val raw = uri?.let(Uri::parse) ?: return null
-        return if (DocumentsContract.isTreeUri(raw)) {
-            DocumentsContract.buildDocumentUriUsingTree(
-                raw,
-                DocumentsContract.getTreeDocumentId(raw),
-            )
-        } else {
-            raw
-        }
     }
 }

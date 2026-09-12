@@ -17,6 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CreateNewFolder
+import androidx.compose.material.icons.filled.DriveFileMove
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.MergeType
 import androidx.compose.material.icons.filled.Refresh
@@ -51,6 +52,7 @@ import com.vaultdrop.mobile.data.local.entity.FolderEntity
 import com.vaultdrop.mobile.features.connection.ConnectionStatusViewModel
 import com.vaultdrop.mobile.ui.components.FileCategoryIcon
 import com.vaultdrop.mobile.ui.components.FolderNameDialog
+import com.vaultdrop.mobile.ui.components.MoveFolderPickerDialog
 import com.vaultdrop.mobile.ui.components.SelectionState
 import com.vaultdrop.mobile.ui.components.SelectionStatusIcon
 import com.vaultdrop.mobile.ui.components.ServerStatusBadge
@@ -72,6 +74,7 @@ fun FolderDetailScreen(
     val connectionStatus by connectionStatusViewModel.status.collectAsStateWithLifecycle()
     val selection = rememberSelectionState()
     var showCreateDialog by remember { mutableStateOf(false) }
+    var showMoveDialog by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(uiState.folderMissing) {
@@ -84,6 +87,18 @@ fun FolderDetailScreen(
             snackbarHostState.showSnackbar(createError)
             viewModel.clearCreateError()
         }
+    }
+
+    LaunchedEffect(uiState.moveError) {
+        val moveError = uiState.moveError
+        if (moveError != null) {
+            snackbarHostState.showSnackbar(moveError)
+            viewModel.clearMoveError()
+        }
+    }
+
+    LaunchedEffect(showMoveDialog) {
+        if (showMoveDialog) viewModel.loadMoveFolders()
     }
 
     BackHandler(enabled = selection.active) { selection.clear() }
@@ -117,6 +132,15 @@ fun FolderDetailScreen(
                 },
                 actions = {
                     if (selection.active) {
+                        IconButton(
+                            onClick = { showMoveDialog = true },
+                            enabled = selection.ids.isNotEmpty(),
+                        ) {
+                            Icon(
+                                Icons.Filled.DriveFileMove,
+                                contentDescription = stringResource(R.string.move_files),
+                            )
+                        }
                         IconButton(
                             onClick = {
                                 val ids = selection.ids.toList()
@@ -168,6 +192,24 @@ fun FolderDetailScreen(
             onConfirm = { name ->
                 showCreateDialog = false
                 viewModel.createFolder(name)
+            },
+        )
+    }
+
+    val moveFolders = uiState.moveFolders
+    if (showMoveDialog && moveFolders != null) {
+        MoveFolderPickerDialog(
+            folders = moveFolders,
+            fileCount = selection.ids.size,
+            onDismiss = {
+                showMoveDialog = false
+                viewModel.closeMovePicker()
+            },
+            onConfirm = { folderId ->
+                val ids = selection.ids.toList()
+                selection.clear()
+                showMoveDialog = false
+                viewModel.moveSelectedFiles(ids, folderId)
             },
         )
     }

@@ -48,6 +48,12 @@ interface FileDao {
     @Query("UPDATE files SET \"exists\" = 0, updated_at = :updatedAt WHERE resource_id = :resourceId")
     suspend fun markMissing(resourceId: String, updatedAt: Long)
 
+    @Query("UPDATE files SET folder_resource_id = :folderId, updated_at = :updatedAt WHERE resource_id IN (:resourceIds)")
+    suspend fun moveToFolder(resourceIds: List<String>, folderId: String, updatedAt: Long)
+
+    @Query("UPDATE files SET uri = :uri WHERE resource_id = :resourceId")
+    suspend fun updateUri(resourceId: String, uri: String?)
+
     @Query("DELETE FROM files WHERE resource_id = :resourceId")
     suspend fun remove(resourceId: String)
 }

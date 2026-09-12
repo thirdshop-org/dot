@@ -17,6 +17,10 @@ interface FolderDao {
     @Query("SELECT * FROM folders ORDER BY name ASC")
     suspend fun getAll(): List<FolderEntity>
 
+    /** Dossiers créés dans l'app (`created_in_app = 1`) — cibles du picker de déplacement. */
+    @Query("SELECT * FROM folders WHERE \"created_in_app\" = 1 ORDER BY name ASC")
+    suspend fun getCreatedInApp(): List<FolderEntity>
+
     @Query("SELECT * FROM folders WHERE parent_resource_id IS NULL ORDER BY name ASC")
     fun observeRootFolders(): Flow<List<FolderEntity>>
 

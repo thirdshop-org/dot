@@ -88,6 +88,13 @@ class FileRepository @Inject constructor(
     suspend fun markMissing(resourceId: String, updatedAt: Long) =
         fileDao.markMissing(resourceId, updatedAt)
 
+    /** Met à jour la cible dossier d'un fichier (déplacement local / cloud-only). */
+    suspend fun applyMove(resourceId: String, folderId: String, newUri: String?) {
+        val now = System.currentTimeMillis()
+        fileDao.moveToFolder(listOf(resourceId), folderId, now)
+        if (newUri != null) fileDao.updateUri(resourceId, newUri)
+    }
+
     /**
      * `GET /files?folderId=...` (1re page, tri serveur) puis upsert cloud de
      * chaque fichier. Ne supprime jamais de lignes locales.

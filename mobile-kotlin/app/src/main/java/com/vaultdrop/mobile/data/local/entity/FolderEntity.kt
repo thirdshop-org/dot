@@ -40,6 +40,8 @@ data class FolderEntity(
     val ownerId: String? = null,
     @ColumnInfo(name = "sync_status")
     val syncStatus: String = "local",
+    @ColumnInfo(name = "created_in_app", defaultValue = "0")
+    val createdInApp: Boolean = false,
     @ColumnInfo(name = "added_at")
     val addedAt: Long,
     @ColumnInfo(name = "updated_at")

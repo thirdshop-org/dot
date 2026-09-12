@@ -15,6 +15,7 @@ import com.vaultdrop.mobile.data.remote.ApiException
 import com.vaultdrop.mobile.data.repository.FileRepository
 import com.vaultdrop.mobile.data.repository.FolderRepository
 import com.vaultdrop.mobile.data.repository.SaveFolderInput
+import com.vaultdrop.mobile.features.saf.FileMover
 import com.vaultdrop.mobile.features.saf.SafFolderCreator
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -40,6 +41,7 @@ class FolderListViewModel @Inject constructor(
     private val tokenProvider: TokenProvider,
     private val defaultRootStore: DefaultRootStore,
     private val safFolderCreator: SafFolderCreator,
+    private val fileMover: FileMover,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
 
@@ -95,7 +97,12 @@ class FolderListViewModel @Inject constructor(
         } ?: return null
 
         val saved = folderRepository.saveFolder(
-            input = SaveFolderInput(uri = vaultFolderUri.toString(), name = label, exists = true),
+            input = SaveFolderInput(
+                uri = vaultFolderUri.toString(),
+                name = label,
+                exists = true,
+                createdInApp = true,
+            ),
             parentResourceId = rootRoomId,
         )
         return saved.resourceId
@@ -150,7 +157,7 @@ class FolderListViewModel @Inject constructor(
                 return@launch
             }
             folderRepository.saveFolder(
-                input = SaveFolderInput(uri = created.toString(), name = trimmed, exists = true),
+                input = SaveFolderInput(uri = created.toString(), name = trimmed, exists = true, createdInApp = true),
                 parentResourceId = root.resourceId,
             )
         }
@@ -159,6 +166,36 @@ class FolderListViewModel @Inject constructor(
     /** Consomme une erreur transitoire de création (Snackbar). */
     fun clearCreateError() {
         _uiState.update { it.copy(createError = null) }
+    }
+
+    /** Charge les dossiers éligibles pour le picker de déplacement. */
+    fun loadMoveFolders() {
+        viewModelScope.launch {
+            val moveFolders = folderRepository.getCreatedInApp()
+            _uiState.update { it.copy(moveFolders = moveFolders) }
+        }
+    }
+
+    /** Déplace les fichiers vers le dossier cible puis ferme le picker. */
+    fun moveSelectedFiles(resourceIds: List<String>, targetFolderId: String) {
+        viewModelScope.launch {
+            runCatching { fileMover.moveFiles(resourceIds, targetFolderId) }
+                .onFailure {
+                    _uiState.update { state ->
+                        state.copy(moveError = context.getString(R.string.move_files_error))
+                    }
+                }
+            _uiState.update { it.copy(moveFolders = null) }
+        }
+    }
+
+    /** Ferme le picker sans déplacer (annulation). */
+    fun closeMovePicker() {
+        _uiState.update { it.copy(moveFolders = null) }
+    }
+
+    fun clearMoveError() {
+        _uiState.update { it.copy(moveError = null) }
     }
 
     /** Grille d'accueil : tous les fichiers visibles, groupés par jour (date de référence). */

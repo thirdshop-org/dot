@@ -11,6 +11,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  *   du compte actif et les préférences utilisateur.
  * v3 : table `files` — miroir de `FileRow` JS (métadonnées locales + cloud).
  * v4 : ajout colonne `category` + index sur `files`.
+ * v5 : ajout colonne `created_in_app` sur `folders` (marqueur « créé dans
+ *   l'app » — 0 par défaut pour les dossiers importés/Parcourus SAF, 1 pour la
+ *   feature « Créer un dossier ». Utilisé pour filtrer le picker de déplacement).
  */
 object Migrations {
 
@@ -66,5 +69,11 @@ object Migrations {
         }
     }
 
-    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+    private val MIGRATION_4_5 = object : Migration(4, 5) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE `folders` ADD COLUMN `created_in_app` INTEGER NOT NULL DEFAULT 0")
+        }
+    }
+
+    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
 }

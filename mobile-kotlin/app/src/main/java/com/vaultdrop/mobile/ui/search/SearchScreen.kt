@@ -21,6 +21,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.DriveFileMove
 import androidx.compose.material.icons.filled.MergeType
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Card
@@ -33,10 +34,16 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -52,6 +59,7 @@ import com.vaultdrop.mobile.data.local.entity.FileEntity
 import com.vaultdrop.mobile.domain.FileCategory
 import com.vaultdrop.mobile.features.connection.ConnectionStatusViewModel
 import com.vaultdrop.mobile.ui.components.FileCategoryIcon
+import com.vaultdrop.mobile.ui.components.MoveFolderPickerDialog
 import com.vaultdrop.mobile.ui.components.SelectionState
 import com.vaultdrop.mobile.ui.components.SelectionStatusIcon
 import com.vaultdrop.mobile.ui.components.ServerStatusBadge
@@ -74,7 +82,23 @@ fun SearchScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val connectionStatus by connectionStatusViewModel.status.collectAsStateWithLifecycle()
+    val moveFolders by viewModel.moveFolders.collectAsStateWithLifecycle()
+    val moveError by viewModel.moveError.collectAsStateWithLifecycle()
     val selection = rememberSelectionState()
+    var showMoveDialog by remember { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(moveError) {
+        val message = moveError
+        if (message != null) {
+            snackbarHostState.showSnackbar(message)
+            viewModel.clearMoveError()
+        }
+    }
+
+    LaunchedEffect(showMoveDialog) {
+        if (showMoveDialog) viewModel.loadMoveFolders()
+    }
 
     BackHandler(enabled = selection.active) { selection.clear() }
 
@@ -101,6 +125,15 @@ fun SearchScreen(
                 actions = {
                     if (selection.active) {
                         IconButton(
+                            onClick = { showMoveDialog = true },
+                            enabled = selection.ids.isNotEmpty(),
+                        ) {
+                            Icon(
+                                Icons.Filled.DriveFileMove,
+                                contentDescription = stringResource(R.string.move_files),
+                            )
+                        }
+                        IconButton(
                             onClick = {
                                 val ids = selection.ids.toList()
                                 selection.clear()
@@ -125,6 +158,7 @@ fun SearchScreen(
         bottomBar = {
             FloatingNavBar(selected = selectedTab, onSelect = onTabSelected)
         },
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
     ) { padding ->
         SearchContent(
             uiState = uiState,
@@ -133,6 +167,24 @@ fun SearchScreen(
             onCategorySelect = viewModel::onCategorySelect,
             onOpenDocument = onOpenDocument,
             modifier = Modifier.padding(padding),
+        )
+    }
+
+    val folders = moveFolders
+    if (showMoveDialog && folders != null) {
+        MoveFolderPickerDialog(
+            folders = folders,
+            fileCount = selection.ids.size,
+            onDismiss = {
+                showMoveDialog = false
+                viewModel.closeMovePicker()
+            },
+            onConfirm = { folderId ->
+                val ids = selection.ids.toList()
+                selection.clear()
+                showMoveDialog = false
+                viewModel.moveSelectedFiles(ids, folderId)
+            },
         )
     }
 }

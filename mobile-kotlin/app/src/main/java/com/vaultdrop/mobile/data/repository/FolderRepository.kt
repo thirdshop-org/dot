@@ -33,6 +33,9 @@ class FolderRepository @Inject constructor(
 
     suspend fun getAll(): List<FolderEntity> = folderDao.getAll()
 
+    /** Dossiers créés dans l'app uniquement (cibles du picker de déplacement). */
+    suspend fun getCreatedInApp(): List<FolderEntity> = folderDao.getCreatedInApp()
+
     suspend fun getFolder(resourceId: String): FolderEntity? =
         folderDao.getByResourceId(resourceId)
 
@@ -93,6 +96,7 @@ class FolderRepository @Inject constructor(
             parentResourceId = parentResourceId ?: existing?.parentResourceId,
             ownerId = ownerId ?: existing?.ownerId ?: deviceIdentity.getOrCreate(),
             syncStatus = existing?.syncStatus ?: FolderStatus.LOCAL,
+            createdInApp = existing?.createdInApp ?: input.createdInApp,
             addedAt = existing?.addedAt ?: now,
             updatedAt = now,
         )
@@ -110,4 +114,6 @@ data class SaveFolderInput(
     val name: String,
     val exists: Boolean? = null,
     val resourceId: String? = null,
+    /** `true` si le dossier est créé via la feature « Créer un dossier » (picker de déplacement). */
+    val createdInApp: Boolean = false,
 )

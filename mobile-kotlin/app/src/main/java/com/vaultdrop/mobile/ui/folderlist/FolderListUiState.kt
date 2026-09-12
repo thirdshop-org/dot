@@ -25,4 +25,8 @@ data class FolderListUiState(
     val error: String? = null,
     /** Erreur transitoire de création de dossier — affichée en Snackbar puis effacée. */
     val createError: String? = null,
+    /** Dossiers disponibles pour le picker de déplacement (null = pas chargé). */
+    val moveFolders: List<FolderEntity>? = null,
+    /** Erreur transitoire de déplacement — affichée en Snackbar puis effacée. */
+    val moveError: String? = null,
 )
