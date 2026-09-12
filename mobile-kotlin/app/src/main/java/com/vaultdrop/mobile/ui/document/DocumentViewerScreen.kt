@@ -40,6 +40,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -65,6 +67,7 @@ import com.vaultdrop.mobile.ui.document.content.DocumentContentViewer
 import com.vaultdrop.mobile.ui.document.content.ImageViewer
 import com.vaultdrop.mobile.ui.document.content.PdfFocusViewer
 import com.vaultdrop.mobile.ui.document.content.TextFocusViewer
+import com.vaultdrop.mobile.ui.document.content.ZoomableContent
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.ZoneId
@@ -294,6 +297,7 @@ private fun PdfFullscreenReader(
 ) {
     var pageCount by remember(file.resourceId) { mutableIntStateOf(0) }
     val pagerState = rememberPagerState(pageCount = { pageCount })
+    var zoom by remember(file.resourceId) { mutableFloatStateOf(1f) }
 
     FocusScaffold(
         file = file,
@@ -301,18 +305,24 @@ private fun PdfFullscreenReader(
         modifier = modifier,
         position = if (pageCount > 0) "${pagerState.currentPage + 1} / $pageCount" else null,
     ) {
-        PdfFocusViewer(
-            file = file,
-            contentResolver = LocalContext.current.contentResolver,
-            onOpenExternalFailed = onOpenExternalFailed,
-            pagerState = pagerState,
+        ZoomableContent(
             modifier = Modifier.fillMaxSize(),
-            onPageCountChanged = { pageCount = it },
-        )
+            onScaleChanged = { zoom = it },
+        ) {
+            PdfFocusViewer(
+                file = file,
+                contentResolver = LocalContext.current.contentResolver,
+                onOpenExternalFailed = onOpenExternalFailed,
+                pagerState = pagerState,
+                modifier = Modifier.fillMaxSize(),
+                onPageCountChanged = { pageCount = it },
+                renderScale = pdfRenderScale(zoom),
+            )
+        }
     }
 }
 
-/** Image focus : l'image remplit l'écran (fit) sur fond noir. */
+/** Image focus : l'image remplit l'écran (fit), pincable sur fond noir. */
 @Composable
 private fun ImageFullscreenReader(
     file: FileEntity,
@@ -330,12 +340,14 @@ private fun ImageFullscreenReader(
         onExitFullscreen = onExitFullscreen,
         modifier = modifier,
     ) {
-        ImageViewer(
-            contentResolver = contentResolver,
-            uri = uri,
-            contentDescription = file.name,
-            modifier = Modifier.fillMaxSize(),
-        )
+        ZoomableContent(modifier = Modifier.fillMaxSize()) {
+            ImageViewer(
+                contentResolver = contentResolver,
+                uri = uri,
+                contentDescription = file.name,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
     }
 }
 
@@ -447,6 +459,13 @@ private fun FileEntity.canFocus(): Boolean =
     uri != null && categoryValue() in FOCUS_CATEGORIES
 
 private val FOCUS_CATEGORIES = setOf(FileCategory.PDF, FileCategory.IMAGE, FileCategory.TEXT)
+
+/** Résolution de rendu PDF en fonction du zoom : re-rendu par paliers pour rester net. */
+private fun pdfRenderScale(zoom: Float): Float = when {
+    zoom >= 2.5f -> 3f
+    zoom >= 1.5f -> 2f
+    else -> 1f
+}
 
 private fun formatDateTime(millis: Long): String {
     val locale = Locale.getDefault()

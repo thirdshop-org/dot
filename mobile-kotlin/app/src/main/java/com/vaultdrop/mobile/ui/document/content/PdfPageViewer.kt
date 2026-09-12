@@ -134,6 +134,7 @@ fun PdfFocusViewer(
     pagerState: PagerState,
     modifier: Modifier = Modifier,
     onPageCountChanged: ((Int) -> Unit)? = null,
+    renderScale: Float = 1f,
 ) {
     val uri = file.uri
     if (uri == null) {
@@ -184,6 +185,7 @@ fun PdfFocusViewer(
                     page = page,
                     maxWidthPx = maxWidthPx,
                     maxHeightPx = maxHeightPx,
+                    renderScale = renderScale,
                 )
             }
         }
@@ -197,12 +199,13 @@ private fun PdfFocusPageItem(
     page: Int,
     maxWidthPx: Int,
     maxHeightPx: Int,
+    renderScale: Float = 1f,
 ) {
     var bitmap by remember(page) { mutableStateOf<Bitmap?>(null) }
     var failed by remember(page) { mutableStateOf(false) }
-    LaunchedEffect(document, page, maxWidthPx, maxHeightPx) {
+    LaunchedEffect(document, page, maxWidthPx, maxHeightPx, renderScale) {
         failed = false
-        bitmap = document.bitmap(page, maxWidthPx, maxHeightPx)
+        bitmap = document.bitmap(page, maxWidthPx, maxHeightPx, renderScale)
         if (bitmap == null) failed = true
     }
 
@@ -305,7 +308,9 @@ private class PdfDocumentState(
     private val uri: String,
 ) {
     private var renderer: PdfRenderer? = null
-    private val cache = LruCache<Int, Bitmap>(MAX_CACHED_PAGES)
+    private val cache = object : LruCache<PageKey, Bitmap>(CACHE_MAX_KILOBYTES) {
+        override fun sizeOf(key: PageKey, value: Bitmap): Int = value.byteCount / 1024
+    }
     private val renderMutex = Mutex()
 
     val pageCount: Int get() = renderer?.pageCount ?: 0
@@ -323,28 +328,37 @@ private class PdfDocumentState(
         }
     }
 
-    /** Bitmap de la page (mise à l'échelle pour tenir dans les limites). */
-    suspend fun bitmap(page: Int, maxWidthPx: Int, maxHeightPx: Int): Bitmap? =
-        withContext(Dispatchers.IO) {
-            cache.get(page) ?: renderMutex.withLock {
-                cache.get(page) ?: runCatching { renderPage(page, maxWidthPx, maxHeightPx) }
-                    .getOrNull()
-                    ?.also { cache.put(page, it) }
-            }
+    /**
+     * Bitmap de la page (mise à l'échelle pour tenir dans les limites), grossie
+     * par [targetScale] (1 = résolution écran, >1 = rendu plus net pour le zoom).
+     */
+    suspend fun bitmap(
+        page: Int,
+        maxWidthPx: Int,
+        maxHeightPx: Int,
+        targetScale: Float = 1f,
+    ): Bitmap? = withContext(Dispatchers.IO) {
+        val key = PageKey(page, targetScale)
+        cache.get(key) ?: renderMutex.withLock {
+            cache.get(key) ?: runCatching { renderPage(page, maxWidthPx, maxHeightPx, targetScale) }
+                .getOrNull()
+                ?.also { cache.put(key, it) }
         }
+    }
 
-    private fun renderPage(page: Int, maxWidthPx: Int, maxHeightPx: Int): Bitmap {
+    private fun renderPage(page: Int, maxWidthPx: Int, maxHeightPx: Int, targetScale: Float): Bitmap {
         val current = renderer ?: error("document non ouvert")
         val pdfPage = current.openPage(page)
         try {
-            // Ajuste le rendu à la résolution cible (passe au strict besoin),
+            // Ajuste le rendu à la résolution cible (passe au strict besoin) :
+            // fit dans la zone, grossi de targetScale pour rester net au zoom,
             // borné par MAX_SCALE pour ne pas exploser la mémoire des pages
             // vectorielles très grandes.
-            val scale = minOf(
-                MAX_SCALE,
+            val baseFit = minOf(
                 maxWidthPx.toFloat() / pdfPage.width,
                 maxHeightPx.toFloat() / pdfPage.height,
             )
+            val scale = minOf(MAX_SCALE, baseFit * targetScale)
             val width = (pdfPage.width * scale).toInt().coerceAtLeast(1)
             val height = (pdfPage.height * scale).toInt().coerceAtLeast(1)
             val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
@@ -362,11 +376,15 @@ private class PdfDocumentState(
         renderer = null
     }
 
+    /** Clé de cache : page + résolution de rendu demandée. */
+    private data class PageKey(val page: Int, val scale: Float)
+
     companion object {
-        private const val MAX_CACHED_PAGES = 6
+        /** Budget mémoire du cache (≈1/8 du tas) — le coût unitaire est le byteCount du bitmap. */
+        private val CACHE_MAX_KILOBYTES = (Runtime.getRuntime().maxMemory() / 8 / 1024).toInt()
 
         /** Borne du ratio de rendu (résolution écran) appliquée à la page source. */
-        private const val MAX_SCALE = 2f
+        private const val MAX_SCALE = 3f
     }
 }
 
