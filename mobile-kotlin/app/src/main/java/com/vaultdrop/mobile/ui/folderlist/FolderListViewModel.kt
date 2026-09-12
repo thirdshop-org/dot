@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.vaultdrop.mobile.auth.TokenProvider
 import com.vaultdrop.mobile.data.local.entity.FileEntity
 import com.vaultdrop.mobile.data.local.referenceDate
+import com.vaultdrop.mobile.data.preferences.DefaultRootStore
 import com.vaultdrop.mobile.data.remote.ApiException
 import com.vaultdrop.mobile.data.repository.FileRepository
 import com.vaultdrop.mobile.data.repository.FolderRepository
@@ -27,14 +28,25 @@ class FolderListViewModel @Inject constructor(
     private val folderRepository: FolderRepository,
     private val fileRepository: FileRepository,
     private val tokenProvider: TokenProvider,
+    private val defaultRootStore: DefaultRootStore,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(FolderListUiState())
     val uiState: StateFlow<FolderListUiState> = _uiState.asStateFlow()
 
+    /** Racine VaultDrop obligatoire : null = premier lancement (onboarding). */
+    private val _defaultRootId = MutableStateFlow(defaultRootStore.get())
+    val defaultRootId: StateFlow<String?> = _defaultRootId.asStateFlow()
+
     init {
         observeFiles()
         refresh()
+    }
+
+    /** Enregistre la racine choisie au premier lancement (persistant). */
+    fun setDefaultRoot(resourceId: String) {
+        defaultRootStore.set(resourceId)
+        _defaultRootId.value = resourceId
     }
 
     /** Grille d'accueil : tous les fichiers visibles, groupés par jour (date de référence). */

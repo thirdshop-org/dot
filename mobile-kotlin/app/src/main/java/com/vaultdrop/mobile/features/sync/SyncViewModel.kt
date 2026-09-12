@@ -92,6 +92,10 @@ class SyncViewModel @Inject constructor(
         }
     }
 
+    /** Id Room d'une racine SAF à partir de son uri (après un `importRoot`). */
+    suspend fun rootResourceId(uri: String): String? =
+        folderRepository.getByUri(uri)?.resourceId
+
     companion object {
         /** Cadence de la boucle — même valeur que `useSyncDevice(30_000)` Expo. */
         const val INTERVAL_MS = 30_000L

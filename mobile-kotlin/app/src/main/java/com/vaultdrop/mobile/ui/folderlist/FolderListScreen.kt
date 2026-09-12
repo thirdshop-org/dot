@@ -12,6 +12,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -41,7 +42,12 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -63,6 +69,7 @@ import com.vaultdrop.mobile.ui.components.ServerStatusBadge
 import com.vaultdrop.mobile.ui.components.rememberSelectionState
 import com.vaultdrop.mobile.ui.navigation.FloatingNavBar
 import com.vaultdrop.mobile.ui.navigation.NavTab
+import kotlinx.coroutines.delay
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -79,9 +86,46 @@ fun FolderListScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val importState by syncViewModel.importState.collectAsStateWithLifecycle()
     val connectionStatus by connectionStatusViewModel.status.collectAsStateWithLifecycle()
+    val defaultRootId by viewModel.defaultRootId.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val folderLabel = stringResource(R.string.folder)
     val selection = rememberSelectionState()
+
+    // Racine par défaut : dossier VaultDrop choisi au premier lancement.
+    val defaultRootLabel = stringResource(R.string.default_root_folder_label)
+    var pendingDefaultPick by remember { mutableStateOf<Uri?>(null) }
+    val pickDefaultRootLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocumentTree(),
+    ) { uri: Uri? ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        runCatching {
+            context.contentResolver.takePersistableUriPermission(
+                uri,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
+            )
+        }
+        pendingDefaultPick = uri
+        syncViewModel.importRoot(uri = uri.toString(), name = defaultRootLabel)
+    }
+
+    // Attend la création de la racine (importRoot la sauvegarde en Room puis
+    // lance le walk) et l'enregistre comme racine par défaut.
+    LaunchedEffect(pendingDefaultPick) {
+        val uri = pendingDefaultPick ?: return@LaunchedEffect
+        val target = uri.toString()
+        var attempts = 0
+        while (attempts < 100) { // ~10 s max
+            val id = syncViewModel.rootResourceId(target)
+            if (id != null) {
+                pendingDefaultPick = null
+                viewModel.setDefaultRoot(id)
+                return@LaunchedEffect
+            }
+            delay(100)
+            attempts++
+        }
+        pendingDefaultPick = null
+    }
 
     val pickFolderLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocumentTree(),
@@ -98,6 +142,15 @@ fun FolderListScreen(
             uri = uri.toString(),
             name = uri.displayName(context) ?: uri.lastPathSegment ?: folderLabel,
         )
+    }
+
+    if (defaultRootId == null) {
+        DefaultRootOnboarding(
+            importing = importState.isImporting,
+            error = importState.error,
+            onPickFolder = { pickDefaultRootLauncher.launch(null) },
+        )
+        return
     }
 
     BackHandler(enabled = selection.active) { selection.clear() }
@@ -162,6 +215,59 @@ fun FolderListScreen(
             onOpenDocument = onOpenDocument,
             modifier = Modifier.padding(padding),
         )
+    }
+}
+
+/** Écran obligatoire du premier lancement : choix/création de la racine VaultDrop. */
+@Composable
+private fun DefaultRootOnboarding(
+    importing: Boolean,
+    error: String?,
+    onPickFolder: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 24.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.default_root_title),
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center,
+            )
+            Text(
+                text = stringResource(R.string.default_root_message),
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
+            Button(
+                onClick = onPickFolder,
+                enabled = !importing,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Icon(Icons.Filled.Add, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.default_root_pick))
+            }
+            if (importing) {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            }
+            error?.let { message ->
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error,
+                    textAlign = TextAlign.Center,
+                )
+            }
+        }
     }
 }
 

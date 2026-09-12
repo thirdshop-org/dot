@@ -149,6 +149,11 @@ fun NavGraph(
                 PdfBuilderScreen(
                     initialResourceIds = ids,
                     onBack = { navController.popBackStack() },
+                    onOpenDocument = { id ->
+                        navController.navigate(Routes.document(id)) {
+                            popUpTo(Routes.PDF_BUILDER) { inclusive = true }
+                        }
+                    },
                 )
             }
         }

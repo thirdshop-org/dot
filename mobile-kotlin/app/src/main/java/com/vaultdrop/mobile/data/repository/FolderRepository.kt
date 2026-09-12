@@ -36,6 +36,9 @@ class FolderRepository @Inject constructor(
     suspend fun getFolder(resourceId: String): FolderEntity? =
         folderDao.getByResourceId(resourceId)
 
+    /** Récupère un dossier par son uri SAF (utilisé pour retrouver la racine par défaut). */
+    suspend fun getByUri(uri: String): FolderEntity? = folderDao.getByUri(uri)
+
     /**
      * Fetch `GET /files/folders` et upsert dans Room. Les dossiers cloud
      * n'ont pas d'uri (uri = NULL → cloud-only). En V1 le serveur ne renvoie

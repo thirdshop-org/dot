@@ -3,6 +3,10 @@
 
     <string name="files">Files</string>
     <string name="folder">Folder</string>
+    <string name="default_root_title">Choose your VaultDrop folder</string>
+    <string name="default_root_message">VaultDrop needs a folder to store all the PDFs it creates. You can also create a new VaultDrop folder right in the picker. This step is required, once only.</string>
+    <string name="default_root_pick">Choose my VaultDrop folder</string>
+    <string name="default_root_folder_label">VaultDrop</string>
     <string name="add_folder">Add a folder</string>
     <string name="no_folders_yet">No folders yet. Tap "Add a folder" to sync a folder.</string>
     <string name="no_files_yet">No files yet. Tap "Add a folder" to sync your files.</string>
@@ -96,6 +100,10 @@
     <string name="pdf_builder_no_items">Select at least one file or add a note.</string>
     <string name="pdf_builder_error">Could not generate the PDF.</string>
     <string name="pdf_builder_save_error">Could not save the PDF.</string>
+    <string name="pdf_builder_name_required">The file name cannot be empty.</string>
+    <string name="pdf_builder_name_title">PDF name</string>
+    <string name="pdf_builder_name_hint">e.g. january_invoices</string>
+    <string name="pdf_builder_name_save">Save</string>
     <string name="pdf_builder_saved">PDF created</string>
     <string name="pdf_generated_folder">Generated PDFs</string>
 </resources>
