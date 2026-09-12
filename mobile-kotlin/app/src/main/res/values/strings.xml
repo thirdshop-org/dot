@@ -82,4 +82,28 @@
     <string name="status_checking">Vérification…</string>
     <string name="status_local">Mode local</string>
     <string name="status_tap_to_recheck">Statut serveur — appuyer pour vérifier</string>
+
+    <!-- Sélection multi-fichiers + assemblage PDF -->
+    <string name="selection_count">%1$d sélectionné(s)</string>
+    <string name="selection_assemble">Assembler en PDF</string>
+    <string name="selection_cancel">Annuler la sélection</string>
+    <string name="pdf_builder_title">Assembler un PDF</string>
+    <string name="pdf_builder_empty">Aucun élément. Ajoute des fichiers ou une note pour commencer l\'assemblage.</string>
+    <string name="pdf_builder_add_files">Ajouter un fichier</string>
+    <string name="pdf_builder_pick_files">Choisir des fichiers</string>
+    <string name="pdf_builder_add_note">Ajouter une note</string>
+    <string name="pdf_builder_note">Note texte</string>
+    <string name="pdf_builder_note_hint">Saisis le texte de la note…</string>
+    <string name="pdf_builder_add">Ajouter</string>
+    <string name="pdf_builder_cancel">Annuler</string>
+    <string name="pdf_builder_assemble">Assembler le PDF</string>
+    <string name="pdf_builder_remove">Retirer</string>
+    <string name="pdf_builder_move_up">Monter</string>
+    <string name="pdf_builder_move_down">Descendre</string>
+    <string name="pdf_builder_unreadable">Illisible — ignoré</string>
+    <string name="pdf_builder_no_items">Sélectionne au moins un fichier ou ajoute une note.</string>
+    <string name="pdf_builder_error">Impossible de générer le PDF.</string>
+    <string name="pdf_builder_save_error">Impossible d\'enregistrer le PDF.</string>
+    <string name="pdf_builder_saved">PDF créé</string>
+    <string name="pdf_generated_folder">PDF générés</string>
 </resources>

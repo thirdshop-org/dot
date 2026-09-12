@@ -1,6 +1,9 @@
 package com.vaultdrop.mobile.ui.search
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,6 +20,8 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.MergeType
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -24,6 +29,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -46,9 +52,12 @@ import com.vaultdrop.mobile.data.local.entity.FileEntity
 import com.vaultdrop.mobile.domain.FileCategory
 import com.vaultdrop.mobile.features.connection.ConnectionStatusViewModel
 import com.vaultdrop.mobile.ui.components.FileCategoryIcon
+import com.vaultdrop.mobile.ui.components.SelectionState
+import com.vaultdrop.mobile.ui.components.SelectionStatusIcon
 import com.vaultdrop.mobile.ui.components.ServerStatusBadge
 import com.vaultdrop.mobile.ui.components.color
 import com.vaultdrop.mobile.ui.components.icon
+import com.vaultdrop.mobile.ui.components.rememberSelectionState
 import com.vaultdrop.mobile.ui.navigation.FloatingNavBar
 import com.vaultdrop.mobile.ui.navigation.NavTab
 import java.util.Locale
@@ -59,21 +68,57 @@ fun SearchScreen(
     selectedTab: NavTab,
     onTabSelected: (NavTab) -> Unit,
     onOpenDocument: (String) -> Unit,
+    onBuildPdf: (List<String>) -> Unit,
     connectionStatusViewModel: ConnectionStatusViewModel,
     viewModel: SearchViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val connectionStatus by connectionStatusViewModel.status.collectAsStateWithLifecycle()
+    val selection = rememberSelectionState()
+
+    BackHandler(enabled = selection.active) { selection.clear() }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.search)) },
+                title = {
+                    if (selection.active) {
+                        Text(stringResource(R.string.selection_count, selection.ids.size))
+                    } else {
+                        Text(stringResource(R.string.search))
+                    }
+                },
+                navigationIcon = {
+                    if (selection.active) {
+                        IconButton(onClick = { selection.clear() }) {
+                            Icon(
+                                Icons.Filled.Close,
+                                contentDescription = stringResource(R.string.selection_cancel),
+                            )
+                        }
+                    }
+                },
                 actions = {
-                    ServerStatusBadge(
-                        status = connectionStatus,
-                        onClick = connectionStatusViewModel::checkNow,
-                    )
+                    if (selection.active) {
+                        IconButton(
+                            onClick = {
+                                val ids = selection.ids.toList()
+                                selection.clear()
+                                onBuildPdf(ids)
+                            },
+                            enabled = selection.ids.isNotEmpty(),
+                        ) {
+                            Icon(
+                                Icons.Filled.MergeType,
+                                contentDescription = stringResource(R.string.selection_assemble),
+                            )
+                        }
+                    } else {
+                        ServerStatusBadge(
+                            status = connectionStatus,
+                            onClick = connectionStatusViewModel::checkNow,
+                        )
+                    }
                 },
             )
         },
@@ -83,6 +128,7 @@ fun SearchScreen(
     ) { padding ->
         SearchContent(
             uiState = uiState,
+            selection = selection,
             onQueryChange = viewModel::onQueryChange,
             onCategorySelect = viewModel::onCategorySelect,
             onOpenDocument = onOpenDocument,
@@ -94,6 +140,7 @@ fun SearchScreen(
 @Composable
 private fun SearchContent(
     uiState: SearchUiState,
+    selection: SelectionState,
     onQueryChange: (String) -> Unit,
     onCategorySelect: (String?) -> Unit,
     onOpenDocument: (String) -> Unit,
@@ -113,6 +160,7 @@ private fun SearchContent(
             leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
             placeholder = { Text(stringResource(R.string.search_hint)) },
             singleLine = true,
+            enabled = !selection.active,
         )
 
         LazyRow(
@@ -138,6 +186,7 @@ private fun SearchContent(
 
         SearchResults(
             uiState = uiState,
+            selection = selection,
             onOpenDocument = onOpenDocument,
             modifier = Modifier.weight(1f),
         )
@@ -185,6 +234,7 @@ private fun categoryLabel(category: FileCategory): String = when (category) {
 @Composable
 private fun SearchResults(
     uiState: SearchUiState,
+    selection: SelectionState,
     onOpenDocument: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -231,21 +281,40 @@ private fun SearchResults(
                 }
             }
             items(uiState.results, key = { it.resourceId }) { file ->
-                SearchResultCard(file = file, onClick = { onOpenDocument(file.resourceId) })
+                SearchResultCard(
+                    file = file,
+                    selection = selection,
+                    onOpenDocument = { onOpenDocument(file.resourceId) },
+                )
             }
         }
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun SearchResultCard(file: FileEntity, onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun SearchResultCard(
+    file: FileEntity,
+    selection: SelectionState,
+    onOpenDocument: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val selected = file.resourceId in selection.ids
     Card(
-        onClick = onClick,
         colors = CardDefaults.cardColors(containerColor = Color(0xFFF7F8FA)),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         border = BorderStroke(1.dp, Color(0xFFEAEAEA)),
         shape = RoundedCornerShape(10.dp),
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .combinedClickable(
+                onClick = {
+                    if (selection.active) selection.toggle(file.resourceId) else onOpenDocument()
+                },
+                onLongClick = {
+                    if (!selection.active) selection.start(file.resourceId)
+                },
+            ),
     ) {
         Row(
             modifier = Modifier.padding(12.dp),
@@ -269,11 +338,15 @@ private fun SearchResultCard(file: FileEntity, onClick: () -> Unit, modifier: Mo
                 )
             }
             Spacer(Modifier.width(12.dp))
-            Text(
-                text = formatSize(file.size),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            if (selection.active) {
+                SelectionStatusIcon(selected = selected)
+            } else {
+                Text(
+                    text = formatSize(file.size),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }

@@ -5,9 +5,12 @@ import android.content.Intent
 import android.net.Uri
 import android.provider.DocumentsContract
 import android.provider.OpenableColumns
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -23,6 +26,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.MergeType
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -52,7 +57,10 @@ import com.vaultdrop.mobile.data.local.entity.FileEntity
 import com.vaultdrop.mobile.features.connection.ConnectionStatusViewModel
 import com.vaultdrop.mobile.features.sync.SyncViewModel
 import com.vaultdrop.mobile.ui.components.FileCategoryIcon
+import com.vaultdrop.mobile.ui.components.SelectionState
+import com.vaultdrop.mobile.ui.components.SelectionStatusIcon
 import com.vaultdrop.mobile.ui.components.ServerStatusBadge
+import com.vaultdrop.mobile.ui.components.rememberSelectionState
 import com.vaultdrop.mobile.ui.navigation.FloatingNavBar
 import com.vaultdrop.mobile.ui.navigation.NavTab
 import java.util.Locale
@@ -63,6 +71,7 @@ fun FolderListScreen(
     selectedTab: NavTab,
     onTabSelected: (NavTab) -> Unit,
     onOpenDocument: (String) -> Unit,
+    onBuildPdf: (List<String>) -> Unit,
     syncViewModel: SyncViewModel,
     connectionStatusViewModel: ConnectionStatusViewModel,
     viewModel: FolderListViewModel = hiltViewModel(),
@@ -72,6 +81,7 @@ fun FolderListScreen(
     val connectionStatus by connectionStatusViewModel.status.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val folderLabel = stringResource(R.string.folder)
+    val selection = rememberSelectionState()
 
     val pickFolderLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocumentTree(),
@@ -90,17 +100,51 @@ fun FolderListScreen(
         )
     }
 
+    BackHandler(enabled = selection.active) { selection.clear() }
+
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.files)) },
+                title = {
+                    if (selection.active) {
+                        Text(stringResource(R.string.selection_count, selection.ids.size))
+                    } else {
+                        Text(stringResource(R.string.files))
+                    }
+                },
+                navigationIcon = {
+                    if (selection.active) {
+                        IconButton(onClick = { selection.clear() }) {
+                            Icon(
+                                Icons.Filled.Close,
+                                contentDescription = stringResource(R.string.selection_cancel),
+                            )
+                        }
+                    }
+                },
                 actions = {
-                    ServerStatusBadge(
-                        status = connectionStatus,
-                        onClick = connectionStatusViewModel::checkNow,
-                    )
-                    IconButton(onClick = viewModel::refresh) {
-                        Icon(Icons.Filled.Refresh, contentDescription = stringResource(R.string.refresh))
+                    if (selection.active) {
+                        IconButton(
+                            onClick = {
+                                val ids = selection.ids.toList()
+                                selection.clear()
+                                onBuildPdf(ids)
+                            },
+                            enabled = selection.ids.isNotEmpty(),
+                        ) {
+                            Icon(
+                                Icons.Filled.MergeType,
+                                contentDescription = stringResource(R.string.selection_assemble),
+                            )
+                        }
+                    } else {
+                        ServerStatusBadge(
+                            status = connectionStatus,
+                            onClick = connectionStatusViewModel::checkNow,
+                        )
+                        IconButton(onClick = viewModel::refresh) {
+                            Icon(Icons.Filled.Refresh, contentDescription = stringResource(R.string.refresh))
+                        }
                     }
                 },
             )
@@ -113,6 +157,7 @@ fun FolderListScreen(
             uiState = uiState,
             isImporting = importState.isImporting,
             error = uiState.error ?: importState.error,
+            selection = selection,
             onAddFolder = { pickFolderLauncher.launch(null) },
             onOpenDocument = onOpenDocument,
             modifier = Modifier.padding(padding),
@@ -140,6 +185,7 @@ private fun FolderListContent(
     uiState: FolderListUiState,
     isImporting: Boolean,
     error: String?,
+    selection: SelectionState,
     onAddFolder: () -> Unit,
     onOpenDocument: (String) -> Unit,
     modifier: Modifier = Modifier,
@@ -212,12 +258,14 @@ private fun FolderListContent(
                 ) {
                     FileCard(
                         file = row.left,
+                        selection = selection,
                         onClick = { onOpenDocument(row.left.resourceId) },
                         modifier = Modifier.weight(1f),
                     )
                     if (row.right != null) {
                         FileCard(
                             file = row.right,
+                            selection = selection,
                             onClick = { onOpenDocument(row.right.resourceId) },
                             modifier = Modifier.weight(1f),
                         )
@@ -241,19 +289,38 @@ private fun SectionHeader(label: String) {
     )
 }
 
-/** Carte fichier — le clic ouvre la consultation du document. */
+/** Carte fichier — clic long pour la sélection multi-fichiers, clic pour ouvrir. */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun FileCard(file: FileEntity, onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun FileCard(
+    file: FileEntity,
+    selection: SelectionState,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val selected = file.resourceId in selection.ids
     Card(
-        onClick = onClick,
         colors = CardDefaults.cardColors(containerColor = Color(0xFFF7F8FA)),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         border = BorderStroke(1.dp, Color(0xFFEAEAEA)),
         shape = RoundedCornerShape(10.dp),
-        modifier = modifier,
+        modifier = modifier.combinedClickable(
+            onClick = {
+                if (selection.active) selection.toggle(file.resourceId) else onClick()
+            },
+            onLongClick = {
+                if (!selection.active) selection.start(file.resourceId)
+            },
+        ),
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
-            FileCategoryIcon(file = file, size = 36.dp)
+            Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                FileCategoryIcon(file = file, size = 36.dp)
+                if (selection.active) {
+                    Spacer(Modifier.weight(1f))
+                    SelectionStatusIcon(selected = selected)
+                }
+            }
             Spacer(Modifier.height(8.dp))
             Text(
                 text = file.name,

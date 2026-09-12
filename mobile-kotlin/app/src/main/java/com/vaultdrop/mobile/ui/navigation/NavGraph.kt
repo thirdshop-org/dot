@@ -21,6 +21,7 @@ import com.vaultdrop.mobile.ui.auth.AuthViewModel
 import com.vaultdrop.mobile.ui.document.DocumentViewerScreen
 import com.vaultdrop.mobile.ui.folderdetail.FolderDetailScreen
 import com.vaultdrop.mobile.ui.folderlist.FolderListScreen
+import com.vaultdrop.mobile.ui.pdfbuilder.PdfBuilderScreen
 import com.vaultdrop.mobile.ui.search.SearchScreen
 import com.vaultdrop.mobile.ui.settings.SettingsScreen
 
@@ -32,9 +33,12 @@ object Routes {
     const val ARG_FOLDER = "folderResourceId"
     const val DOCUMENT = "document/{documentResourceId}"
     const val ARG_DOCUMENT = "documentResourceId"
+    const val PDF_BUILDER = "pdfbuilder/{ids}"
+    const val ARG_BUILDER_IDS = "ids"
 
     fun folder(folderResourceId: String): String = "folder/$folderResourceId"
     fun document(documentResourceId: String): String = "document/$documentResourceId"
+    fun pdfBuilder(resourceIds: List<String>): String = "pdfbuilder/${resourceIds.joinToString(",")}"
 }
 
 private fun String?.toNavTab(): NavTab = when (this) {
@@ -76,6 +80,7 @@ fun NavGraph(
                     selectedTab = selectedTab,
                     onTabSelected = onTabSelected,
                     onOpenDocument = { id -> navController.navigate(Routes.document(id)) },
+                    onBuildPdf = { ids -> navController.navigate(Routes.pdfBuilder(ids)) },
                     syncViewModel = syncViewModel,
                     connectionStatusViewModel = connectionStatusViewModel,
                 )
@@ -85,6 +90,7 @@ fun NavGraph(
                     selectedTab = selectedTab,
                     onTabSelected = onTabSelected,
                     onOpenDocument = { id -> navController.navigate(Routes.document(id)) },
+                    onBuildPdf = { ids -> navController.navigate(Routes.pdfBuilder(ids)) },
                     connectionStatusViewModel = connectionStatusViewModel,
                 )
             }
@@ -110,6 +116,7 @@ fun NavGraph(
                     onBack = { navController.popBackStack() },
                     onOpenFolder = { id -> navController.navigate(Routes.folder(id)) },
                     onOpenDocument = { id -> navController.navigate(Routes.document(id)) },
+                    onBuildPdf = { ids -> navController.navigate(Routes.pdfBuilder(ids)) },
                     connectionStatusViewModel = connectionStatusViewModel,
                 )
             }
@@ -126,6 +133,22 @@ fun NavGraph(
                     initialResourceId = documentId,
                     onBack = { navController.popBackStack() },
                     connectionStatusViewModel = connectionStatusViewModel,
+                )
+            }
+            composable(
+                route = Routes.PDF_BUILDER,
+                arguments = listOf(
+                    navArgument(Routes.ARG_BUILDER_IDS) { type = NavType.StringType },
+                ),
+            ) { backStackEntry ->
+                val ids = backStackEntry.arguments
+                    ?.getString(Routes.ARG_BUILDER_IDS)
+                    .orEmpty()
+                    .split(",")
+                    .filter { it.isNotBlank() }
+                PdfBuilderScreen(
+                    initialResourceIds = ids,
+                    onBack = { navController.popBackStack() },
                 )
             }
         }

@@ -74,4 +74,28 @@
     <string name="login_error_unauthorized">Incorrect username or password</string>
     <string name="login_skip">Continue without account</string>
     <string name="skip_message">Local mode — your folders stay on this device and are not synced.</string>
+
+    <!-- Multi-select + PDF assembly -->
+    <string name="selection_count">%1$d selected</string>
+    <string name="selection_assemble">Assemble PDF</string>
+    <string name="selection_cancel">Cancel selection</string>
+    <string name="pdf_builder_title">Assemble a PDF</string>
+    <string name="pdf_builder_empty">Nothing here yet. Add files or a note to start assembling.</string>
+    <string name="pdf_builder_add_files">Add a file</string>
+    <string name="pdf_builder_pick_files">Pick files</string>
+    <string name="pdf_builder_add_note">Add a note</string>
+    <string name="pdf_builder_note">Text note</string>
+    <string name="pdf_builder_note_hint">Type your note text…</string>
+    <string name="pdf_builder_add">Add</string>
+    <string name="pdf_builder_cancel">Cancel</string>
+    <string name="pdf_builder_assemble">Assemble PDF</string>
+    <string name="pdf_builder_remove">Remove</string>
+    <string name="pdf_builder_move_up">Move up</string>
+    <string name="pdf_builder_move_down">Move down</string>
+    <string name="pdf_builder_unreadable">Unreadable — skipped</string>
+    <string name="pdf_builder_no_items">Select at least one file or add a note.</string>
+    <string name="pdf_builder_error">Could not generate the PDF.</string>
+    <string name="pdf_builder_save_error">Could not save the PDF.</string>
+    <string name="pdf_builder_saved">PDF created</string>
+    <string name="pdf_generated_folder">Generated PDFs</string>
 </resources>
