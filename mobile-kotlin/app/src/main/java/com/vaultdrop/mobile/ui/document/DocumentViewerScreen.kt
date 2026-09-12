@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -34,7 +33,6 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -62,7 +60,7 @@ import com.vaultdrop.mobile.data.local.entity.FileEntity
 import com.vaultdrop.mobile.domain.FileCategory
 import com.vaultdrop.mobile.ui.components.categoryValue
 import com.vaultdrop.mobile.ui.document.content.DocumentContentViewer
-import com.vaultdrop.mobile.ui.document.content.PdfPageViewer
+import com.vaultdrop.mobile.ui.document.content.PdfFocusViewer
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.ZoneId
@@ -197,9 +195,9 @@ fun DocumentViewerScreen(
 }
 
 /**
- * Lecture PDF focus : le document remplit l'écran (fond noir), un tap quitte le
- * plein écran, le défilement vertical reste actif et une pastille indique la
- * page courante.
+ * Lecture PDF focus : le document remplit l'écran (fond noir), une page par
+ * écran défiler verticalement, un tap quitte le plein écran et une pastille
+ * indique la page courante.
  */
 @Composable
 private fun PdfFullscreenReader(
@@ -208,10 +206,8 @@ private fun PdfFullscreenReader(
     onExitFullscreen: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val contentResolver = LocalContext.current.contentResolver
-    val listState = rememberLazyListState()
     var pageCount by remember(file.resourceId) { mutableIntStateOf(0) }
-    val currentPage by remember { derivedStateOf { listState.firstVisibleItemIndex + 1 } }
+    val pagerState = rememberPagerState(pageCount = { pageCount })
 
     Box(
         modifier = modifier
@@ -221,12 +217,12 @@ private fun PdfFullscreenReader(
                 detectTapGestures(onTap = { onExitFullscreen() })
             },
     ) {
-        PdfPageViewer(
+        PdfFocusViewer(
             file = file,
-            contentResolver = contentResolver,
+            contentResolver = LocalContext.current.contentResolver,
             onOpenExternalFailed = onOpenExternalFailed,
+            pagerState = pagerState,
             modifier = Modifier.fillMaxSize(),
-            listState = listState,
             onPageCountChanged = { pageCount = it },
         )
         if (pageCount > 0) {
@@ -238,7 +234,7 @@ private fun PdfFullscreenReader(
                 color = MaterialTheme.colorScheme.inverseSurface.copy(alpha = 0.85f),
             ) {
                 Text(
-                    text = "$currentPage / $pageCount",
+                    text = "${pagerState.currentPage + 1} / $pageCount",
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.inverseOnSurface,

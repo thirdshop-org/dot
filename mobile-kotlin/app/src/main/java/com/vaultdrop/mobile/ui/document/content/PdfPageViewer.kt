@@ -17,8 +17,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.pager.PagerState
+import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BrokenImage
 import androidx.compose.material3.CircularProgressIndicator
@@ -36,6 +36,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -60,8 +61,6 @@ fun PdfPageViewer(
     contentResolver: ContentResolver,
     onOpenExternalFailed: () -> Unit,
     modifier: Modifier = Modifier,
-    listState: LazyListState = rememberLazyListState(),
-    onPageCountChanged: ((Int) -> Unit)? = null,
 ) {
     val uri = file.uri
     if (uri == null) {
@@ -75,6 +74,77 @@ fun PdfPageViewer(
 
     // Le state vit en mémoire (cache + dossier ouvert) tant que ce lecteur est
     // affiché ; il est fermé à la sortie ou au changement de document.
+    DisposableEffect(document) {
+        onDispose { document.close() }
+    }
+
+    LaunchedEffect(uri) {
+        pageCount = 0
+        loadFailed = false
+        if (document.load()) {
+            pageCount = document.pageCount
+        } else {
+            loadFailed = true
+        }
+    }
+
+    when {
+        loadFailed -> UnreadableDocument(
+            file = file,
+            message = stringResource(R.string.document_cannot_read),
+            onOpenExternalFailed = onOpenExternalFailed,
+            modifier = modifier,
+        )
+        pageCount == 0 -> Box(modifier, contentAlignment = Alignment.Center) {
+            CircularProgressIndicator()
+        }
+        else -> BoxWithConstraints(modifier.fillMaxSize()) {
+            val density = LocalDensity.current
+            val maxWidthPx = with(density) { maxWidth.toPx().toInt() }
+            val maxHeightPx = with(density) { maxHeight.toPx().toInt() }
+
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                items(pageCount, key = { it }) { page ->
+                    PdfPageItem(
+                        document = document,
+                        page = page,
+                        maxWidthPx = maxWidthPx,
+                        maxHeightPx = maxHeightPx,
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Lecteur PDF en mode focus : une page par écran (`VerticalPager`), le swipe
+ * vertical passe d'une page à l'autre. Chaque page est rendue pour remplir au
+ * mieux la zone visible (fit) à la résolution de l'écran.
+ */
+@Composable
+fun PdfFocusViewer(
+    file: FileEntity,
+    contentResolver: ContentResolver,
+    onOpenExternalFailed: () -> Unit,
+    pagerState: PagerState,
+    modifier: Modifier = Modifier,
+    onPageCountChanged: ((Int) -> Unit)? = null,
+) {
+    val uri = file.uri
+    if (uri == null) {
+        CloudOnlyPlaceholder(file, modifier)
+        return
+    }
+
+    val document = remember(uri) { PdfDocumentState(contentResolver, uri) }
+    var pageCount by remember(uri) { mutableIntStateOf(0) }
+    var loadFailed by remember(uri) { mutableStateOf(false) }
+
     DisposableEffect(document) {
         onDispose { document.close() }
     }
@@ -105,20 +175,69 @@ fun PdfPageViewer(
             val maxWidthPx = with(density) { maxWidth.toPx().toInt() }
             val maxHeightPx = with(density) { maxHeight.toPx().toInt() }
 
-            LazyColumn(
-                state = listState,
+            VerticalPager(
+                state = pagerState,
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) { page ->
+                PdfFocusPageItem(
+                    document = document,
+                    page = page,
+                    maxWidthPx = maxWidthPx,
+                    maxHeightPx = maxHeightPx,
+                )
+            }
+        }
+    }
+}
+
+/** Page plein écran : bitmap rendu à la résolution de l'écran, fit dans la zone. */
+@Composable
+private fun PdfFocusPageItem(
+    document: PdfDocumentState,
+    page: Int,
+    maxWidthPx: Int,
+    maxHeightPx: Int,
+) {
+    var bitmap by remember(page) { mutableStateOf<Bitmap?>(null) }
+    var failed by remember(page) { mutableStateOf(false) }
+    LaunchedEffect(document, page, maxWidthPx, maxHeightPx) {
+        failed = false
+        bitmap = document.bitmap(page, maxWidthPx, maxHeightPx)
+        if (bitmap == null) failed = true
+    }
+
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center,
+    ) {
+        when {
+            bitmap != null -> Image(
+                bitmap = bitmap!!.asImageBitmap(),
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Fit,
+            )
+            failed -> Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.padding(vertical = 32.dp),
             ) {
-                items(pageCount, key = { it }) { page ->
-                    PdfPageItem(
-                        document = document,
-                        page = page,
-                        maxWidthPx = maxWidthPx,
-                        maxHeightPx = maxHeightPx,
-                    )
-                }
+                Icon(
+                    imageVector = Icons.Filled.BrokenImage,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.height(32.dp),
+                )
+                Text(
+                    text = stringResource(R.string.document_page_unreadable),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            else -> Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.padding(vertical = 32.dp),
+            ) {
+                CircularProgressIndicator()
             }
         }
     }
@@ -218,8 +337,11 @@ private class PdfDocumentState(
         val current = renderer ?: error("document non ouvert")
         val pdfPage = current.openPage(page)
         try {
+            // Ajuste le rendu à la résolution cible (passe au strict besoin),
+            // borné par MAX_SCALE pour ne pas exploser la mémoire des pages
+            // vectorielles très grandes.
             val scale = minOf(
-                1f,
+                MAX_SCALE,
                 maxWidthPx.toFloat() / pdfPage.width,
                 maxHeightPx.toFloat() / pdfPage.height,
             )
@@ -242,6 +364,9 @@ private class PdfDocumentState(
 
     companion object {
         private const val MAX_CACHED_PAGES = 6
+
+        /** Borne du ratio de rendu (résolution écran) appliquée à la page source. */
+        private const val MAX_SCALE = 2f
     }
 }
 
