@@ -70,6 +70,7 @@ import com.vaultdrop.mobile.ui.components.rememberSelectionState
 import com.vaultdrop.mobile.ui.navigation.FloatingNavBar
 import com.vaultdrop.mobile.ui.navigation.NavTab
 import kotlinx.coroutines.delay
+import timber.log.Timber
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -103,23 +104,27 @@ fun FolderListScreen(
                 uri,
                 Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
             )
-        }
+        }.onFailure { Timber.w(it, "persistable permission absent on default root pick") }
         pendingDefaultPick = uri
-        syncViewModel.importRoot(uri = uri.toString(), name = defaultRootLabel)
+        val rootName = uri.displayName(context) ?: uri.lastPathSegment ?: defaultRootLabel
+        syncViewModel.importRoot(uri = uri.toString(), name = rootName)
     }
 
-    // Attend la création de la racine (importRoot la sauvegarde en Room puis
-    // lance le walk) et l'enregistre comme racine par défaut.
+    // Attend la création de la racine (importRoot la sauvegarde puis lance le
+    // walk), crée le sous-dossier « VaultDrop » et l'enregistre comme racine.
     LaunchedEffect(pendingDefaultPick) {
         val uri = pendingDefaultPick ?: return@LaunchedEffect
         val target = uri.toString()
         var attempts = 0
         while (attempts < 100) { // ~10 s max
-            val id = syncViewModel.rootResourceId(target)
-            if (id != null) {
-                pendingDefaultPick = null
-                viewModel.setDefaultRoot(id)
-                return@LaunchedEffect
+            val rootId = syncViewModel.rootResourceId(target)
+            if (rootId != null) {
+                val vaultFolderId = viewModel.ensureVaultDropFolder(uri, rootId)
+                if (vaultFolderId != null) {
+                    pendingDefaultPick = null
+                    viewModel.setDefaultRoot(vaultFolderId)
+                    return@LaunchedEffect
+                }
             }
             delay(100)
             attempts++

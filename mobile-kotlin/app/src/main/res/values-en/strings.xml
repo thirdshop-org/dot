@@ -100,6 +100,7 @@
     <string name="pdf_builder_no_items">Select at least one file or add a note.</string>
     <string name="pdf_builder_error">Could not generate the PDF.</string>
     <string name="pdf_builder_save_error">Could not save the PDF.</string>
+    <string name="pdf_builder_save_error_permission">Permission denied for the VaultDrop folder. Choose a folder again at next launch.</string>
     <string name="pdf_builder_name_required">The file name cannot be empty.</string>
     <string name="pdf_builder_name_title">PDF name</string>
     <string name="pdf_builder_name_hint">e.g. january_invoices</string>

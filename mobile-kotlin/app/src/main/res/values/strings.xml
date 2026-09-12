@@ -108,6 +108,7 @@
     <string name="pdf_builder_no_items">Sélectionne au moins un fichier ou ajoute une note.</string>
     <string name="pdf_builder_error">Impossible de générer le PDF.</string>
     <string name="pdf_builder_save_error">Impossible d\'enregistrer le PDF.</string>
+    <string name="pdf_builder_save_error_permission">Permission refusée pour le dossier VaultDrop. Choisis à nouveau un dossier au prochain lancement.</string>
     <string name="pdf_builder_name_required">Le nom du fichier ne peut pas être vide.</string>
     <string name="pdf_builder_name_title">Nom du PDF</string>
     <string name="pdf_builder_name_hint">ex. factures_janvier</string>

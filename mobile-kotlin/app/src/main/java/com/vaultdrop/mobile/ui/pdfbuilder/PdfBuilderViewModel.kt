@@ -206,7 +206,8 @@ class PdfBuilderViewModel @Inject constructor(
             runCatching {
                 val root = folderRepository.getFolder(rootResourceId)
                     ?: error("default root not found: $rootResourceId")
-                val rootUri = checkNotNull(Uri.parse(root.uri)) { "default root has no uri" }
+                val rootUri = parentDocumentUri(root.uri)
+                    ?: error("default root has no uri")
 
                 val fileName = if (trimmed.lowercase().endsWith(".pdf")) trimmed else "$trimmed.pdf"
                 val createdUri = DocumentsContract.createDocument(
@@ -251,12 +252,38 @@ class PdfBuilderViewModel @Inject constructor(
                 _buildState.value = BuildPhase.Saved(resourceId)
             }.onFailure { e ->
                 Timber.e(e, "PDF save failed")
-                _buildState.value = BuildPhase.Failed(context.getString(R.string.pdf_builder_save_error))
+                if (e is SecurityException) {
+                    defaultRootStore.clear()
+                    _buildState.value = BuildPhase.Failed(
+                        context.getString(R.string.pdf_builder_save_error_permission),
+                    )
+                } else {
+                    _buildState.value = BuildPhase.Failed(
+                        e.message ?: context.getString(R.string.pdf_builder_save_error),
+                    )
+                }
             }
         }
     }
 
     // ------------------------------------------------------------ helpers
+
+    /**
+     * `DocumentsContract.createDocument` attend un URI *document*, pas un URI
+     * *tree*. Convertit un tree URI en document URI (équivalent au dossier
+     * racine de l'arbre) — les deux autorités sont identiques.
+     */
+    private fun parentDocumentUri(uri: String?): Uri? {
+        val raw = uri?.let(Uri::parse) ?: return null
+        return if (DocumentsContract.isTreeUri(raw)) {
+            DocumentsContract.buildDocumentUriUsingTree(
+                raw,
+                DocumentsContract.getTreeDocumentId(raw),
+            )
+        } else {
+            raw
+        }
+    }
 
     private fun copyInto(uri: Uri, source: File, resolver: ContentResolver) {
         val target = resolver.openOutputStream(uri)
@@ -281,20 +308,26 @@ class PdfBuilderViewModel @Inject constructor(
     }.getOrNull()
 
     /**
-     * Associe l'URI créé au dossier SAF importé qui le contient (par préfixe
-     * du documentId), sinon à un dossier racine local « PDF générés ».
+     * Associe l'URI créé au dossier (racine ou sous-dossier) dont le documentId
+     * est le préfixe — plus long match gagne (ex. le sous-dossier « VaultDrop »
+     * plutôt que l'arbre racine). Sinon dossier racine local « PDF générés ».
      */
     private suspend fun resolveTargetFolder(uri: Uri): String {
         val documentId = runCatching { DocumentsContract.getDocumentId(uri) }.getOrNull()
         if (documentId != null) {
-            folderRepository.getRootFolders().filter { it.uri != null }.forEach { folder ->
-                val treeDocId = runCatching {
-                    DocumentsContract.getDocumentId(Uri.parse(folder.uri))
-                }.getOrNull()
-                if (treeDocId != null && documentId.startsWith("$treeDocId/")) {
-                    return folder.resourceId
+            val matches = folderRepository.getAll()
+                .filter { it.uri != null }
+                .mapNotNull { folder ->
+                    val treeDocId = runCatching {
+                        DocumentsContract.getDocumentId(Uri.parse(folder.uri))
+                    }.getOrNull()
+                    if (treeDocId != null && documentId.startsWith("$treeDocId/")) {
+                        folder to treeDocId.length
+                    } else {
+                        null
+                    }
                 }
-            }
+            matches.maxByOrNull { it.second }?.first?.resourceId?.let { return it }
         }
         return generatedFolderResourceId()
     }
