@@ -1,0 +1,28 @@
+[tasks.up_backend]
+description = "Start PostgreSQL + backend API (Go/Gin)"
+run = [
+  "docker compose up -d postgres --wait",
+  "cd backend && go run cmd/server/main.go",
+]
+
+[tasks.up_mobile]
+description = "Build + install Android debug app (device or emulator)"
+dir = "mobile-kotlin"
+usage = '''
+arg "[target]" {
+  help "Where to install"
+  choices "device" "emulator"
+  default "emulator"
+}
+'''
+run = '''
+#!/usr/bin/env bash
+set -euo pipefail
+./gradlew :app:assembleDebug -q
+APK="app/build/outputs/apk/debug/app-debug.apk"
+if [ "${usage_target?}" = "emulator" ]; then
+  adb -e install -r "$APK"
+else
+  adb -d install -r "$APK"
+fi
+'''
