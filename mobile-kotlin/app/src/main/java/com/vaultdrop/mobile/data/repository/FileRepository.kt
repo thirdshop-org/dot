@@ -43,6 +43,22 @@ class FileRepository @Inject constructor(
     fun recentFiles(category: String?, limit: Int = RECENT_LIMIT): Flow<List<FileEntity>> =
         fileDao.recentFiles(category = category, limit = limit)
 
+    /** Nombre de fichiers locaux non encore traités (file de review). */
+    fun observeUnprocessedCount(): Flow<Int> = fileDao.observeUnprocessedCount()
+
+    /** Fichiers locaux non traités, du plus récent au plus ancien — file de review. */
+    fun observeUnprocessed(): Flow<List<FileEntity>> = fileDao.observeUnprocessed()
+
+    /** Snapshot de la file de review, chargé à l'entrée dans le mode traitement. */
+    suspend fun getUnprocessed(): List<FileEntity> = fileDao.getUnprocessed()
+
+    /** Marque un fichier comme traité (gardé) — local au device, jamais poussé. */
+    suspend fun markProcessed(resourceId: String) =
+        fileDao.markProcessed(resourceId, System.currentTimeMillis())
+
+    /** Marque tous les fichiers locaux restants comme traités. */
+    suspend fun markAllProcessed() = fileDao.markAllProcessed(System.currentTimeMillis())
+
     suspend fun getFile(resourceId: String): FileEntity? =
         fileDao.getByResourceId(resourceId)
 
@@ -77,6 +93,7 @@ class FileRepository @Inject constructor(
             lastModified = input.lastModified,
             ownerId = ownerId ?: existing?.ownerId,
             syncStatus = existing?.syncStatus ?: input.syncStatus ?: FileStatus.LOCAL,
+            processed = existing?.processed ?: false,
             addedAt = existing?.addedAt ?: now,
             updatedAt = now,
         )
@@ -126,6 +143,7 @@ class FileRepository @Inject constructor(
             lastModified = existing?.lastModified,
             ownerId = existing?.ownerId,
             syncStatus = existing?.syncStatus ?: FileStatus.CLOUD,
+            processed = existing?.processed ?: false,
             addedAt = existing?.addedAt ?: now,
             updatedAt = now,
         )

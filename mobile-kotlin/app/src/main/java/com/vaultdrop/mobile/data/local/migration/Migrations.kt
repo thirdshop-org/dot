@@ -14,6 +14,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  * v5 : ajout colonne `created_in_app` sur `folders` (marqueur « créé dans
  *   l'app » — 0 par défaut pour les dossiers importés/Parcourus SAF, 1 pour la
  *   feature « Créer un dossier ». Utilisé pour filtrer le picker de déplacement).
+ * v6 : ajout colonne `processed` sur `files` (mode review « traiter »). Le
+ *   backlog existant est marqué traité à la migration : seuls les fichiers
+ *   découverts après la mise à jour entrent dans la file de review.
  */
 object Migrations {
 
@@ -75,5 +78,14 @@ object Migrations {
         }
     }
 
-    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+    private val MIGRATION_5_6 = object : Migration(5, 6) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE `files` ADD COLUMN `processed` INTEGER NOT NULL DEFAULT 0")
+            // Backlog = déjà traité : la file de review ne contient que les
+            // fichiers découverts après l'activation de la fonctionnalité.
+            db.execSQL("UPDATE `files` SET `processed` = 1")
+        }
+    }
+
+    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
 }

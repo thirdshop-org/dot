@@ -11,6 +11,22 @@
     <string name="view_files">Fichiers</string>
     <string name="view_folders">Dossiers</string>
     <string name="dashboard_coming_soon">Dashboard à venir</string>
+    <string name="dashboard_review_title">%1$d document(s) à traiter</string>
+    <string name="dashboard_review_hint">Révise-les en mode swipe : garder ou supprimer.</string>
+    <string name="dashboard_all_processed">Tout est à jour — aucun document à traiter.</string>
+
+    <!-- Mode review (swipe) -->
+    <string name="review_title">Nouveaux documents</string>
+    <string name="review_remaining">%1$d restant(s)</string>
+    <string name="review_keep">GARDER</string>
+    <string name="review_delete">SUPPRIMER</string>
+    <string name="review_done">Tous les documents ont été traités.</string>
+    <string name="review_finish">Terminer</string>
+    <string name="review_mark_all">Tout marquer comme traité</string>
+    <string name="review_mark_all_title">Tout marquer comme traité ?</string>
+    <string name="review_mark_all_message">Les documents restants seront considérés comme traités sans être revus.</string>
+    <string name="review_load_error">Impossible de charger les documents à traiter.</string>
+    <string name="review_delete_error">Impossible de supprimer ce document — permission refusée.</string>
     <string name="browse_up">Remonter</string>
     <string name="move_here_count">Déplacer ici (%1$d)</string>
     <string name="move_pick_title">Déplacer %1$d fichier(s)…</string>

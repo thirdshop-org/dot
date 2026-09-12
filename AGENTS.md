@@ -49,7 +49,7 @@ Il n'y a **pas** de tests mobiles (pas de dossier `src/test` ni `src/androidTest
 
 - Entry point: `app/src/main/java/com/vaultdrop/mobile/VaultDropApplication.kt` + `MainActivity.kt` (Hilt) ; navigation Compose dans `ui/navigation/` (`NavGraph.kt`, `VaultDropApp.kt`)
 - Data layer — `data/`:
-  - `data/local/` — Room SQLite (DB `dot.db`, **version 5**, `Migrations.kt` : tables `folders`, `files`, `user_preferences`) : entités Folder/File/UserPreference, DAO, tri (`FileOrdering`)
+  - `data/local/` — Room SQLite (DB `dot.db`, **version 6**, `Migrations.kt` : tables `folders`, `files`, `user_preferences`) : entités Folder/File/UserPreference, DAO, tri (`FileOrdering`) ; flag `processed` sur `files` (mode review « traiter », local au device — le backlog est marqué traité à la migration v6)
   - `data/remote/` — Retrofit/Moshi : `ApiService.kt` + `dto/Dtos.kt` = **contrat HTTP** (`{ data, meta }`, erreurs `{ error: { code, message } }`) ; `ApiClient.kt` normalise les réponses ; interceptors OkHttp (`AuthInterceptor`, `ServerUrlInterceptor`)
   - `data/repository/` — `FolderRepository`, `FileRepository`, `AuthRepository`
 - `features/` — logique descendue côté client :

@@ -51,6 +51,8 @@ data class FileEntity(
     val category: String? = null,
     @ColumnInfo(name = "sync_status")
     val syncStatus: String = "local",
+    @ColumnInfo(name = "processed")
+    val processed: Boolean = false,
     @ColumnInfo(name = "added_at")
     val addedAt: Long,
     @ColumnInfo(name = "updated_at")

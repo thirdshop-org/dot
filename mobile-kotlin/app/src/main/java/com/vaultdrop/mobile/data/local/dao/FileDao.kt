@@ -56,4 +56,35 @@ interface FileDao {
 
     @Query("DELETE FROM files WHERE resource_id = :resourceId")
     suspend fun remove(resourceId: String)
+
+    @Query("SELECT COUNT(*) FROM files WHERE \"exists\" = 1 AND processed = 0 AND uri IS NOT NULL")
+    fun observeUnprocessedCount(): Flow<Int>
+
+    @Query("""
+        SELECT * FROM files
+        WHERE "exists" = 1
+          AND processed = 0
+          AND uri IS NOT NULL
+        ORDER BY COALESCE(last_modified, added_at) DESC, name ASC
+    """)
+    fun observeUnprocessed(): Flow<List<FileEntity>>
+
+    @Query("""
+        SELECT * FROM files
+        WHERE "exists" = 1
+          AND processed = 0
+          AND uri IS NOT NULL
+        ORDER BY COALESCE(last_modified, added_at) DESC, name ASC
+    """)
+    suspend fun getUnprocessed(): List<FileEntity>
+
+    @Query("UPDATE files SET processed = 1, updated_at = :updatedAt WHERE resource_id = :resourceId")
+    suspend fun markProcessed(resourceId: String, updatedAt: Long)
+
+    @Query("""
+        UPDATE files
+        SET processed = 1, updated_at = :updatedAt
+        WHERE "exists" = 1 AND processed = 0 AND uri IS NOT NULL
+    """)
+    suspend fun markAllProcessed(updatedAt: Long)
 }

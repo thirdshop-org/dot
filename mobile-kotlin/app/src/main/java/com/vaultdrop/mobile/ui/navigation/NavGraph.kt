@@ -24,6 +24,7 @@ import com.vaultdrop.mobile.ui.document.DocumentViewerScreen
 import com.vaultdrop.mobile.ui.folderdetail.FolderDetailScreen
 import com.vaultdrop.mobile.ui.folderlist.FolderListScreen
 import com.vaultdrop.mobile.ui.pdfbuilder.PdfBuilderScreen
+import com.vaultdrop.mobile.ui.review.SwipeReviewScreen
 import com.vaultdrop.mobile.ui.search.SearchScreen
 import com.vaultdrop.mobile.ui.settings.SettingsScreen
 
@@ -32,6 +33,7 @@ object Routes {
     const val SEARCH = "search"
     const val SETTINGS = "settings"
     const val DASHBOARD = "dashboard"
+    const val REVIEW = "review"
     const val FOLDER_DETAIL = "folder/{folderResourceId}"
     const val ARG_FOLDER = "folderResourceId"
     const val DOCUMENT = "document/{documentResourceId}"
@@ -114,6 +116,13 @@ fun NavGraph(
                 DashboardScreen(
                     selectedTab = selectedTab,
                     onTabSelected = onTabSelected,
+                    connectionStatusViewModel = connectionStatusViewModel,
+                    onOpenReview = { navController.navigate(Routes.REVIEW) },
+                )
+            }
+            composable(Routes.REVIEW) {
+                SwipeReviewScreen(
+                    onBack = { navController.popBackStack() },
                     connectionStatusViewModel = connectionStatusViewModel,
                 )
             }
