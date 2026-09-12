@@ -25,6 +25,9 @@ class FolderRepository @Inject constructor(
 
     fun observeRootFolders(): Flow<List<FolderEntity>> = folderDao.observeRootFolders()
 
+    /** Racines SAF surveillées par le sync (celles qui déclenchent un walk périodique). */
+    fun observeSafRoots(): Flow<List<FolderEntity>> = folderDao.observeSafRoots()
+
     /** Sous-dossiers visibles d'un dossier (filtre `exists = 1` dans le DAO). */
     fun observeSubFolders(parentResourceId: String): Flow<List<FolderEntity>> =
         folderDao.observeByParent(parentResourceId)

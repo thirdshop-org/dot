@@ -71,6 +71,11 @@
     <string name="settings_connect">Sign in</string>
     <string name="settings_disconnect">Sign out</string>
     <string name="settings_connected_as">Signed in as %1$s</string>
+    <string name="settings_saf_folders">Watched SAF folders</string>
+    <string name="settings_saf_folders_empty">No watched folders yet.</string>
+    <string name="settings_watched_folders">Watched system folders</string>
+    <string name="settings_watched_folders_hint">View watched folders</string>
+    <string name="watched_count_many">99+</string>
 
     <!-- Search -->
     <string name="search">Search</string>

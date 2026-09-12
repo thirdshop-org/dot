@@ -24,6 +24,10 @@ interface FolderDao {
     @Query("SELECT * FROM folders WHERE parent_resource_id IS NULL ORDER BY name ASC")
     fun observeRootFolders(): Flow<List<FolderEntity>>
 
+    /** Racines physiques surveillées (uri SAF non nulle) — distinctes des racines cloud-only. */
+    @Query("SELECT * FROM folders WHERE parent_resource_id IS NULL AND uri IS NOT NULL ORDER BY name ASC")
+    fun observeSafRoots(): Flow<List<FolderEntity>>
+
     @Query("SELECT * FROM folders WHERE parent_resource_id IS NULL ORDER BY name ASC")
     suspend fun getRootFolders(): List<FolderEntity>
 

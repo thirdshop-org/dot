@@ -27,6 +27,7 @@ import com.vaultdrop.mobile.ui.pdfbuilder.PdfBuilderScreen
 import com.vaultdrop.mobile.ui.review.SwipeReviewScreen
 import com.vaultdrop.mobile.ui.search.SearchScreen
 import com.vaultdrop.mobile.ui.settings.SettingsScreen
+import com.vaultdrop.mobile.ui.watchedfolders.WatchedFoldersScreen
 
 object Routes {
     const val FILES = "files"
@@ -34,6 +35,7 @@ object Routes {
     const val SETTINGS = "settings"
     const val DASHBOARD = "dashboard"
     const val REVIEW = "review"
+    const val WATCHED_FOLDERS = "watched"
     const val FOLDER_DETAIL = "folder/{folderResourceId}"
     const val ARG_FOLDER = "folderResourceId"
     const val DOCUMENT = "document/{documentResourceId}"
@@ -66,6 +68,8 @@ fun NavGraph(
     val selectedTab = backStackEntry?.destination?.route.toNavTab()
 
     val importState by syncViewModel.importState.collectAsStateWithLifecycle()
+
+    val onOpenWatchedFolders = { navController.navigate(Routes.WATCHED_FOLDERS) }
 
     val onTabSelected: (NavTab) -> Unit = { tab ->
         if (tab.route != selectedTab.route) {
@@ -108,6 +112,7 @@ fun NavGraph(
                 SettingsScreen(
                     selectedTab = selectedTab,
                     onTabSelected = onTabSelected,
+                    onOpenWatchedFolders = onOpenWatchedFolders,
                     authViewModel = authViewModel,
                     connectionStatusViewModel = connectionStatusViewModel,
                 )
@@ -124,6 +129,12 @@ fun NavGraph(
                 SwipeReviewScreen(
                     onBack = { navController.popBackStack() },
                     connectionStatusViewModel = connectionStatusViewModel,
+                )
+            }
+            composable(Routes.WATCHED_FOLDERS) {
+                WatchedFoldersScreen(
+                    onBack = { navController.popBackStack() },
+                    syncViewModel = syncViewModel,
                 )
             }
             composable(

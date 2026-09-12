@@ -1,10 +1,7 @@
 package com.vaultdrop.mobile.ui.folderlist
 
-import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.provider.DocumentsContract
-import android.provider.OpenableColumns
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -73,6 +70,7 @@ import com.vaultdrop.mobile.R
 import com.vaultdrop.mobile.data.local.entity.FileEntity
 import com.vaultdrop.mobile.data.local.entity.FolderEntity
 import com.vaultdrop.mobile.features.connection.ConnectionStatusViewModel
+import com.vaultdrop.mobile.features.saf.safDisplayName
 import com.vaultdrop.mobile.features.sync.SyncViewModel
 import com.vaultdrop.mobile.ui.components.FileCategoryIcon
 import com.vaultdrop.mobile.ui.components.FolderNameDialog
@@ -104,7 +102,6 @@ fun FolderListScreen(
     val connectionStatus by connectionStatusViewModel.status.collectAsStateWithLifecycle()
     val defaultRootId by viewModel.defaultRootId.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    val folderLabel = stringResource(R.string.folder)
     val selection = rememberSelectionState()
     var showCreateDialog by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
@@ -146,7 +143,7 @@ fun FolderListScreen(
             )
         }.onFailure { Timber.w(it, "persistable permission absent on default root pick") }
         pendingDefaultPick = uri
-        val rootName = uri.displayName(context) ?: uri.lastPathSegment ?: defaultRootLabel
+        val rootName = uri.safDisplayName(context) ?: uri.lastPathSegment ?: defaultRootLabel
         syncViewModel.importRoot(uri = uri.toString(), name = rootName)
     }
 
@@ -170,23 +167,6 @@ fun FolderListScreen(
             attempts++
         }
         pendingDefaultPick = null
-    }
-
-    val pickFolderLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenDocumentTree(),
-    ) { uri: Uri? ->
-        if (uri == null) return@rememberLauncherForActivityResult
-        // Permissions persistantes : l'app ré-ouvrira le dossier aux prochains lancements.
-        runCatching {
-            context.contentResolver.takePersistableUriPermission(
-                uri,
-                Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
-            )
-        }
-        syncViewModel.importRoot(
-            uri = uri.toString(),
-            name = uri.displayName(context) ?: uri.lastPathSegment ?: folderLabel,
-        )
     }
 
     if (defaultRootId == null) {
@@ -289,7 +269,6 @@ fun FolderListScreen(
                 selection = selection,
                 onBrowseUp = viewModel::browseUp,
                 onOpenBrowseFolder = viewModel::openBrowseFolder,
-                onAddFolder = { pickFolderLauncher.launch(null) },
                 onCreateFolder = { showCreateDialog = true },
                 onOpenDocument = onOpenDocument,
                 modifier = Modifier.weight(1f),
@@ -416,7 +395,6 @@ private fun HomeViewContent(
     selection: SelectionState,
     onBrowseUp: () -> Unit,
     onOpenBrowseFolder: (String) -> Unit,
-    onAddFolder: () -> Unit,
     onCreateFolder: () -> Unit,
     onOpenDocument: (String) -> Unit,
     modifier: Modifier = Modifier,
@@ -439,7 +417,6 @@ private fun HomeViewContent(
             error = error,
             onBrowseUp = onBrowseUp,
             onOpenBrowseFolder = onOpenBrowseFolder,
-            onAddFolder = onAddFolder,
             onCreateFolder = onCreateFolder,
             modifier = modifier,
         )
@@ -541,7 +518,6 @@ private fun FolderBrowserContent(
     error: String?,
     onBrowseUp: () -> Unit,
     onOpenBrowseFolder: (String) -> Unit,
-    onAddFolder: () -> Unit,
     onCreateFolder: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -582,25 +558,12 @@ private fun FolderBrowserContent(
 
         if (!moveMode) {
             item(key = "create") {
-                if (atRoot) {
-                    Button(
-                        onClick = onAddFolder,
-                        enabled = !isImporting,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 12.dp),
-                    ) {
-                        Icon(Icons.Filled.Add, contentDescription = null)
-                        Spacer(Modifier.width(8.dp))
-                        Text(stringResource(R.string.add_folder))
-                    }
-                }
                 OutlinedButton(
                     onClick = onCreateFolder,
                     enabled = !isImporting,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = if (atRoot) 8.dp else 4.dp, bottom = 4.dp),
+                        .padding(top = 8.dp, bottom = 4.dp),
                 ) {
                     Icon(Icons.Filled.CreateNewFolder, contentDescription = null)
                     Spacer(Modifier.width(8.dp))
@@ -704,21 +667,6 @@ private fun DefaultRootOnboarding(
         }
     }
 }
-
-/** Nom affiché d'un dossier SAF via DocumentsContract (DISPLAY_NAME). */
-private fun Uri.displayName(context: Context): String? = runCatching {
-    val docId = DocumentsContract.getTreeDocumentId(this)
-    val docUri = DocumentsContract.buildDocumentUriUsingTree(this, docId)
-    context.contentResolver.query(
-        docUri,
-        arrayOf(OpenableColumns.DISPLAY_NAME),
-        null,
-        null,
-        null,
-    )?.use { cursor ->
-        if (cursor.moveToFirst()) cursor.getString(0) else null
-    }
-}.getOrNull()
 
 @Composable
 private fun SectionHeader(label: String) {

@@ -1,8 +1,10 @@
 package com.vaultdrop.mobile.features.saf
 
 import android.content.ContentResolver
+import android.content.Context
 import android.net.Uri
 import android.provider.DocumentsContract
+import android.provider.OpenableColumns
 
 /**
  * Conversions d'URI SAF partagées par SafFolderCreator et FileMover.
@@ -39,3 +41,18 @@ object SafUris {
         }
     }
 }
+
+/** Nom affiché d'une racine SAF via DocumentsContract (colonne DISPLAY_NAME). */
+fun Uri.safDisplayName(context: Context): String? = runCatching {
+    val docId = DocumentsContract.getTreeDocumentId(this)
+    val docUri = DocumentsContract.buildDocumentUriUsingTree(this, docId)
+    context.contentResolver.query(
+        docUri,
+        arrayOf(OpenableColumns.DISPLAY_NAME),
+        null,
+        null,
+        null,
+    )?.use { cursor ->
+        if (cursor.moveToFirst()) cursor.getString(0) else null
+    }
+}.getOrNull()

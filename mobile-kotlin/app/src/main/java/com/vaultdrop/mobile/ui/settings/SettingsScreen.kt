@@ -1,5 +1,6 @@
 package com.vaultdrop.mobile.ui.settings
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -14,6 +15,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -51,6 +53,7 @@ import com.vaultdrop.mobile.ui.auth.AuthState
 import com.vaultdrop.mobile.ui.auth.AuthViewModel
 import com.vaultdrop.mobile.ui.auth.authErrorResFor
 import com.vaultdrop.mobile.ui.components.ServerStatusBadge
+import com.vaultdrop.mobile.ui.components.WatchedFoldersBadge
 import com.vaultdrop.mobile.ui.navigation.FloatingNavBar
 import com.vaultdrop.mobile.ui.navigation.NavTab
 
@@ -59,6 +62,7 @@ import com.vaultdrop.mobile.ui.navigation.NavTab
 fun SettingsScreen(
     selectedTab: NavTab,
     onTabSelected: (NavTab) -> Unit,
+    onOpenWatchedFolders: () -> Unit,
     authViewModel: AuthViewModel,
     connectionStatusViewModel: ConnectionStatusViewModel,
     viewModel: SettingsViewModel = hiltViewModel(),
@@ -117,6 +121,17 @@ fun SettingsScreen(
                         },
                     )
                 },
+            )
+
+            HorizontalDivider()
+            SettingsRow(
+                icon = { Icon(Icons.Filled.Folder, contentDescription = null) },
+                title = stringResource(R.string.settings_watched_folders),
+                subtitle = stringResource(R.string.settings_watched_folders_hint),
+                trailing = {
+                    WatchedFoldersBadge(onClick = onOpenWatchedFolders)
+                },
+                onClick = onOpenWatchedFolders,
             )
 
             HorizontalDivider()
@@ -241,6 +256,8 @@ fun SettingsScreen(
                     }
                 }
             }
+
+            HorizontalDivider()
             Spacer(Modifier.height(16.dp))
         }
     }
@@ -251,11 +268,13 @@ private fun SettingsRow(
     icon: @Composable () -> Unit,
     title: String,
     subtitle: String,
-    trailing: @Composable () -> Unit,
+    trailing: @Composable () -> Unit = {},
+    onClick: (() -> Unit)? = null,
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clickable(enabled = onClick != null, onClick = { onClick?.invoke() })
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

@@ -88,6 +88,11 @@
     <string name="settings_connect">Se connecter</string>
     <string name="settings_disconnect">Se déconnecter</string>
     <string name="settings_connected_as">Connecté en tant que %1$s</string>
+    <string name="settings_saf_folders">Dossiers SAF surveillés</string>
+    <string name="settings_saf_folders_empty">Aucun dossier surveillé pour le moment.</string>
+    <string name="settings_watched_folders">Dossiers système surveillés</string>
+    <string name="settings_watched_folders_hint">Consulter les dossiers surveillés</string>
+    <string name="watched_count_many">99+</string>
 
     <!-- Recherche -->
     <string name="search">Recherche</string>
