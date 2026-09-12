@@ -21,8 +21,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.DriveFileMove
-import androidx.compose.material.icons.filled.MergeType
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -68,6 +66,7 @@ import com.vaultdrop.mobile.ui.components.icon
 import com.vaultdrop.mobile.ui.components.rememberSelectionState
 import com.vaultdrop.mobile.ui.navigation.FloatingNavBar
 import com.vaultdrop.mobile.ui.navigation.NavTab
+import com.vaultdrop.mobile.ui.navigation.SelectionNavBar
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -123,30 +122,7 @@ fun SearchScreen(
                     }
                 },
                 actions = {
-                    if (selection.active) {
-                        IconButton(
-                            onClick = { showMoveDialog = true },
-                            enabled = selection.ids.isNotEmpty(),
-                        ) {
-                            Icon(
-                                Icons.Filled.DriveFileMove,
-                                contentDescription = stringResource(R.string.move_files),
-                            )
-                        }
-                        IconButton(
-                            onClick = {
-                                val ids = selection.ids.toList()
-                                selection.clear()
-                                onBuildPdf(ids)
-                            },
-                            enabled = selection.ids.isNotEmpty(),
-                        ) {
-                            Icon(
-                                Icons.Filled.MergeType,
-                                contentDescription = stringResource(R.string.selection_assemble),
-                            )
-                        }
-                    } else {
+                    if (!selection.active) {
                         ServerStatusBadge(
                             status = connectionStatus,
                             onClick = connectionStatusViewModel::checkNow,
@@ -156,7 +132,19 @@ fun SearchScreen(
             )
         },
         bottomBar = {
-            FloatingNavBar(selected = selectedTab, onSelect = onTabSelected)
+            if (selection.active) {
+                SelectionNavBar(
+                    onMove = { showMoveDialog = true },
+                    onBuildPdf = {
+                        val ids = selection.ids.toList()
+                        selection.clear()
+                        onBuildPdf(ids)
+                    },
+                    enabled = selection.ids.isNotEmpty(),
+                )
+            } else {
+                FloatingNavBar(selected = selectedTab, onSelect = onTabSelected)
+            }
         },
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
     ) { padding ->
