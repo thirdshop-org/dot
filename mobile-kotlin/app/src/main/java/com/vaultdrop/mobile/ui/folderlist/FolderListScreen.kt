@@ -30,9 +30,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CreateNewFolder
-import androidx.compose.material.icons.filled.DriveFileMove
 import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.MergeType
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -79,6 +77,7 @@ import com.vaultdrop.mobile.ui.components.ServerStatusBadge
 import com.vaultdrop.mobile.ui.components.rememberSelectionState
 import com.vaultdrop.mobile.ui.navigation.FloatingNavBar
 import com.vaultdrop.mobile.ui.navigation.NavTab
+import com.vaultdrop.mobile.ui.navigation.SelectionNavBar
 import kotlinx.coroutines.delay
 import timber.log.Timber
 import java.util.Locale
@@ -215,30 +214,7 @@ fun FolderListScreen(
                     }
                 },
                 actions = {
-                    if (selection.active) {
-                        IconButton(
-                            onClick = { showMoveDialog = true },
-                            enabled = selection.ids.isNotEmpty(),
-                        ) {
-                            Icon(
-                                Icons.Filled.DriveFileMove,
-                                contentDescription = stringResource(R.string.move_files),
-                            )
-                        }
-                        IconButton(
-                            onClick = {
-                                val ids = selection.ids.toList()
-                                selection.clear()
-                                onBuildPdf(ids)
-                            },
-                            enabled = selection.ids.isNotEmpty(),
-                        ) {
-                            Icon(
-                                Icons.Filled.MergeType,
-                                contentDescription = stringResource(R.string.selection_assemble),
-                            )
-                        }
-                    } else {
+                    if (!selection.active) {
                         ServerStatusBadge(
                             status = connectionStatus,
                             onClick = connectionStatusViewModel::checkNow,
@@ -251,7 +227,19 @@ fun FolderListScreen(
             )
         },
         bottomBar = {
-            FloatingNavBar(selected = selectedTab, onSelect = onTabSelected)
+            if (selection.active) {
+                SelectionNavBar(
+                    onMove = { showMoveDialog = true },
+                    onBuildPdf = {
+                        val ids = selection.ids.toList()
+                        selection.clear()
+                        onBuildPdf(ids)
+                    },
+                    enabled = selection.ids.isNotEmpty(),
+                )
+            } else {
+                FloatingNavBar(selected = selectedTab, onSelect = onTabSelected)
+            }
         },
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
     ) { padding ->
