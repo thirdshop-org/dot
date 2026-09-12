@@ -17,6 +17,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  * v6 : ajout colonne `processed` sur `files` (mode review « traiter »). Le
  *   backlog existant est marqué traité à la migration : seuls les fichiers
  *   découverts après la mise à jour entrent dans la file de review.
+ * v7 : table `pending_operations` (outbox) — file des mutations locales à
+ *   pousser vers `POST /sync/ops` (uuid 32-hex client-generated, cf.
+ *   docs/api-v1.md §6.1).
  */
 object Migrations {
 
@@ -87,5 +90,34 @@ object Migrations {
         }
     }
 
-    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+    private val MIGRATION_6_7 = object : Migration(6, 7) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `pending_operations` (
+                    `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    `operation_id` TEXT NOT NULL,
+                    `ref_type` TEXT,
+                    `ref_id` INTEGER,
+                    `resource_id` TEXT,
+                    `resource_type` TEXT,
+                    `operation` TEXT NOT NULL,
+                    `payload` TEXT NOT NULL,
+                    `status` TEXT NOT NULL DEFAULT 'pending'
+                        CHECK (status IN ('pending', 'synced', 'failed')),
+                    `attempts` INTEGER NOT NULL DEFAULT 0,
+                    `created_at` INTEGER NOT NULL,
+                    `updated_at` INTEGER NOT NULL
+                )
+                """.trimIndent(),
+            )
+            db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_pending_operations_operation_id` ON `pending_operations` (`operation_id`)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_pending_operations_status` ON `pending_operations` (`status`)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_pending_operations_resource_id` ON `pending_operations` (`resource_id`)")
+        }
+    }
+
+    val ALL: Array<Migration> = arrayOf(
+        MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7,
+    )
 }

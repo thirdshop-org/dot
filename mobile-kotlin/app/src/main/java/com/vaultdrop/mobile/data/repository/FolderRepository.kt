@@ -1,5 +1,7 @@
 package com.vaultdrop.mobile.data.repository
 
+import androidx.room.withTransaction
+import com.vaultdrop.mobile.data.local.AppDatabase
 import com.vaultdrop.mobile.data.local.dao.FolderDao
 import com.vaultdrop.mobile.data.local.entity.FolderEntity
 import com.vaultdrop.mobile.data.local.entity.FolderStatus
@@ -14,6 +16,9 @@ import javax.inject.Singleton
 /**
  * Miroir de `services/db/repositories/folders.ts`. Local-first : l'UI lit Room
  * ; le réseau sert de source de rafraîchissement (snapshot cloud).
+ *
+ * L'antichambre outbox (`create_resource` pour un dossier SAF nouvellement
+ * découvert/créé) est écrite dans la MÊME transaction que l'upsert Room.
  */
 @Singleton
 class FolderRepository @Inject constructor(
@@ -21,6 +26,8 @@ class FolderRepository @Inject constructor(
     private val apiClient: ApiClient,
     private val generateId: GenerateId,
     private val deviceIdentity: DeviceIdentity,
+    private val appDatabase: AppDatabase,
+    private val outboxRepository: OutboxRepository,
 ) {
 
     fun observeRootFolders(): Flow<List<FolderEntity>> = folderDao.observeRootFolders()
@@ -103,7 +110,18 @@ class FolderRepository @Inject constructor(
             addedAt = existing?.addedAt ?: now,
             updatedAt = now,
         )
-        folderDao.upsert(entity)
+        appDatabase.withTransaction {
+            folderDao.upsert(entity)
+            if (existing == null) {
+                // Nouvelle ressource physique → la pousser vers le serveur.
+                outboxRepository.enqueueCreateResource(
+                    resourceId = entity.resourceId,
+                    resourceType = "folder",
+                    name = entity.name,
+                    parentResourceId = entity.parentResourceId,
+                )
+            }
+        }
         return entity
     }
 

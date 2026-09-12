@@ -5,6 +5,7 @@ import androidx.room.Room
 import com.vaultdrop.mobile.data.local.AppDatabase
 import com.vaultdrop.mobile.data.local.dao.FileDao
 import com.vaultdrop.mobile.data.local.dao.FolderDao
+import com.vaultdrop.mobile.data.local.dao.PendingOperationDao
 import com.vaultdrop.mobile.data.local.dao.UserPreferenceDao
 import com.vaultdrop.mobile.data.local.migration.Migrations
 import dagger.Module
@@ -33,4 +34,7 @@ object DatabaseModule {
 
     @Provides
     fun provideFileDao(db: AppDatabase): FileDao = db.fileDao()
+
+    @Provides
+    fun providePendingOperationDao(db: AppDatabase): PendingOperationDao = db.pendingOperationDao()
 }

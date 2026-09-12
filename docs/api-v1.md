@@ -84,9 +84,9 @@ type OcrJob = { id: string; status: OcrJobStatus; text?: string | null; error?: 
 {
   "operations": [
     {
-      "operation_id": 42,          // = id client (pending_operations.id)
+      "operation_id": "…32-hex",      // généré par le client (GenerateId), jamais réutilisé
       "ref_type": "resource",      // "resource" | "share" | "share_link"
-      "ref_id": 7,                 // id local de la ligne share/share_link (sinon null)
+      "ref_id": null,              // id local de la ligne share/share_link (sinon null)
       "resource_id": "…32-hex",    // ressource cible
       "resource_type": "folder",   // "folder" | "file"
       "operation": "create_resource",
@@ -97,15 +97,15 @@ type OcrJob = { id: string; status: OcrJobStatus; text?: string | null; error?: 
 ```
 
 - `operation` ∈ `create_resource | update_metadata | delete_resource | move_resource | share | revoke_share | update_share | create_link | revoke_link` (cf. `PendingOperationType` mobile).
-- L'idempotence outbox reste **par device** : `UNIQUE(device_id, operation_id)` (la réinscription d'un device avec un login différent ne réutilise pas l'historique outbox d'un autre compte). Pour chaque op : si déjà traitée → **no-op** (comptée comme appliquée, les doublons arrivent à cause du backoff/retry). Sinon appliquée si valide.
+- **Identifiants** : `operation_id` est un **TEXT 32-hex** généré par le client (`^[0-9a-f]{32}$`, CHECK-enforced depuis la migration `000008`), distinct de `resource_id`. L'idempotence outbox reste **par device** : `UNIQUE(device_id, operation_id)` (la réinscription d'un device avec un login différent ne réutilise pas l'historique outbox d'un autre compte). Pour chaque op : si déjà traitée → **no-op** (comptée comme appliquée, les doublons arrivent à cause du backoff/retry). Sinon appliquée si valide.
 - **Ordre** : les opérations sont appliquées **séquentiellement**, dans l'ordre du batch. Le serveur **s'arrête à la première erreur non-idempotente** et renvoie l'index atteint — le client reprend à cet index.
-- Réponse : `2xx` avec `{ "applied": int, "failed": { "operation_id": int, "code": string, "message": string } | null }` (`applied` = index de la prochaine op à envoyer).
-- Côté client, le `pushStatus` (pending/synced/failed) des shares/share_links est **dérivé** de l'état des opérations de l'outbox ; dead-letter après `MAX_PENDING_ATTEMPTS` (= 5). **Côté serveur, les ops `share | revoke_share | update_share | create_link | revoke_link` sont accusées réception mais ne créent aucun état** (V1 single-owner, pas de table shares serveur) — la dérivation du pushStatus reste purement client.
+- Réponse : `2xx` avec `{ "applied": int, "failed": { "operation_id": "…32-hex", "code": string, "message": string } | null }` (`applied` = index de la prochaine op à envoyer).
+- Côté client, le `pushStatus` (pending/synced/failed) des shares/share_links est **dérivé** de l'état des opérations de l'outbox ; **dead-letter immédiat** sur erreur 4xx non-idempotente (`failed`, non resélectionné ; `attempts` reste un compteur diagnostic, pas un seuil) — seul le transitoire (`NETWORK_ERROR`/5xx) est rejoué avec backoff. **Côté serveur, les ops `share | revoke_share | update_share | create_link | revoke_link` sont accusées réception mais ne créent aucun état** (V1 single-owner, pas de table shares serveur) — la dérivation du pushStatus reste purement client.
 - Sémantique d'application (côté serveur) :
-  - `create_resource` : crée la ressource ; **déjà présente → no-op** (rejeu idempotent). `payload.name` obligatoire.
+  - `create_resource` : crée la ressource ; **déjà présente → no-op** (rejeu idempotent). `payload.name` obligatoire ; `payload.parentResourceId` (32-hex, optionnel) = dossier parent — absent → racine. **Parent inexistant → `NOT_FOUND`** (cohérent avec `move_resource`). Ordre garanti par construction client : le walk SAF émet les `create` des dossiers (ordre préfixe) avant ceux des fichiers, dans la même transaction Room → `id ASC` = parent avant enfant.
   - `update_metadata` / `move_resource` : ressource absente → **no-op** (état terminal atteint) ; dossier cible de `move_resource` absent → `NOT_FOUND` ; déplacement dans soi-même → `INVALID_REQUEST`.
   - `delete_resource` : **idempotent** — suppression d'une ressource absente = succès.
-  - Validation (deuxième champ `operation_id`, hex32 pour `resource_id`, enum `operation`) → échec `INVALID_REQUEST` avec arrêt du batch.
+  - Validation (deuxième champ `operation_id`, hex32 pour `resource_id` **et** `operation_id`, enum `operation`) → échec `INVALID_REQUEST` avec arrêt du batch.
   - Nom déjà pris (même parent, ou à la racine) → échec `NAME_CONFLICT`.**
 
 ### 6.2 Snapshot — `GET /sync/permissions?after=<cached_at_ms>`

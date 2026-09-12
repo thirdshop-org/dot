@@ -4,8 +4,11 @@ import android.content.ContentResolver
 import android.content.Context
 import android.net.Uri
 import android.provider.DocumentsContract
+import androidx.room.withTransaction
+import com.vaultdrop.mobile.data.local.AppDatabase
 import com.vaultdrop.mobile.data.local.entity.FileEntity
 import com.vaultdrop.mobile.data.repository.FileRepository
+import com.vaultdrop.mobile.data.repository.OutboxRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -20,6 +23,8 @@ import javax.inject.Singleton
  * disparaît aussi de l'arborescence (et donc du prochain sync). En cas de
  * succès, la ligne Room est masquée (`exists = 0`) : cohérent avec la
  * réconciliation (jamais de DELETE SQL), idempotent face à la marche 30s.
+ * La suppression est aussi journalisée dans l'outbox (`delete_resource`),
+ * dans la même transaction que le masquage Room.
  *
  * Retourne `false` si le provider refuse la suppression (permission ou pas de
  * geste delete) : dans ce cas le fichier reste dans la file de review.
@@ -28,6 +33,8 @@ import javax.inject.Singleton
 class SafFileDeleter @Inject constructor(
     @ApplicationContext private val context: Context,
     private val fileRepository: FileRepository,
+    private val outboxRepository: OutboxRepository,
+    private val appDatabase: AppDatabase,
 ) {
 
     private val resolver: ContentResolver get() = context.contentResolver
@@ -39,8 +46,12 @@ class SafFileDeleter @Inject constructor(
                 DocumentsContract.deleteDocument(resolver, Uri.parse(uri))
             }.onSuccess { deleted ->
                 if (deleted) {
+                    val now = System.currentTimeMillis()
+                    appDatabase.withTransaction {
+                        fileRepository.markMissing(file.resourceId, now)
+                        outboxRepository.enqueueDeleteResource(file.resourceId, "file")
+                    }
                     Timber.d("deleted %s", uri)
-                    fileRepository.markMissing(file.resourceId, System.currentTimeMillis())
                 } else {
                     Timber.w("deleteDocument returned false for %s", uri)
                 }

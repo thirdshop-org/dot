@@ -2,9 +2,11 @@ package com.vaultdrop.mobile.features.sync
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import android.content.Context
 import com.vaultdrop.mobile.data.repository.FolderRepository
 import com.vaultdrop.mobile.data.repository.SaveFolderInput
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -31,6 +33,7 @@ import javax.inject.Inject
 class SyncViewModel @Inject constructor(
     private val deviceSync: DeviceSync,
     private val folderRepository: FolderRepository,
+    @ApplicationContext private val appContext: Context,
 ) : ViewModel() {
 
     private var loopJob: Job? = null
@@ -54,6 +57,9 @@ class SyncViewModel @Inject constructor(
                 runCatching { deviceSync.syncAll() }
                     .onSuccess { results ->
                         if (results.isNotEmpty()) Timber.d("syncAll: %s", results)
+                        // Les nouvelles ressources découvertes sont dans l'outbox
+                        // → drainer vers POST /sync/ops (single-flight via KEEP).
+                        OutboxSyncWorker.enqueue(appContext)
                     }
                     .onFailure { e -> Timber.w(e, "syncAll failed, retrying later") }
                 delay(INTERVAL_MS)

@@ -1,12 +1,15 @@
 package com.vaultdrop.mobile.ui.auth
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.vaultdrop.mobile.auth.SessionManager
 import com.vaultdrop.mobile.data.remote.ApiClient
 import com.vaultdrop.mobile.data.remote.ApiException
 import com.vaultdrop.mobile.data.repository.AuthRepository
+import com.vaultdrop.mobile.features.sync.OutboxSyncWorker
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -22,6 +25,7 @@ class AuthViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     private val sessionManager: SessionManager,
     private val apiClient: ApiClient,
+    @ApplicationContext private val appContext: Context,
 ) : ViewModel() {
 
     private val _authState = MutableStateFlow<AuthState>(AuthState.Loading)
@@ -43,6 +47,8 @@ class AuthViewModel @Inject constructor(
                 else -> AuthState.SignedOut
             }
             authRepository.registerDevice()
+            // Session restaurée → drainer l'outbox laissée en attente.
+            OutboxSyncWorker.enqueue(appContext)
         }
     }
 
@@ -58,6 +64,8 @@ class AuthViewModel @Inject constructor(
                     sessionManager.save(response.token, response.user)
                     _loginUiState.value = LoginUiState()
                     _authState.value = AuthState.SignedIn(response.user)
+                    // Connexion réussie → pousser les mutations locales en attente.
+                    OutboxSyncWorker.enqueue(appContext)
                 }
                 .onFailure { e ->
                     val error = when (e) {

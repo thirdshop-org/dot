@@ -9,6 +9,10 @@ import com.vaultdrop.mobile.data.remote.dto.FileDto
 import com.vaultdrop.mobile.data.remote.dto.FolderDto
 import com.vaultdrop.mobile.data.remote.dto.LoginRequestDto
 import com.vaultdrop.mobile.data.remote.dto.LoginResponseDto
+import com.vaultdrop.mobile.data.remote.dto.ResourcePermissionDto
+import com.vaultdrop.mobile.data.remote.dto.SyncOpDto
+import com.vaultdrop.mobile.data.remote.dto.SyncOpsRequest
+import com.vaultdrop.mobile.data.remote.dto.SyncOpsResult
 import okio.IOException
 import retrofit2.Response
 import timber.log.Timber
@@ -58,6 +62,14 @@ class ApiClient @Inject constructor(
     suspend fun login(username: String, password: String, deviceId: String): LoginResponseDto =
         unwrap({ apiService.login(LoginRequestDto(username, password, deviceId)) },
             skipUnauthorizedHandling = true)
+
+    /** Push outbox : applique un batch d'opérations, séquentiel et idempotent. */
+    suspend fun syncOps(operations: List<SyncOpDto>): SyncOpsResult =
+        unwrap({ apiService.syncOps(SyncOpsRequest(operations)) })
+
+    /** Snapshot des permissions effectives (delta si `after` ms fourni). */
+    suspend fun syncPermissions(after: Long? = null): List<ResourcePermissionDto> =
+        unwrap({ apiService.syncPermissions(after) })
 
     private suspend fun <T> unwrap(
         call: suspend () -> Response<ApiEnvelope<T>>,

@@ -1,5 +1,7 @@
 package com.vaultdrop.mobile.data.repository
 
+import androidx.room.withTransaction
+import com.vaultdrop.mobile.data.local.AppDatabase
 import com.vaultdrop.mobile.data.local.dao.FileDao
 import com.vaultdrop.mobile.data.local.entity.FileEntity
 import com.vaultdrop.mobile.data.local.entity.FileStatus
@@ -17,12 +19,17 @@ import javax.inject.Singleton
  *
  * Les fichiers renvoyés par le serveur sont cloud-only (uri = NULL) :
  * aucune copie physique locale, mirror de `saveFile(..., syncStatus='cloud')`.
+ *
+ * L'antichambre outbox (`create_resource`/`move_resource`) est écrite dans la
+ * MÊME transaction que la mutation Room (pattern transactional outbox).
  */
 @Singleton
 class FileRepository @Inject constructor(
     private val fileDao: FileDao,
     private val apiClient: ApiClient,
     private val generateId: GenerateId,
+    private val appDatabase: AppDatabase,
+    private val outboxRepository: OutboxRepository,
 ) {
 
     /** Fichiers visibles du dossier, locaux + cloud — source de l'UI. */
@@ -97,7 +104,20 @@ class FileRepository @Inject constructor(
             addedAt = existing?.addedAt ?: now,
             updatedAt = now,
         )
-        fileDao.upsert(entity)
+        appDatabase.withTransaction {
+            fileDao.upsert(entity)
+            if (existing == null) {
+                // Nouveau fichier physique → le pousser vers le serveur (métadonnées).
+                outboxRepository.enqueueCreateResource(
+                    resourceId = entity.resourceId,
+                    resourceType = "file",
+                    name = entity.name,
+                    parentResourceId = entity.folderResourceId,
+                    mimeType = entity.mimeType,
+                    extension = entity.extension,
+                )
+            }
+        }
         return entity
     }
 
@@ -108,8 +128,16 @@ class FileRepository @Inject constructor(
     /** Met à jour la cible dossier d'un fichier (déplacement local / cloud-only). */
     suspend fun applyMove(resourceId: String, folderId: String, newUri: String?) {
         val now = System.currentTimeMillis()
-        fileDao.moveToFolder(listOf(resourceId), folderId, now)
-        if (newUri != null) fileDao.updateUri(resourceId, newUri)
+        appDatabase.withTransaction {
+            fileDao.moveToFolder(listOf(resourceId), folderId, now)
+            if (newUri != null) fileDao.updateUri(resourceId, newUri)
+            // Déplacement reflété localement ←→ poussé vers le serveur.
+            outboxRepository.enqueueMoveResource(
+                resourceId = resourceId,
+                resourceType = "file",
+                toFolderResourceId = folderId,
+            )
+        }
     }
 
     /**

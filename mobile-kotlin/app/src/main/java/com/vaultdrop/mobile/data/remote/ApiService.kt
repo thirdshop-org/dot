@@ -6,6 +6,9 @@ import com.vaultdrop.mobile.data.remote.dto.FileDto
 import com.vaultdrop.mobile.data.remote.dto.FolderDto
 import com.vaultdrop.mobile.data.remote.dto.LoginRequestDto
 import com.vaultdrop.mobile.data.remote.dto.LoginResponseDto
+import com.vaultdrop.mobile.data.remote.dto.ResourcePermissionDto
+import com.vaultdrop.mobile.data.remote.dto.SyncOpsRequest
+import com.vaultdrop.mobile.data.remote.dto.SyncOpsResult
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET
@@ -41,4 +44,16 @@ interface ApiService {
     suspend fun login(
         @Body body: LoginRequestDto,
     ): Response<ApiEnvelope<LoginResponseDto>>
+
+    /** Outbox client→serveur : applique un batch séquentiel, idempotent par device. */
+    @POST("sync/ops")
+    suspend fun syncOps(
+        @Body body: SyncOpsRequest,
+    ): Response<ApiEnvelope<SyncOpsResult>>
+
+    /** Snapshot des permissions effectives (delta si `after` fourni, ms epoch). */
+    @GET("sync/permissions")
+    suspend fun syncPermissions(
+        @Query("after") after: Long? = null,
+    ): Response<ApiEnvelope<List<ResourcePermissionDto>>>
 }

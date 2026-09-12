@@ -22,7 +22,7 @@ import javax.inject.Singleton
  *    bas de gamme : métadonnée seule (`folderResourceId`), la marche suivante
  *    re-réconciliera.
  *  - fichier cloud-only → mise à jour de la métadonnée de dossier uniquement
- *    (pas de poussée serveur en V1 — pas d'outbox).
+ *    (`applyMove` journalise aussi un `move_resource` dans l'outbox).
  */
 @Singleton
 class FileMover @Inject constructor(

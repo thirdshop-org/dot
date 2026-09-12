@@ -81,3 +81,44 @@ data class LoginResponseDto(
     @Json(name = "expires_at") val expiresAt: Long,
     @Json(name = "user") val user: UserDto,
 )
+
+/** Outbox — une op du batch `POST /sync/ops` (docs/api-v1.md §6.1). */
+data class SyncOpDto(
+    @Json(name = "operation_id") val operationId: String,
+    @Json(name = "ref_type") val refType: String? = null,
+    @Json(name = "ref_id") val refId: Long? = null,
+    @Json(name = "resource_id") val resourceId: String? = null,
+    @Json(name = "resource_type") val resourceType: String? = null,
+    @Json(name = "operation") val operation: String,
+    @Json(name = "payload") val payload: Map<String, Any?>? = null,
+)
+
+data class SyncOpsRequest(
+    @Json(name = "operations") val operations: List<SyncOpDto>,
+)
+
+/** Réponse de `POST /sync/ops` : `applied` = index de la prochaine op à envoyer. */
+data class SyncOpsResult(
+    @Json(name = "applied") val applied: Int,
+    @Json(name = "failed") val failed: SyncFailedDto? = null,
+)
+
+/** Première erreur non-idempotente du batch (arrêt du serveur). */
+data class SyncFailedDto(
+    @Json(name = "operation_id") val operationId: String,
+    @Json(name = "code") val code: String,
+    @Json(name = "message") val message: String,
+)
+
+/** Snapshot `GET /sync/permissions` (docs/api-v1.md §6.2). */
+data class ResourcePermissionDto(
+    @Json(name = "resource_id") val resourceId: String,
+    @Json(name = "resourceType") val resourceType: String,
+    @Json(name = "effectiveAccess") val effectiveAccess: String,
+    @Json(name = "inherit") val inherit: Boolean,
+    @Json(name = "ownerId") val ownerId: String? = null,
+    @Json(name = "sharedById") val sharedById: Any? = null,
+    @Json(name = "expiresAt") val expiresAt: Any? = null,
+    @Json(name = "cachedAt") val cachedAt: Long,
+    @Json(name = "updatedAt") val updatedAt: Long,
+)
