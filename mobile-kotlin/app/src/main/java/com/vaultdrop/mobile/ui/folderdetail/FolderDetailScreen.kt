@@ -37,7 +37,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.vaultdrop.mobile.R
 import com.vaultdrop.mobile.data.local.entity.FileEntity
 import com.vaultdrop.mobile.data.local.entity.FolderEntity
+import com.vaultdrop.mobile.features.connection.ConnectionStatusViewModel
 import com.vaultdrop.mobile.ui.components.FileCategoryIcon
+import com.vaultdrop.mobile.ui.components.ServerStatusBadge
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -47,9 +49,11 @@ fun FolderDetailScreen(
     onBack: () -> Unit,
     onOpenFolder: (String) -> Unit,
     onOpenDocument: (String) -> Unit,
+    connectionStatusViewModel: ConnectionStatusViewModel,
     viewModel: FolderDetailViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val connectionStatus by connectionStatusViewModel.status.collectAsStateWithLifecycle()
 
     LaunchedEffect(uiState.folderMissing) {
         if (uiState.folderMissing) onBack()
@@ -68,6 +72,10 @@ fun FolderDetailScreen(
                     }
                 },
                 actions = {
+                    ServerStatusBadge(
+                        status = connectionStatus,
+                        onClick = connectionStatusViewModel::checkNow,
+                    )
                     IconButton(onClick = viewModel::refresh) {
                         Icon(Icons.Filled.Refresh, contentDescription = stringResource(R.string.refresh))
                     }

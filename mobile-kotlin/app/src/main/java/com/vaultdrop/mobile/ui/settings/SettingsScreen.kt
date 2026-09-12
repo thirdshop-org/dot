@@ -46,9 +46,11 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.vaultdrop.mobile.R
 import com.vaultdrop.mobile.domain.ThemePreference
+import com.vaultdrop.mobile.features.connection.ConnectionStatusViewModel
 import com.vaultdrop.mobile.ui.auth.AuthState
 import com.vaultdrop.mobile.ui.auth.AuthViewModel
 import com.vaultdrop.mobile.ui.auth.authErrorResFor
+import com.vaultdrop.mobile.ui.components.ServerStatusBadge
 import com.vaultdrop.mobile.ui.navigation.FloatingNavBar
 import com.vaultdrop.mobile.ui.navigation.NavTab
 
@@ -58,11 +60,13 @@ fun SettingsScreen(
     selectedTab: NavTab,
     onTabSelected: (NavTab) -> Unit,
     authViewModel: AuthViewModel,
+    connectionStatusViewModel: ConnectionStatusViewModel,
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val theme by viewModel.theme.collectAsStateWithLifecycle()
     val serverUrl by viewModel.serverUrl.collectAsStateWithLifecycle()
     val testUiState by viewModel.testUiState.collectAsStateWithLifecycle()
+    val connectionStatus by connectionStatusViewModel.status.collectAsStateWithLifecycle()
     val authState by authViewModel.authState.collectAsStateWithLifecycle()
     val loginUi by authViewModel.loginUiState.collectAsStateWithLifecycle()
 
@@ -77,7 +81,15 @@ fun SettingsScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(title = { Text(stringResource(R.string.settings)) })
+            TopAppBar(
+                title = { Text(stringResource(R.string.settings)) },
+                actions = {
+                    ServerStatusBadge(
+                        status = connectionStatus,
+                        onClick = connectionStatusViewModel::checkNow,
+                    )
+                },
+            )
         },
         bottomBar = {
             FloatingNavBar(selected = selectedTab, onSelect = onTabSelected)

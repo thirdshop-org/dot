@@ -15,6 +15,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.vaultdrop.mobile.features.connection.ConnectionStatusViewModel
 import com.vaultdrop.mobile.features.sync.SyncViewModel
 import com.vaultdrop.mobile.ui.auth.AuthViewModel
 import com.vaultdrop.mobile.ui.document.DocumentViewerScreen
@@ -47,6 +48,7 @@ private fun String?.toNavTab(): NavTab = when (this) {
 fun NavGraph(
     authViewModel: AuthViewModel,
     syncViewModel: SyncViewModel,
+    connectionStatusViewModel: ConnectionStatusViewModel,
 ) {
     val navController = rememberNavController()
 
@@ -75,6 +77,7 @@ fun NavGraph(
                     onTabSelected = onTabSelected,
                     onOpenDocument = { id -> navController.navigate(Routes.document(id)) },
                     syncViewModel = syncViewModel,
+                    connectionStatusViewModel = connectionStatusViewModel,
                 )
             }
             composable(Routes.SEARCH) {
@@ -82,6 +85,7 @@ fun NavGraph(
                     selectedTab = selectedTab,
                     onTabSelected = onTabSelected,
                     onOpenDocument = { id -> navController.navigate(Routes.document(id)) },
+                    connectionStatusViewModel = connectionStatusViewModel,
                 )
             }
             composable(Routes.SETTINGS) {
@@ -89,6 +93,7 @@ fun NavGraph(
                     selectedTab = selectedTab,
                     onTabSelected = onTabSelected,
                     authViewModel = authViewModel,
+                    connectionStatusViewModel = connectionStatusViewModel,
                 )
             }
             composable(
@@ -105,6 +110,7 @@ fun NavGraph(
                     onBack = { navController.popBackStack() },
                     onOpenFolder = { id -> navController.navigate(Routes.folder(id)) },
                     onOpenDocument = { id -> navController.navigate(Routes.document(id)) },
+                    connectionStatusViewModel = connectionStatusViewModel,
                 )
             }
             composable(
@@ -119,6 +125,7 @@ fun NavGraph(
                 DocumentViewerScreen(
                     initialResourceId = documentId,
                     onBack = { navController.popBackStack() },
+                    connectionStatusViewModel = connectionStatusViewModel,
                 )
             }
         }

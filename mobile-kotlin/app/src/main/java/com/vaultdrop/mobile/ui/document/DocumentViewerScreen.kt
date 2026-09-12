@@ -58,6 +58,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.vaultdrop.mobile.R
 import com.vaultdrop.mobile.data.local.entity.FileEntity
 import com.vaultdrop.mobile.domain.FileCategory
+import com.vaultdrop.mobile.features.connection.ConnectionStatusViewModel
+import com.vaultdrop.mobile.ui.components.ServerStatusBadge
 import com.vaultdrop.mobile.ui.components.categoryValue
 import com.vaultdrop.mobile.ui.document.content.DocumentContentViewer
 import com.vaultdrop.mobile.ui.document.content.PdfFocusViewer
@@ -81,9 +83,11 @@ import java.util.Locale
 fun DocumentViewerScreen(
     initialResourceId: String,
     onBack: () -> Unit,
+    connectionStatusViewModel: ConnectionStatusViewModel,
     viewModel: DocumentViewerViewModel = hiltViewModel(),
 ) {
     val documents by viewModel.documents.collectAsStateWithLifecycle()
+    val connectionStatus by connectionStatusViewModel.status.collectAsStateWithLifecycle()
     val pagerState = rememberPagerState(pageCount = { documents.size })
 
     // Démarre une seule fois sur le document demandé, dès que la liste est chargée.
@@ -159,6 +163,12 @@ fun DocumentViewerScreen(
                                 contentDescription = stringResource(R.string.back),
                             )
                         }
+                    },
+                    actions = {
+                        ServerStatusBadge(
+                            status = connectionStatus,
+                            onClick = connectionStatusViewModel::checkNow,
+                        )
                     },
                 )
             }

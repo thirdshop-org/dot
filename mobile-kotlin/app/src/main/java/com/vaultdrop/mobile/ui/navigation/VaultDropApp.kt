@@ -11,6 +11,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.vaultdrop.mobile.features.connection.ConnectionStatusViewModel
 import com.vaultdrop.mobile.features.sync.SyncViewModel
 import com.vaultdrop.mobile.ui.auth.AuthState
 import com.vaultdrop.mobile.ui.auth.AuthViewModel
@@ -35,18 +36,30 @@ private fun SplashScreen() {
 fun VaultDropApp(
     authViewModel: AuthViewModel = hiltViewModel(),
     syncViewModel: SyncViewModel = hiltViewModel(),
+    connectionStatusViewModel: ConnectionStatusViewModel = hiltViewModel(),
 ) {
     val authState by authViewModel.authState.collectAsStateWithLifecycle()
 
-    // Une fois la session résolue, lancer la boucle de fond (idempotente).
+    // Une fois la session résolue, lancer les boucles de fond (idempotentes).
     LaunchedEffect(authState) {
-        if (authState != AuthState.Loading) syncViewModel.ensureStarted()
+        if (authState != AuthState.Loading) {
+            syncViewModel.ensureStarted()
+            connectionStatusViewModel.start()
+        }
     }
 
     when (authState) {
         AuthState.Loading -> SplashScreen()
         AuthState.SignedOut -> LoginScreen()
-        AuthState.Local -> NavGraph(authViewModel = authViewModel, syncViewModel = syncViewModel)
-        is AuthState.SignedIn -> NavGraph(authViewModel = authViewModel, syncViewModel = syncViewModel)
+        AuthState.Local -> NavGraph(
+            authViewModel = authViewModel,
+            syncViewModel = syncViewModel,
+            connectionStatusViewModel = connectionStatusViewModel,
+        )
+        is AuthState.SignedIn -> NavGraph(
+            authViewModel = authViewModel,
+            syncViewModel = syncViewModel,
+            connectionStatusViewModel = connectionStatusViewModel,
+        )
     }
 }

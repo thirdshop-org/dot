@@ -44,7 +44,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.vaultdrop.mobile.R
 import com.vaultdrop.mobile.data.local.entity.FileEntity
 import com.vaultdrop.mobile.domain.FileCategory
+import com.vaultdrop.mobile.features.connection.ConnectionStatusViewModel
 import com.vaultdrop.mobile.ui.components.FileCategoryIcon
+import com.vaultdrop.mobile.ui.components.ServerStatusBadge
 import com.vaultdrop.mobile.ui.components.color
 import com.vaultdrop.mobile.ui.components.icon
 import com.vaultdrop.mobile.ui.navigation.FloatingNavBar
@@ -57,13 +59,23 @@ fun SearchScreen(
     selectedTab: NavTab,
     onTabSelected: (NavTab) -> Unit,
     onOpenDocument: (String) -> Unit,
+    connectionStatusViewModel: ConnectionStatusViewModel,
     viewModel: SearchViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val connectionStatus by connectionStatusViewModel.status.collectAsStateWithLifecycle()
 
     Scaffold(
         topBar = {
-            TopAppBar(title = { Text(stringResource(R.string.search)) })
+            TopAppBar(
+                title = { Text(stringResource(R.string.search)) },
+                actions = {
+                    ServerStatusBadge(
+                        status = connectionStatus,
+                        onClick = connectionStatusViewModel::checkNow,
+                    )
+                },
+            )
         },
         bottomBar = {
             FloatingNavBar(selected = selectedTab, onSelect = onTabSelected)

@@ -49,8 +49,10 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.vaultdrop.mobile.R
 import com.vaultdrop.mobile.data.local.entity.FileEntity
+import com.vaultdrop.mobile.features.connection.ConnectionStatusViewModel
 import com.vaultdrop.mobile.features.sync.SyncViewModel
 import com.vaultdrop.mobile.ui.components.FileCategoryIcon
+import com.vaultdrop.mobile.ui.components.ServerStatusBadge
 import com.vaultdrop.mobile.ui.navigation.FloatingNavBar
 import com.vaultdrop.mobile.ui.navigation.NavTab
 import java.util.Locale
@@ -62,10 +64,12 @@ fun FolderListScreen(
     onTabSelected: (NavTab) -> Unit,
     onOpenDocument: (String) -> Unit,
     syncViewModel: SyncViewModel,
+    connectionStatusViewModel: ConnectionStatusViewModel,
     viewModel: FolderListViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val importState by syncViewModel.importState.collectAsStateWithLifecycle()
+    val connectionStatus by connectionStatusViewModel.status.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val folderLabel = stringResource(R.string.folder)
 
@@ -91,6 +95,10 @@ fun FolderListScreen(
             TopAppBar(
                 title = { Text(stringResource(R.string.files)) },
                 actions = {
+                    ServerStatusBadge(
+                        status = connectionStatus,
+                        onClick = connectionStatusViewModel::checkNow,
+                    )
                     IconButton(onClick = viewModel::refresh) {
                         Icon(Icons.Filled.Refresh, contentDescription = stringResource(R.string.refresh))
                     }
