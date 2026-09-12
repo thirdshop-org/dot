@@ -4,6 +4,7 @@ package com.vaultdrop.mobile.domain
 object PrefKeys {
     const val DEVICE_USER_ID = "device_user_id"
     const val ACTIVE_USER_ID = "active_user_id"
+    const val LOCAL_MODE = "local_mode"
     const val SYNC_MODE = "sync_mode"
     const val THEME = "theme"
     const val SERVER_URL = "server_url"

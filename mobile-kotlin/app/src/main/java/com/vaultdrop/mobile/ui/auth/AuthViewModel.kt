@@ -37,8 +37,11 @@ class AuthViewModel @Inject constructor(
 
         viewModelScope.launch {
             val session = sessionManager.restore()
-            _authState.value =
-                if (session != null) AuthState.SignedIn(session.user) else AuthState.SignedOut
+            _authState.value = when {
+                session != null -> AuthState.SignedIn(session.user)
+                sessionManager.isLocalMode() -> AuthState.Local
+                else -> AuthState.SignedOut
+            }
             authRepository.registerDevice()
         }
     }
@@ -67,7 +70,10 @@ class AuthViewModel @Inject constructor(
     }
 
     fun continueWithoutAccount() {
-        _authState.value = AuthState.Local
+        viewModelScope.launch {
+            sessionManager.setLocalMode()
+            _authState.value = AuthState.Local
+        }
     }
 
     /** Purge la session et revient en mode local (sans repasser par le login). */
@@ -76,6 +82,7 @@ class AuthViewModel @Inject constructor(
             Timber.d("auth: session purgée (mode local)")
             withContext(Dispatchers.IO) {
                 sessionManager.clear()
+                sessionManager.setLocalMode()
             }
             _authState.value = AuthState.Local
         }
@@ -86,6 +93,7 @@ class AuthViewModel @Inject constructor(
             Timber.d("auth: session purgée (signOut)")
             withContext(Dispatchers.IO) {
                 sessionManager.clear()
+                sessionManager.clearLocalMode()
             }
             _authState.value = AuthState.SignedOut
         }
