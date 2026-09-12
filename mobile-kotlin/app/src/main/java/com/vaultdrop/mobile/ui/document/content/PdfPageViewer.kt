@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import com.vaultdrop.mobile.R
 import com.vaultdrop.mobile.data.local.entity.FileEntity
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -307,24 +308,32 @@ private class PdfDocumentState(
     private val contentResolver: ContentResolver,
     private val uri: String,
 ) {
+    @Volatile
     private var renderer: PdfRenderer? = null
+
+    @Volatile
+    private var closed = false
+
     private val cache = object : LruCache<PageKey, Bitmap>(CACHE_MAX_KILOBYTES) {
         override fun sizeOf(key: PageKey, value: Bitmap): Int = value.byteCount / 1024
     }
+
+    /** Sérialise toute lecture/écriture du renderer (non thread-safe). */
     private val renderMutex = Mutex()
 
     val pageCount: Int get() = renderer?.pageCount ?: 0
 
     /** Ouvre le document si ce n'est pas déjà fait. Échoue si illisible. */
     suspend fun load(): Boolean = withContext(Dispatchers.IO) {
-        if (renderer != null) return@withContext true
-        val opened = runCatching {
-            val pfd: ParcelFileDescriptor? = DocumentContent.openFileDescriptor(contentResolver, uri)
-            if (pfd != null) PdfRenderer(pfd) else null
-        }.getOrNull()
-        if (opened == null) false else {
-            renderer = opened
-            true
+        renderMutex.withLock {
+            if (closed) return@withLock false
+            if (renderer != null) return@withLock true
+            val opened = runCatching {
+                val pfd: ParcelFileDescriptor? = DocumentContent.openFileDescriptor(contentResolver, uri)
+                if (pfd != null) PdfRenderer(pfd) else null
+            }.getOrNull()
+            if (opened != null) renderer = opened
+            opened != null
         }
     }
 
@@ -340,6 +349,7 @@ private class PdfDocumentState(
     ): Bitmap? = withContext(Dispatchers.IO) {
         val key = PageKey(page, targetScale)
         cache.get(key) ?: renderMutex.withLock {
+            if (closed) return@withLock null
             cache.get(key) ?: runCatching { renderPage(page, maxWidthPx, maxHeightPx, targetScale) }
                 .getOrNull()
                 ?.also { cache.put(key, it) }
@@ -352,15 +362,15 @@ private class PdfDocumentState(
         try {
             // Ajuste le rendu à la résolution cible (passe au strict besoin) :
             // fit dans la zone, grossi de targetScale pour rester net au zoom,
-            // borné par MAX_SCALE pour ne pas exploser la mémoire des pages
-            // vectorielles très grandes.
+            // borné par MAX_SCALE et MAX_RENDER_PIXELS pour ne pas exploser la
+            // mémoire des pages vectorielles très grandes.
             val baseFit = minOf(
                 maxWidthPx.toFloat() / pdfPage.width,
                 maxHeightPx.toFloat() / pdfPage.height,
             )
             val scale = minOf(MAX_SCALE, baseFit * targetScale)
-            val width = (pdfPage.width * scale).toInt().coerceAtLeast(1)
-            val height = (pdfPage.height * scale).toInt().coerceAtLeast(1)
+            val width = (pdfPage.width * scale).toInt().coerceIn(1, MAX_RENDER_PIXELS)
+            val height = (pdfPage.height * scale).toInt().coerceIn(1, MAX_RENDER_PIXELS)
             val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
             pdfPage.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
             return bitmap
@@ -369,11 +379,24 @@ private class PdfDocumentState(
         }
     }
 
+    /**
+     * Fermeture à la sortie du lecteur (dispose). Attend la fin d'un éventuel
+     * rendu en cours via [renderMutex] avant de fermer le renderer : évite
+     * d'utiliser un `PdfPage` après destruction native du document. Les bitmaps
+     * du cache sont simplement relâchées (GC) plutôt que recyclées : elles
+     * peuvent encore être référencées par des `Image` Composées pendant la
+     * sortie, et recycler une bitmap encore dessinée fait planter l'app.
+     */
     fun close() {
-        cache.snapshot().values.forEach { it.recycle() }
-        cache.evictAll()
-        renderer?.close()
-        renderer = null
+        if (closed) return
+        closed = true
+        runBlocking {
+            renderMutex.withLock {
+                cache.evictAll()
+                renderer?.close()
+                renderer = null
+            }
+        }
     }
 
     /** Clé de cache : page + résolution de rendu demandée. */
@@ -385,6 +408,9 @@ private class PdfDocumentState(
 
         /** Borne du ratio de rendu (résolution écran) appliquée à la page source. */
         private const val MAX_SCALE = 3f
+
+        /** Borne d'une dimension de rendu en pixels (pages vectorielles très grandes). */
+        private const val MAX_RENDER_PIXELS = 4096
     }
 }
 
