@@ -62,7 +62,9 @@ import com.vaultdrop.mobile.features.connection.ConnectionStatusViewModel
 import com.vaultdrop.mobile.ui.components.ServerStatusBadge
 import com.vaultdrop.mobile.ui.components.categoryValue
 import com.vaultdrop.mobile.ui.document.content.DocumentContentViewer
+import com.vaultdrop.mobile.ui.document.content.ImageViewer
 import com.vaultdrop.mobile.ui.document.content.PdfFocusViewer
+import com.vaultdrop.mobile.ui.document.content.TextFocusViewer
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.ZoneId
@@ -75,8 +77,9 @@ import java.util.Locale
  * externe, carte de métadonnées, navigation au swipe entre les documents (même
  * fil que l'écran d'accueil).
  *
- * Les PDF locaux passent en mode plein écran sur tap : barres système et barre
- * d'outils masquées, document verrouillé, indication de page en bas.
+ * Les documents locaux lisibles (PDF, image, texte) passent en mode focus sur
+ * tap : barres système et barre d'outils masquées, fond noir, un tap ou le
+ * retour système quitte le mode.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -114,7 +117,7 @@ fun DocumentViewerScreen(
     }
 
     var fullscreen by rememberSaveable { mutableStateOf(false) }
-    val canFullscreen = currentFile?.canPdfFullscreen() == true
+    val canFullscreen = currentFile?.canFocus() == true
 
     // Mode immersif : masque les barres système en plein écran, les restaure
     // à la sortie ou si l'écran est composé autrement.
@@ -176,7 +179,7 @@ fun DocumentViewerScreen(
     ) { padding ->
         val current = currentFile
         if (fullscreen && canFullscreen && current != null) {
-            PdfFullscreenReader(
+            FocusDocumentReader(
                 file = current,
                 onOpenExternalFailed = onOpenExternalFailed,
                 onExitFullscreen = { fullscreen = false },
@@ -194,7 +197,7 @@ fun DocumentViewerScreen(
                     DocumentViewerPage(
                         file = file,
                         onOpenExternalFailed = onOpenExternalFailed,
-                        onEnterFullscreen = file.canPdfFullscreen()
+                        onEnterFullscreen = file.canFocus()
                             .takeIf { it }
                             ?.let { { fullscreen = true } },
                     )
@@ -205,10 +208,83 @@ fun DocumentViewerScreen(
 }
 
 /**
- * Lecture PDF focus : le document remplit l'écran (fond noir), une page par
- * écran défiler verticalement, un tap quitte le plein écran et une pastille
- * indique la page courante.
+ * Lecteur focus du document courant : dispatch par catégorie.
+ *
+ * - PDF → une page par écran, défilement vertical, pastille de page
+ * - IMAGE → document plein écran sur fond noir
+ * - TEXT → lecture immersive (fond sombre, texte clair, sélectionnable)
+ *
+ * Le retour (tap ou bouton système) est géré par le cadre commun [FocusScaffold].
  */
+@Composable
+private fun FocusDocumentReader(
+    file: FileEntity,
+    onOpenExternalFailed: () -> Unit,
+    onExitFullscreen: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    when (file.categoryValue()) {
+        FileCategory.PDF -> PdfFullscreenReader(
+            file = file,
+            onOpenExternalFailed = onOpenExternalFailed,
+            onExitFullscreen = onExitFullscreen,
+            modifier = modifier,
+        )
+        FileCategory.IMAGE -> ImageFullscreenReader(
+            file = file,
+            onExitFullscreen = onExitFullscreen,
+            modifier = modifier,
+        )
+        FileCategory.TEXT -> TextFullscreenReader(
+            file = file,
+            onExitFullscreen = onExitFullscreen,
+            modifier = modifier,
+        )
+        else -> Unit
+    }
+}
+
+/**
+ * Cadre commun du mode focus : fond noir plein écran, un tap (l'indicatrice de
+ * position est optionnelle) quitte le mode.
+ */
+@Composable
+private fun FocusScaffold(
+    file: FileEntity,
+    onExitFullscreen: () -> Unit,
+    modifier: Modifier = Modifier,
+    position: String? = null,
+    content: @Composable () -> Unit,
+) {
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .pointerInput(file.resourceId) {
+                detectTapGestures(onTap = { onExitFullscreen() })
+            },
+    ) {
+        content()
+        if (position != null) {
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 16.dp),
+                shape = RoundedCornerShape(percent = 50),
+                color = MaterialTheme.colorScheme.inverseSurface.copy(alpha = 0.85f),
+            ) {
+                Text(
+                    text = position,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.inverseOnSurface,
+                )
+            }
+        }
+    }
+}
+
+/** Lecture PDF focus : une page par écran, swipe vertical, pastille de page. */
 @Composable
 private fun PdfFullscreenReader(
     file: FileEntity,
@@ -219,13 +295,11 @@ private fun PdfFullscreenReader(
     var pageCount by remember(file.resourceId) { mutableIntStateOf(0) }
     val pagerState = rememberPagerState(pageCount = { pageCount })
 
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(Color.Black)
-            .pointerInput(file.resourceId) {
-                detectTapGestures(onTap = { onExitFullscreen() })
-            },
+    FocusScaffold(
+        file = file,
+        onExitFullscreen = onExitFullscreen,
+        modifier = modifier,
+        position = if (pageCount > 0) "${pagerState.currentPage + 1} / $pageCount" else null,
     ) {
         PdfFocusViewer(
             file = file,
@@ -235,22 +309,59 @@ private fun PdfFullscreenReader(
             modifier = Modifier.fillMaxSize(),
             onPageCountChanged = { pageCount = it },
         )
-        if (pageCount > 0) {
-            Surface(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 16.dp),
-                shape = RoundedCornerShape(percent = 50),
-                color = MaterialTheme.colorScheme.inverseSurface.copy(alpha = 0.85f),
-            ) {
-                Text(
-                    text = "${pagerState.currentPage + 1} / $pageCount",
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.inverseOnSurface,
-                )
-            }
-        }
+    }
+}
+
+/** Image focus : l'image remplit l'écran (fit) sur fond noir. */
+@Composable
+private fun ImageFullscreenReader(
+    file: FileEntity,
+    onExitFullscreen: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val contentResolver = LocalContext.current.contentResolver
+    val uri = file.uri
+    if (uri == null) {
+        return
+    }
+
+    FocusScaffold(
+        file = file,
+        onExitFullscreen = onExitFullscreen,
+        modifier = modifier,
+    ) {
+        ImageViewer(
+            contentResolver = contentResolver,
+            uri = uri,
+            contentDescription = file.name,
+            modifier = Modifier.fillMaxSize(),
+        )
+    }
+}
+
+/** Texte focus : lecture immersive fond sombre, texte clair, sélectionnable. */
+@Composable
+private fun TextFullscreenReader(
+    file: FileEntity,
+    onExitFullscreen: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val contentResolver = LocalContext.current.contentResolver
+    val uri = file.uri
+    if (uri == null) {
+        return
+    }
+
+    FocusScaffold(
+        file = file,
+        onExitFullscreen = onExitFullscreen,
+        modifier = modifier,
+    ) {
+        TextFocusViewer(
+            contentResolver = contentResolver,
+            uri = uri,
+            modifier = Modifier.fillMaxSize(),
+        )
     }
 }
 
@@ -331,9 +442,11 @@ private fun fileTypeLabel(file: FileEntity): String =
         ?: file.mimeType?.uppercase(Locale.getDefault())
         ?: "—"
 
-/** Vrai si le fichier est un PDF avec un contenu local consultable en plein écran. */
-private fun FileEntity.canPdfFullscreen(): Boolean =
-    uri != null && categoryValue() == FileCategory.PDF
+/** Vrai si le fichier est local et appartient à une catégorie consultable en mode focus. */
+private fun FileEntity.canFocus(): Boolean =
+    uri != null && categoryValue() in FOCUS_CATEGORIES
+
+private val FOCUS_CATEGORIES = setOf(FileCategory.PDF, FileCategory.IMAGE, FileCategory.TEXT)
 
 private fun formatDateTime(millis: Long): String {
     val locale = Locale.getDefault()

@@ -18,6 +18,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.vaultdrop.mobile.R
@@ -81,6 +82,73 @@ fun TextDocumentViewer(
                             Text(
                                 text = text.orEmpty(),
                                 style = MaterialTheme.typography.bodyMedium,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Lecture texte en mode focus : fond sombre, texte clair, défilement vertical.
+ * Reprend la lecture bornée (bandeau de troncature) et la sélection de texte
+ * du mode classique, avec les couleurs inversées sur fond noir.
+ */
+@Composable
+fun TextFocusViewer(
+    contentResolver: ContentResolver,
+    uri: String,
+    modifier: Modifier = Modifier,
+) {
+    var text by remember(uri) { mutableStateOf<String?>(null) }
+    var truncated by remember(uri) { mutableStateOf(false) }
+    var failed by remember(uri) { mutableStateOf(false) }
+
+    LaunchedEffect(uri) {
+        text = null
+        truncated = false
+        failed = false
+        val result = withContext(Dispatchers.IO) { readCapped(contentResolver, uri) }
+        result?.let {
+            text = it.first
+            truncated = it.second
+        } ?: run { failed = true }
+    }
+
+    Box(modifier.fillMaxSize()) {
+        when {
+            failed -> Text(
+                text = stringResource(R.string.document_cannot_read),
+                style = MaterialTheme.typography.bodyMedium,
+                color = Color.White,
+                modifier = Modifier.align(Alignment.Center),
+            )
+            text == null -> Text(
+                text = stringResource(R.string.document_loading),
+                style = MaterialTheme.typography.bodyMedium,
+                color = Color.White,
+                modifier = Modifier.align(Alignment.Center),
+            )
+            else -> Column(Modifier.fillMaxSize()) {
+                if (truncated) {
+                    Text(
+                        text = stringResource(R.string.document_truncated_notice),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color(0xFFFFD54F),
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    )
+                }
+                SelectionContainer(Modifier.weight(1f)) {
+                    LazyColumn(
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                    ) {
+                        item {
+                            Text(
+                                text = text.orEmpty(),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = Color.White,
                             )
                         }
                     }
