@@ -14,7 +14,7 @@ func syncOpsBody(ops []map[string]any) []byte {
 	return body
 }
 
-func op(operationID int64, resourceID, operation, resourceType string, payload map[string]any) map[string]any {
+func op(operationID string, resourceID, operation, resourceType string, payload map[string]any) map[string]any {
 	return map[string]any{
 		"operation_id":  operationID,
 		"ref_type":      "resource",
@@ -33,9 +33,9 @@ func TestSyncOpsApplySequential(t *testing.T) {
 	folderID := repository.NewID()
 	fileID := repository.NewID()
 	ops := []map[string]any{
-		op(1, folderID, "create_resource", "folder", map[string]any{"name": "Docs"}),
-		op(2, fileID, "create_resource", "file", map[string]any{"name": "note.txt"}),
-		op(3, fileID, "move_resource", "file", map[string]any{"toFolderResourceId": folderID}),
+		op(repository.NewID(), folderID, "create_resource", "folder", map[string]any{"name": "Docs"}),
+		op(repository.NewID(), fileID, "create_resource", "file", map[string]any{"name": "note.txt"}),
+		op(repository.NewID(), fileID, "move_resource", "file", map[string]any{"toFolderResourceId": folderID}),
 	}
 
 	rec, _ := doRequest(t, r, http.MethodPost, "/api/v1/sync/ops", token, syncOpsBody(ops), "application/json")
@@ -77,6 +77,80 @@ func TestSyncOpsApplySequential(t *testing.T) {
 	}
 }
 
+func TestSyncOpsCreateResourceWithParent(t *testing.T) {
+	r, _, repo := setup(t)
+	device := repository.NewID()
+	token, user := registerAndLogin(t, r, repo, testUserUsername(device, "scp"), "sync-test-password", device)
+
+	parentID := repository.NewID()
+	childFolderID := repository.NewID()
+	fileID := repository.NewID()
+	ops := []map[string]any{
+		op(repository.NewID(), parentID, "create_resource", "folder", map[string]any{"name": "Docs"}),
+		op(repository.NewID(), childFolderID, "create_resource", "folder", map[string]any{"name": "Sub", "parentResourceId": parentID}),
+		op(repository.NewID(), fileID, "create_resource", "file", map[string]any{"name": "note.txt", "parentResourceId": parentID}),
+	}
+
+	rec, _ := doRequest(t, r, http.MethodPost, "/api/v1/sync/ops", token, syncOpsBody(ops), "application/json")
+	env := expectOK(t, rec, "sync-ops-parent")
+	var result struct {
+		Applied int `json:"applied"`
+		Failed  any `json:"failed"`
+	}
+	if err := json.Unmarshal(env.Data, &result); err != nil {
+		t.Fatalf("unmarshal: %v body=%s", err, rec.Body.String())
+	}
+	if result.Applied != 3 || result.Failed != nil {
+		t.Errorf("attendu applied=3 failed=null, got %+v", result)
+	}
+
+	// Le fichier est classé sous parentID (pas à la racine)
+	rec, _ = doRequest(t, r, http.MethodGet, "/api/v1/files/"+fileID, token, nil, "")
+	env = expectOK(t, rec, "get-after-sync-parent")
+	var got fileDTO
+	if err := json.Unmarshal(env.Data, &got); err != nil {
+		t.Fatalf("get-after-sync-parent: unmarshal: %v", err)
+	}
+	if got.FolderID != parentID {
+		t.Errorf("fichier attendu sous parentID=%s, got FolderID=%q", parentID, got.FolderID)
+	}
+
+	// Parent inexistant → NOT_FOUND, aucune ressource créée
+	missingParent := repository.NewID()
+	orphanID := repository.NewID()
+	orphanOpID := repository.NewID()
+	rec, _ = doRequest(t, r, http.MethodPost, "/api/v1/sync/ops", token,
+		syncOpsBody([]map[string]any{
+			op(orphanOpID, orphanID, "create_resource", "file", map[string]any{"name": "ghost.txt", "parentResourceId": missingParent}),
+		}), "application/json")
+	env = expectOK(t, rec, "sync-ops-missing-parent")
+	var failed struct {
+		Applied int `json:"applied"`
+		Failed  *struct {
+			OperationID string `json:"operation_id"`
+			Code        string `json:"code"`
+		} `json:"failed"`
+	}
+	if err := json.Unmarshal(env.Data, &failed); err != nil {
+		t.Fatalf("unmarshal: %v body=%s", err, rec.Body.String())
+	}
+	if failed.Applied != 0 || failed.Failed == nil || failed.Failed.OperationID != orphanOpID || failed.Failed.Code != "NOT_FOUND" {
+		t.Errorf("attendu applied=0 NOT_FOUND, got %+v", failed)
+	}
+
+	// La ressource orpheline n'existe pas ; le dossier enfant est parenté à parentID.
+	if _, err := repo.Resources.GetFile(user, orphanID); err != repository.ErrNotFound {
+		t.Errorf("la ressource orpheline ne doit pas exister, err=%v", err)
+	}
+	child, err := repo.Resources.GetFolder(user, childFolderID)
+	if err != nil {
+		t.Fatalf("GetFolder enfant: %v", err)
+	}
+	if child.ParentID != parentID {
+		t.Errorf("dossier enfant attendu parentID=%s, got %q", parentID, child.ParentID)
+	}
+}
+
 func TestSyncOpsStopsAtFirstNonIdempotentFailure(t *testing.T) {
 	r, _, repo := setup(t)
 	device := repository.NewID()
@@ -84,11 +158,12 @@ func TestSyncOpsStopsAtFirstNonIdempotentFailure(t *testing.T) {
 
 	folderID := repository.NewID()
 	dupeID := repository.NewID()
+	dupeOpID := repository.NewID()
 	ops := []map[string]any{
-		op(10, folderID, "create_resource", "folder", map[string]any{"name": "Docs"}),
+		op(repository.NewID(), folderID, "create_resource", "folder", map[string]any{"name": "Docs"}),
 		// Conflicte avec Docs (même parent racine, même nom)
-		op(11, dupeID, "create_resource", "folder", map[string]any{"name": "Docs"}),
-		op(12, repository.NewID(), "create_resource", "file", map[string]any{"name": "after.txt"}),
+		op(dupeOpID, dupeID, "create_resource", "folder", map[string]any{"name": "Docs"}),
+		op(repository.NewID(), repository.NewID(), "create_resource", "file", map[string]any{"name": "after.txt"}),
 	}
 
 	rec, _ := doRequest(t, r, http.MethodPost, "/api/v1/sync/ops", token, syncOpsBody(ops), "application/json")
@@ -96,7 +171,7 @@ func TestSyncOpsStopsAtFirstNonIdempotentFailure(t *testing.T) {
 	var result struct {
 		Applied int `json:"applied"`
 		Failed  *struct {
-			OperationID int64  `json:"operation_id"`
+			OperationID string `json:"operation_id"`
 			Code        string `json:"code"`
 			Message     string `json:"message"`
 		} `json:"failed"`
@@ -107,8 +182,8 @@ func TestSyncOpsStopsAtFirstNonIdempotentFailure(t *testing.T) {
 	if result.Applied != 1 {
 		t.Errorf("attendu applied=1 (arrêt à la 2e op), got %d", result.Applied)
 	}
-	if result.Failed == nil || result.Failed.OperationID != 11 || result.Failed.Code != "NAME_CONFLICT" {
-		t.Errorf("failed attendu op 11 NAME_CONFLICT, got %+v", result.Failed)
+	if result.Failed == nil || result.Failed.OperationID != dupeOpID || result.Failed.Code != "NAME_CONFLICT" {
+		t.Errorf("failed attendu op %s NAME_CONFLICT, got %+v", dupeOpID, result.Failed)
 	}
 
 	// L'op 12 n'a PAS été appliquée
@@ -136,8 +211,8 @@ func TestSyncOpsDeleteIdempotent(t *testing.T) {
 	// Supprimer une ressource absente → no-op réussi (pas de dead-letter)
 	absent := repository.NewID()
 	ops := []map[string]any{
-		op(20, fileID, "delete_resource", "file", map[string]any{}),
-		op(21, absent, "delete_resource", "file", map[string]any{}),
+		op(repository.NewID(), fileID, "delete_resource", "file", map[string]any{}),
+		op(repository.NewID(), absent, "delete_resource", "file", map[string]any{}),
 	}
 	rec, _ := doRequest(t, r, http.MethodPost, "/api/v1/sync/ops", token, syncOpsBody(ops), "application/json")
 	env := expectOK(t, rec, "sync-delete")

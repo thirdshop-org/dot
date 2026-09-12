@@ -3,7 +3,12 @@ package repository
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
+	"regexp"
 )
+
+// operationIDPattern — operation_id outbox = TEXT 32-hex (cf. docs/api-v1.md §6.1).
+var operationIDPattern = regexp.MustCompile(`^[0-9a-f]{32}$`)
 
 // Operations persists the per-device outbox trace enforcing idempotence
 // UNIQUE(device_id, operation_id) — cf. docs/api-v1.md §6.1.
@@ -11,8 +16,11 @@ type Operations struct {
 	DB *sql.DB
 }
 
+// ErrInvalidOperationID is returned when operation_id is not 32 lowercase hex.
+var ErrInvalidOperationID = errors.New("operation_id must be 32 lowercase hex chars")
+
 // Applied reports whether the operation was already processed for this device.
-func (o *Operations) Applied(deviceID string, operationID int64) (bool, error) {
+func (o *Operations) Applied(deviceID, operationID string) (bool, error) {
 	var exists int
 	err := o.DB.QueryRow(
 		`SELECT 1 FROM operations WHERE device_id = $1 AND operation_id = $2`,
@@ -25,7 +33,10 @@ func (o *Operations) Applied(deviceID string, operationID int64) (bool, error) {
 }
 
 // Record stores an applied operation trace (idempotent on replay).
-func (o *Operations) Record(deviceID string, operationID int64, opType, refType string, refID *int64, resourceID string, payload []byte) error {
+func (o *Operations) Record(deviceID, operationID string, opType, refType string, refID *int64, resourceID string, payload []byte) error {
+	if !operationIDPattern.MatchString(operationID) {
+		return ErrInvalidOperationID
+	}
 	var refTypeValue any
 	if refType != "" {
 		refTypeValue = refType

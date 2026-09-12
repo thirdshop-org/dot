@@ -179,7 +179,7 @@ func TestMigrationsUpDown(t *testing.T) {
 		t.Error("FK resources.user_id → users(id) manquante après 000007")
 	}
 
-	// operation_id outbox = id client (INTEGER) — cf. docs/api-v1.md §6.1
+	// operation_id outbox = UUID 32-hex client-generated — cf. docs/api-v1.md §6.1
 	var opType string
 	err = conn.QueryRow(`
 		SELECT data_type FROM information_schema.columns
@@ -187,9 +187,10 @@ func TestMigrationsUpDown(t *testing.T) {
 	if err != nil {
 		t.Fatalf("operation_id type: %v", err)
 	}
-	if opType != "bigint" {
-		t.Errorf("operation_id attendu bigint, got %s", opType)
+	if opType != "text" {
+		t.Errorf("operation_id attendu text, got %s", opType)
 	}
+	assertHexCheck(t, conn, "operations", "operation_id")
 
 	var resourceTypeCheck int
 	err = conn.QueryRow(`

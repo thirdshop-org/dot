@@ -32,7 +32,7 @@ var ackOnlyOps = map[string]bool{
 
 // SyncOperation is one outbox entry (shadow of mobile PendingOperationRow).
 type SyncOperation struct {
-	OperationID  int64           `json:"operation_id"`
+	OperationID  string          `json:"operation_id"`
 	RefType      string          `json:"ref_type"`
 	RefID        int64           `json:"ref_id"`
 	ResourceID   string          `json:"resource_id"`
@@ -43,7 +43,7 @@ type SyncOperation struct {
 
 // FailedOperation reports the first non-idempotent failure.
 type FailedOperation struct {
-	OperationID int64  `json:"operation_id"`
+	OperationID string `json:"operation_id"`
 	Code        string `json:"code"`
 	Message     string `json:"message"`
 }
@@ -55,9 +55,10 @@ type SyncResult struct {
 }
 
 type createResourcePayload struct {
-	Name      string `json:"name"`
-	MimeType  string `json:"mimeType"`
-	Extension string `json:"extension"`
+	Name             string `json:"name"`
+	ParentResourceID string `json:"parentResourceId"` // dossier parent (racine si vide), cf. docs/api-v1.md §6.1
+	MimeType         string `json:"mimeType"`
+	Extension        string `json:"extension"`
 }
 
 type renamePayload struct {
@@ -113,8 +114,8 @@ func (s *Resources) ApplyBatch(userID, deviceID string, ops []SyncOperation) (Sy
 }
 
 func validateSyncOp(op *SyncOperation) error {
-	if op.OperationID <= 0 {
-		return errors.New("operation_id must be > 0")
+	if !resourceIDPattern.MatchString(op.OperationID) {
+		return errors.New("operation_id must be 32 lowercase hex chars")
 	}
 	if op.Operation == "" {
 		return errors.New("missing operation type")
@@ -153,11 +154,18 @@ func (s *Resources) applySyncOp(ownerID string, op *SyncOperation) error {
 		if p.Name == "" {
 			return errors.New("payload.name required")
 		}
+		// Le parent doit exister et appartenir à l'utilisateur (NOT_FOUND sinon,
+		// cohérent avec move_resource). Ordre du SAF walk : parent avant enfant.
+		if p.ParentResourceID != "" {
+			if _, err := s.Repo.GetFolder(ownerID, p.ParentResourceID); err != nil {
+				return err
+			}
+		}
 		if op.ResourceType == "folder" {
-			return s.Repo.InsertFolder(ownerID, op.ResourceID, p.Name, "")
+			return s.Repo.InsertFolder(ownerID, op.ResourceID, p.Name, p.ParentResourceID)
 		}
 		mime := p.MimeType
-		return s.Repo.InsertFile(ownerID, op.ResourceID, p.Name, "", 0, &mime, nullableString(p.Extension))
+		return s.Repo.InsertFile(ownerID, op.ResourceID, p.Name, p.ParentResourceID, 0, &mime, nullableString(p.Extension))
 
 	case OpUpdateMetadata:
 		exists, err := s.Repo.ExistsOwner(ownerID, op.ResourceID)
@@ -201,8 +209,8 @@ func (s *Resources) applySyncOp(ownerID string, op *SyncOperation) error {
 	}
 }
 
-func (s *Resources) recordApplied(ownerID string, op *SyncOperation) error {
-	return s.Repository.Operations.Record(ownerID, op.OperationID, op.Operation, op.RefType, nullableInt64(op.RefID), op.ResourceID, op.Payload)
+func (s *Resources) recordApplied(deviceID string, op *SyncOperation) error {
+	return s.Repository.Operations.Record(deviceID, op.OperationID, op.Operation, op.RefType, nullableInt64(op.RefID), op.ResourceID, op.Payload)
 }
 
 func nullableString(value string) *string {
