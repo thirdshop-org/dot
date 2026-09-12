@@ -5,7 +5,6 @@
     <string name="folder">Folder</string>
     <string name="view_files">Files</string>
     <string name="view_folders">Folders</string>
-    <string name="view_dashboard">Dashboard</string>
     <string name="dashboard_coming_soon">Dashboard coming soon</string>
     <string name="browse_up">Up</string>
     <string name="move_here_count">Move here (%1$d)</string>
@@ -58,6 +57,8 @@
     <string name="nav_files">Files</string>
     <string name="nav_search">Search</string>
     <string name="nav_settings">Settings</string>
+    <string name="nav_dashboard">Dashboard</string>
+    <string name="dashboard">Dashboard</string>
     <string name="settings">Settings</string>
     <string name="settings_dark_mode">Dark mode</string>
     <string name="settings_dark_mode_on">Dark theme active</string>

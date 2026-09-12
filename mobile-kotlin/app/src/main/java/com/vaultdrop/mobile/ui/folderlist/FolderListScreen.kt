@@ -32,7 +32,6 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CreateNewFolder
-import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Refresh
@@ -352,14 +351,6 @@ private fun HomeViewSelector(
                     onClick = { onSelect(HomeView.FOLDERS) },
                     modifier = Modifier.weight(1f),
                 )
-                ViewSegment(
-                    label = stringResource(R.string.view_dashboard),
-                    icon = Icons.Filled.Dashboard,
-                    selected = selected == HomeView.DASHBOARD,
-                    enabled = enabled,
-                    onClick = { onSelect(HomeView.DASHBOARD) },
-                    modifier = Modifier.weight(1f),
-                )
             }
         }
     }
@@ -431,7 +422,6 @@ private fun HomeViewContent(
     modifier: Modifier = Modifier,
 ) {
     when (view) {
-        HomeView.DASHBOARD -> DashboardPlaceholder(modifier = modifier)
         HomeView.FILES -> FileGridContent(
             sections = sections,
             isImporting = isImporting,
@@ -452,22 +442,6 @@ private fun HomeViewContent(
             onAddFolder = onAddFolder,
             onCreateFolder = onCreateFolder,
             modifier = modifier,
-        )
-    }
-}
-
-/** Dashboard provisoire — vide pour l'instant. */
-@Composable
-private fun DashboardPlaceholder(modifier: Modifier = Modifier) {
-    Box(
-        modifier = modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = stringResource(R.string.dashboard_coming_soon),
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
         )
     }
 }

@@ -236,7 +236,7 @@ class FolderListViewModel @Inject constructor(
 
     /** Annule le mode déplacement : restaure la vue, la sélection est conservée. */
     fun cancelMove() {
-        val previous = _uiState.value.viewBeforeMove ?: HomeView.DASHBOARD
+        val previous = _uiState.value.viewBeforeMove ?: HomeView.FILES
         _uiState.update {
             it.copy(
                 moveMode = false,
@@ -258,7 +258,7 @@ class FolderListViewModel @Inject constructor(
             } else {
                 _uiState.update { it.copy(moveSuccess = true) }
             }
-            val previous = _uiState.value.viewBeforeMove ?: HomeView.DASHBOARD
+            val previous = _uiState.value.viewBeforeMove ?: HomeView.FILES
             _uiState.update {
                 it.copy(moveMode = false, view = previous, viewBeforeMove = null)
             }

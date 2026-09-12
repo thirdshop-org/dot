@@ -13,11 +13,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.DriveFileMove
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.MergeType
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.outlined.Dashboard
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
@@ -42,6 +44,7 @@ enum class NavTab(val route: String) {
     FILES(Routes.FILES),
     SEARCH(Routes.SEARCH),
     SETTINGS(Routes.SETTINGS),
+    DASHBOARD(Routes.DASHBOARD),
 }
 
 private data class TabItem(
@@ -53,6 +56,7 @@ private data class TabItem(
 
 private val TAB_ITEMS = listOf(
     TabItem(NavTab.FILES, Icons.Filled.Folder, Icons.Outlined.Folder, R.string.nav_files),
+    TabItem(NavTab.DASHBOARD, Icons.Filled.Dashboard, Icons.Outlined.Dashboard, R.string.nav_dashboard),
     TabItem(NavTab.SEARCH, Icons.Filled.Search, Icons.Outlined.Search, R.string.nav_search),
     TabItem(NavTab.SETTINGS, Icons.Filled.Settings, Icons.Outlined.Settings, R.string.nav_settings),
 )

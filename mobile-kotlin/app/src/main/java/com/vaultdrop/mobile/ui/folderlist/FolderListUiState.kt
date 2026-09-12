@@ -7,7 +7,6 @@ import com.vaultdrop.mobile.data.local.entity.FolderEntity
 enum class HomeView {
     FILES,
     FOLDERS,
-    DASHBOARD,
 }
 
 /** Section d'un jour dans la grille d'accueil — miroir de `FileSection` (app/index.tsx). */
@@ -26,8 +25,8 @@ data class FilePair(
 )
 
 data class FolderListUiState(
-    /** Segment actif de la page (Fichiers / Dossiers / Dashboard). */
-    val view: HomeView = HomeView.DASHBOARD,
+    /** Segment actif de la page (Fichiers / Dossiers). */
+    val view: HomeView = HomeView.FILES,
     /** Vrai pendant le déplacement d'une sélection : la vue Dossiers est forcée. */
     val moveMode: Boolean = false,
     /** Vue à restaurer après déplacement/annulation. */

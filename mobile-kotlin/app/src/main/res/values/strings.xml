@@ -10,7 +10,6 @@
     <string name="folder">Dossier</string>
     <string name="view_files">Fichiers</string>
     <string name="view_folders">Dossiers</string>
-    <string name="view_dashboard">Dashboard</string>
     <string name="dashboard_coming_soon">Dashboard à venir</string>
     <string name="browse_up">Remonter</string>
     <string name="move_here_count">Déplacer ici (%1$d)</string>
@@ -59,6 +58,8 @@
     <string name="nav_files">Fichiers</string>
     <string name="nav_search">Recherche</string>
     <string name="nav_settings">Réglages</string>
+    <string name="nav_dashboard">Dashboard</string>
+    <string name="dashboard">Dashboard</string>
     <string name="settings">Réglages</string>
     <string name="settings_dark_mode">Mode sombre</string>
     <string name="settings_dark_mode_on">Thème sombre actif</string>

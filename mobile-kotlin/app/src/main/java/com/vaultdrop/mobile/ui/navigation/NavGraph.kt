@@ -8,6 +8,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -18,6 +19,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.vaultdrop.mobile.features.connection.ConnectionStatusViewModel
 import com.vaultdrop.mobile.features.sync.SyncViewModel
 import com.vaultdrop.mobile.ui.auth.AuthViewModel
+import com.vaultdrop.mobile.ui.dashboard.DashboardScreen
 import com.vaultdrop.mobile.ui.document.DocumentViewerScreen
 import com.vaultdrop.mobile.ui.folderdetail.FolderDetailScreen
 import com.vaultdrop.mobile.ui.folderlist.FolderListScreen
@@ -29,6 +31,7 @@ object Routes {
     const val FILES = "files"
     const val SEARCH = "search"
     const val SETTINGS = "settings"
+    const val DASHBOARD = "dashboard"
     const val FOLDER_DETAIL = "folder/{folderResourceId}"
     const val ARG_FOLDER = "folderResourceId"
     const val DOCUMENT = "document/{documentResourceId}"
@@ -45,6 +48,7 @@ private fun String?.toNavTab(): NavTab = when (this) {
     Routes.FILES -> NavTab.FILES
     Routes.SEARCH -> NavTab.SEARCH
     Routes.SETTINGS -> NavTab.SETTINGS
+    Routes.DASHBOARD -> NavTab.DASHBOARD
     else -> NavTab.FILES
 }
 
@@ -64,8 +68,12 @@ fun NavGraph(
     val onTabSelected: (NavTab) -> Unit = { tab ->
         if (tab.route != selectedTab.route) {
             navController.navigate(tab.route) {
-                popUpTo(Routes.FILES) { inclusive = true }
+                // Sauve l'entrée courante (Fichiers) au lieu de la détruire :
+                // le ViewModel (et sa position d'exploration) survit au changement
+                // d'onglet, sinon « Créer un dossier » retombe sur la racine.
+                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
                 launchSingleTop = true
+                restoreState = true
             }
         }
     }
@@ -99,6 +107,13 @@ fun NavGraph(
                     selectedTab = selectedTab,
                     onTabSelected = onTabSelected,
                     authViewModel = authViewModel,
+                    connectionStatusViewModel = connectionStatusViewModel,
+                )
+            }
+            composable(Routes.DASHBOARD) {
+                DashboardScreen(
+                    selectedTab = selectedTab,
+                    onTabSelected = onTabSelected,
                     connectionStatusViewModel = connectionStatusViewModel,
                 )
             }
