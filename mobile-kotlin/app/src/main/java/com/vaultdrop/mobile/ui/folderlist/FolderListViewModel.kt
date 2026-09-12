@@ -8,7 +8,6 @@ import androidx.lifecycle.viewModelScope
 import com.vaultdrop.mobile.R
 import com.vaultdrop.mobile.auth.TokenProvider
 import com.vaultdrop.mobile.data.local.entity.FileEntity
-import com.vaultdrop.mobile.data.local.entity.FolderEntity
 import com.vaultdrop.mobile.data.local.referenceDate
 import com.vaultdrop.mobile.data.preferences.DefaultRootStore
 import com.vaultdrop.mobile.data.remote.ApiException
@@ -19,10 +18,12 @@ import com.vaultdrop.mobile.features.saf.FileMover
 import com.vaultdrop.mobile.features.saf.SafFolderCreator
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import timber.log.Timber
@@ -52,10 +53,11 @@ class FolderListViewModel @Inject constructor(
     private val _defaultRootId = MutableStateFlow(defaultRootStore.get())
     val defaultRootId: StateFlow<String?> = _defaultRootId.asStateFlow()
 
-    private var subFolderJob: Job? = null
+    /** Dossier courant de l'explorateur Dossiers (null = racine par défaut). */
+    private val _browseFolderId = MutableStateFlow<String?>(null)
 
     init {
-        observeSubFolders()
+        observeBrowse()
         observeFiles()
         refresh()
     }
@@ -109,56 +111,92 @@ class FolderListViewModel @Inject constructor(
     }
 
     /**
-     * Sous-dossiers visibles de la racine par défaut, ré-abonnés quand la
-     * racine change (onboarding). Un dossier créé y apparaît immédiatement.
+     * Sélectionne le layer affiché de la page Fichiers. Désactivé en
+     * sélection/déplacement (ux : on ne change pas de vue dans ces modes).
      */
-    private fun observeSubFolders() {
+    fun selectView(view: HomeView) {
+        _uiState.update { it.copy(view = view) }
+    }
+
+    /**
+     * Explorateur Dossiers : sous-dossiers du dossier courant (`null` = racine
+     * par défaut), réabonnés quand la racine ou la position change. Quand la
+     * racine change (onboarding), on revient à la racine et on affiche son nom.
+     */
+    private fun observeBrowse() {
         viewModelScope.launch {
             _defaultRootId.collect { rootId ->
-                subFolderJob?.cancel()
+                _browseFolderId.value = null
                 if (rootId == null) {
-                    _uiState.update { it.copy(subFolders = emptyList()) }
-                    return@collect
-                }
-                subFolderJob = viewModelScope.launch {
-                    folderRepository.observeSubFolders(rootId).collect { subFolders ->
-                        _uiState.update { it.copy(subFolders = subFolders) }
-                    }
+                    _uiState.update { it.copy(browseFolderId = null, browseFolderName = null) }
+                } else {
+                    val rootName = folderRepository.getFolder(rootId)?.name
+                    _uiState.update { it.copy(browseFolderId = null, browseFolderName = rootName) }
                 }
             }
+        }
+        viewModelScope.launch {
+            _defaultRootId.combine(_browseFolderId) { root, browse -> browse ?: root }
+                .flatMapLatest { parentId ->
+                    if (parentId == null) flowOf(emptyList())
+                    else folderRepository.observeSubFolders(parentId)
+                }
+                .collect { subFolders ->
+                    _uiState.update { it.copy(browseSubFolders = subFolders) }
+                }
+        }
+    }
+
+    /** Descend dans l'explorateur Dossiers (aussi en mode déplacement). */
+    fun openBrowseFolder(folderId: String) {
+        _browseFolderId.value = folderId
+        viewModelScope.launch {
+            val folder = folderRepository.getFolder(folderId)
+            _uiState.update { it.copy(browseFolderId = folderId, browseFolderName = folder?.name) }
+        }
+    }
+
+    /** Remonte au parent du dossier courant (reste à la racine si déjà en haut). */
+    fun browseUp() {
+        val current = _browseFolderId.value
+        viewModelScope.launch {
+            val parent = current?.let { folderRepository.getFolder(it)?.parentResourceId }
+            _browseFolderId.value = parent
+            val name = parent?.let { folderRepository.getFolder(it)?.name }
+            _uiState.update { it.copy(browseFolderId = parent, browseFolderName = name) }
         }
     }
 
     /**
-     * Crée un dossier physique dans la racine par défaut (VaultDrop) puis
-     * l'enregistre en Room comme enfant de la racine.
+     * Crée un dossier physique dans le dossier courant de l'explorateur (racine
+     * par défaut si on est en haut) puis l'enregistre en Room comme son enfant.
      */
-    fun createFolderInDefaultRoot(name: String) {
+    fun createFolderInBrowse(name: String) {
         val trimmed = name.trim()
         if (trimmed.isBlank()) {
             _uiState.update { it.copy(createError = context.getString(R.string.new_folder_name_required)) }
             return
         }
         viewModelScope.launch {
-            val rootId = _defaultRootId.value
-            val root = rootId?.let { folderRepository.getFolder(it) }
-            if (root == null) {
+            val targetId = _browseFolderId.value ?: _defaultRootId.value
+            val target = targetId?.let { folderRepository.getFolder(it) }
+            if (target == null) {
                 _uiState.update { it.copy(createError = context.getString(R.string.new_folder_error)) }
                 return@launch
             }
-            val message = if (root.uri == null) {
+            val message = if (target.uri == null) {
                 context.getString(R.string.new_folder_cloud_only)
             } else {
                 context.getString(R.string.new_folder_error)
             }
-            val created = safFolderCreator.createFolder(root.uri, trimmed)
+            val created = safFolderCreator.createFolder(target.uri, trimmed)
             if (created == null) {
                 _uiState.update { it.copy(createError = message) }
                 return@launch
             }
             folderRepository.saveFolder(
                 input = SaveFolderInput(uri = created.toString(), name = trimmed, exists = true, createdInApp = true),
-                parentResourceId = root.resourceId,
+                parentResourceId = target.resourceId,
             )
         }
     }
@@ -168,30 +206,60 @@ class FolderListViewModel @Inject constructor(
         _uiState.update { it.copy(createError = null) }
     }
 
-    /** Charge les dossiers éligibles pour le picker de déplacement. */
-    fun loadMoveFolders() {
+    /**
+     * Entre en mode déplacement : vue Dossiers forcée, explorateur ramené à la
+     * racine pour un choix de destination prévisible.
+     */
+    fun startMove() {
+        _browseFolderId.value = null
         viewModelScope.launch {
-            val moveFolders = folderRepository.getCreatedInApp()
-            _uiState.update { it.copy(moveFolders = moveFolders) }
+            val rootName = _defaultRootId.value?.let { folderRepository.getFolder(it)?.name }
+            _uiState.update {
+                it.copy(
+                    viewBeforeMove = it.view,
+                    view = HomeView.FOLDERS,
+                    moveMode = true,
+                    browseFolderId = null,
+                    browseFolderName = rootName,
+                )
+            }
         }
     }
 
-    /** Déplace les fichiers vers le dossier cible puis ferme le picker. */
-    fun moveSelectedFiles(resourceIds: List<String>, targetFolderId: String) {
-        viewModelScope.launch {
-            runCatching { fileMover.moveFiles(resourceIds, targetFolderId) }
-                .onFailure {
-                    _uiState.update { state ->
-                        state.copy(moveError = context.getString(R.string.move_files_error))
-                    }
-                }
-            _uiState.update { it.copy(moveFolders = null) }
+    /** Annule le mode déplacement : restaure la vue, la sélection est conservée. */
+    fun cancelMove() {
+        val previous = _uiState.value.viewBeforeMove ?: HomeView.DASHBOARD
+        _uiState.update {
+            it.copy(
+                moveMode = false,
+                view = previous,
+                viewBeforeMove = null,
+            )
         }
     }
 
-    /** Ferme le picker sans déplacer (annulation). */
-    fun closeMovePicker() {
-        _uiState.update { it.copy(moveFolders = null) }
+    /**
+     * Déplace la sélection dans le dossier courant de l'explorateur (la racine
+     * par défaut si on est en haut) puis sort du mode déplacement.
+     */
+    fun moveSelectionHere(resourceIds: List<String>) {
+        viewModelScope.launch {
+            val target = _browseFolderId.value ?: _defaultRootId.value
+            if (target == null || runCatching { fileMover.moveFiles(resourceIds, target) }.isFailure) {
+                _uiState.update { it.copy(moveError = context.getString(R.string.move_files_error)) }
+            } else {
+                _uiState.update { it.copy(moveSuccess = true) }
+            }
+            val previous = _uiState.value.viewBeforeMove ?: HomeView.DASHBOARD
+            _uiState.update {
+                it.copy(moveMode = false, view = previous, viewBeforeMove = null)
+            }
+        }
+    }
+
+    /** Consomme le succès transitoire de déplacement (Snackbar). */
+    fun clearMoveSuccess() {
+        _uiState.update { it.copy(moveSuccess = false) }
     }
 
     fun clearMoveError() {

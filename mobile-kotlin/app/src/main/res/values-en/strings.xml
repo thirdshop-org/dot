@@ -3,6 +3,14 @@
 
     <string name="files">Files</string>
     <string name="folder">Folder</string>
+    <string name="view_files">Files</string>
+    <string name="view_folders">Folders</string>
+    <string name="view_dashboard">Dashboard</string>
+    <string name="dashboard_coming_soon">Dashboard coming soon</string>
+    <string name="browse_up">Up</string>
+    <string name="move_here_count">Move here (%1$d)</string>
+    <string name="move_pick_title">Move %1$d file(s)…</string>
+    <string name="move_success">File(s) moved</string>
     <string name="default_root_title">Choose your VaultDrop folder</string>
     <string name="default_root_message">VaultDrop needs a folder to store all the PDFs it creates. You can also create a new VaultDrop folder right in the picker. This step is required, once only.</string>
     <string name="default_root_pick">Choose my VaultDrop folder</string>

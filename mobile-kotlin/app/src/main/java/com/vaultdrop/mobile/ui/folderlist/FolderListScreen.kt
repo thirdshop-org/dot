@@ -23,13 +23,17 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CreateNewFolder
+import androidx.compose.material.icons.filled.Dashboard
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
@@ -44,6 +48,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -55,12 +60,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.vaultdrop.mobile.R
@@ -70,12 +77,12 @@ import com.vaultdrop.mobile.features.connection.ConnectionStatusViewModel
 import com.vaultdrop.mobile.features.sync.SyncViewModel
 import com.vaultdrop.mobile.ui.components.FileCategoryIcon
 import com.vaultdrop.mobile.ui.components.FolderNameDialog
-import com.vaultdrop.mobile.ui.components.MoveFolderPickerDialog
 import com.vaultdrop.mobile.ui.components.SelectionState
 import com.vaultdrop.mobile.ui.components.SelectionStatusIcon
 import com.vaultdrop.mobile.ui.components.ServerStatusBadge
 import com.vaultdrop.mobile.ui.components.rememberSelectionState
 import com.vaultdrop.mobile.ui.navigation.FloatingNavBar
+import com.vaultdrop.mobile.ui.navigation.MoveTargetBar
 import com.vaultdrop.mobile.ui.navigation.NavTab
 import com.vaultdrop.mobile.ui.navigation.SelectionNavBar
 import kotlinx.coroutines.delay
@@ -88,7 +95,6 @@ fun FolderListScreen(
     selectedTab: NavTab,
     onTabSelected: (NavTab) -> Unit,
     onOpenDocument: (String) -> Unit,
-    onOpenFolder: (String) -> Unit,
     onBuildPdf: (List<String>) -> Unit,
     syncViewModel: SyncViewModel,
     connectionStatusViewModel: ConnectionStatusViewModel,
@@ -102,7 +108,6 @@ fun FolderListScreen(
     val folderLabel = stringResource(R.string.folder)
     val selection = rememberSelectionState()
     var showCreateDialog by remember { mutableStateOf(false) }
-    var showMoveDialog by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
 
     val createError = uiState.createError
@@ -121,8 +126,11 @@ fun FolderListScreen(
         }
     }
 
-    LaunchedEffect(showMoveDialog) {
-        if (showMoveDialog) viewModel.loadMoveFolders()
+    LaunchedEffect(uiState.moveSuccess) {
+        if (uiState.moveSuccess) {
+            snackbarHostState.showSnackbar(context.getString(R.string.move_success))
+            viewModel.clearMoveSuccess()
+        }
     }
 
     // Racine par défaut : dossier VaultDrop choisi au premier lancement.
@@ -191,21 +199,31 @@ fun FolderListScreen(
         return
     }
 
-    BackHandler(enabled = selection.active) { selection.clear() }
+    BackHandler(enabled = selection.active || uiState.moveMode) {
+        if (uiState.moveMode) {
+            viewModel.cancelMove()
+        } else {
+            selection.clear()
+        }
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
-                    if (selection.active) {
-                        Text(stringResource(R.string.selection_count, selection.ids.size))
-                    } else {
-                        Text(stringResource(R.string.files))
+                    when {
+                        uiState.moveMode -> Text(stringResource(R.string.move_pick_title, selection.ids.size))
+                        selection.active -> Text(stringResource(R.string.selection_count, selection.ids.size))
+                        else -> Text(stringResource(R.string.files))
                     }
                 },
                 navigationIcon = {
-                    if (selection.active) {
-                        IconButton(onClick = { selection.clear() }) {
+                    if (uiState.moveMode || selection.active) {
+                        IconButton(
+                            onClick = {
+                                if (uiState.moveMode) viewModel.cancelMove() else selection.clear()
+                            },
+                        ) {
                             Icon(
                                 Icons.Filled.Close,
                                 contentDescription = stringResource(R.string.selection_cancel),
@@ -214,7 +232,7 @@ fun FolderListScreen(
                     }
                 },
                 actions = {
-                    if (!selection.active) {
+                    if (!uiState.moveMode && !selection.active) {
                         ServerStatusBadge(
                             status = connectionStatus,
                             onClick = connectionStatusViewModel::checkNow,
@@ -227,9 +245,17 @@ fun FolderListScreen(
             )
         },
         bottomBar = {
-            if (selection.active) {
-                SelectionNavBar(
-                    onMove = { showMoveDialog = true },
+            when {
+                uiState.moveMode -> MoveTargetBar(
+                    fileCount = selection.ids.size,
+                    onMoveHere = {
+                        val ids = selection.ids.toList()
+                        selection.clear()
+                        viewModel.moveSelectionHere(ids)
+                    },
+                )
+                selection.active -> SelectionNavBar(
+                    onMove = { viewModel.startMove() },
                     onBuildPdf = {
                         val ids = selection.ids.toList()
                         selection.clear()
@@ -237,23 +263,39 @@ fun FolderListScreen(
                     },
                     enabled = selection.ids.isNotEmpty(),
                 )
-            } else {
-                FloatingNavBar(selected = selectedTab, onSelect = onTabSelected)
+                else -> FloatingNavBar(selected = selectedTab, onSelect = onTabSelected)
             }
         },
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
     ) { padding ->
-        FolderListContent(
-            uiState = uiState,
-            isImporting = importState.isImporting,
-            error = uiState.error ?: importState.error,
-            selection = selection,
-            onAddFolder = { pickFolderLauncher.launch(null) },
-            onCreateFolder = { showCreateDialog = true },
-            onOpenFolder = onOpenFolder,
-            onOpenDocument = onOpenDocument,
-            modifier = Modifier.padding(padding),
-        )
+        Column(
+            modifier = Modifier
+                .padding(padding)
+                .fillMaxSize(),
+        ) {
+            HomeViewSelector(
+                selected = uiState.view,
+                enabled = !selection.active && !uiState.moveMode,
+                onSelect = viewModel::selectView,
+            )
+            HomeViewContent(
+                view = uiState.view,
+                moveMode = uiState.moveMode,
+                atRoot = uiState.browseFolderId == null,
+                browseFolderName = uiState.browseFolderName,
+                subFolders = uiState.browseSubFolders,
+                sections = uiState.sections,
+                isImporting = importState.isImporting,
+                error = uiState.error ?: importState.error,
+                selection = selection,
+                onBrowseUp = viewModel::browseUp,
+                onOpenBrowseFolder = viewModel::openBrowseFolder,
+                onAddFolder = { pickFolderLauncher.launch(null) },
+                onCreateFolder = { showCreateDialog = true },
+                onOpenDocument = onOpenDocument,
+                modifier = Modifier.weight(1f),
+            )
+        }
     }
 
     if (showCreateDialog) {
@@ -261,27 +303,378 @@ fun FolderListScreen(
             onDismiss = { showCreateDialog = false },
             onConfirm = { name ->
                 showCreateDialog = false
-                viewModel.createFolderInDefaultRoot(name)
+                viewModel.createFolderInBrowse(name)
             },
         )
     }
+}
 
-    val moveFolders = uiState.moveFolders
-    if (showMoveDialog && moveFolders != null) {
-        MoveFolderPickerDialog(
-            folders = moveFolders,
-            fileCount = selection.ids.size,
-            onDismiss = {
-                showMoveDialog = false
-                viewModel.closeMovePicker()
-            },
-            onConfirm = { folderId ->
-                val ids = selection.ids.toList()
-                selection.clear()
-                showMoveDialog = false
-                viewModel.moveSelectedFiles(ids, folderId)
-            },
+/** Sélecteur de layer de la page Fichiers — même habillage pill que la nav flottante. */
+@Composable
+private fun HomeViewSelector(
+    selected: HomeView,
+    enabled: Boolean,
+    onSelect: (HomeView) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 4.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Surface(
+            shape = RoundedCornerShape(30.dp),
+            color = MaterialTheme.colorScheme.surface,
+            shadowElevation = 8.dp,
+            modifier = Modifier
+                .widthIn(max = 400.dp)
+                .fillMaxWidth(),
+        ) {
+            Row(
+                modifier = Modifier.padding(vertical = 6.dp, horizontal = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                ViewSegment(
+                    label = stringResource(R.string.view_files),
+                    icon = Icons.Filled.Description,
+                    selected = selected == HomeView.FILES,
+                    enabled = enabled,
+                    onClick = { onSelect(HomeView.FILES) },
+                    modifier = Modifier.weight(1f),
+                )
+                ViewSegment(
+                    label = stringResource(R.string.view_folders),
+                    icon = Icons.Filled.Folder,
+                    selected = selected == HomeView.FOLDERS,
+                    enabled = enabled,
+                    onClick = { onSelect(HomeView.FOLDERS) },
+                    modifier = Modifier.weight(1f),
+                )
+                ViewSegment(
+                    label = stringResource(R.string.view_dashboard),
+                    icon = Icons.Filled.Dashboard,
+                    selected = selected == HomeView.DASHBOARD,
+                    enabled = enabled,
+                    onClick = { onSelect(HomeView.DASHBOARD) },
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ViewSegment(
+    label: String,
+    icon: ImageVector,
+    selected: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val tint = if (selected) MaterialTheme.colorScheme.primary
+    else MaterialTheme.colorScheme.onSurfaceVariant
+    Surface(
+        onClick = onClick,
+        enabled = enabled,
+        shape = RoundedCornerShape(20.dp),
+        color = if (selected) MaterialTheme.colorScheme.primaryContainer
+        else MaterialTheme.colorScheme.surface,
+        modifier = modifier,
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 6.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = tint,
+                    modifier = Modifier.size(22.dp),
+                )
+                Text(
+                    text = label,
+                    color = tint,
+                    fontSize = 11.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+            }
+        }
+    }
+}
+
+/** Routage du contenu selon le layer affiché. */
+@Composable
+private fun HomeViewContent(
+    view: HomeView,
+    moveMode: Boolean,
+    atRoot: Boolean,
+    browseFolderName: String?,
+    subFolders: List<FolderEntity>,
+    sections: List<FileSection>,
+    isImporting: Boolean,
+    error: String?,
+    selection: SelectionState,
+    onBrowseUp: () -> Unit,
+    onOpenBrowseFolder: (String) -> Unit,
+    onAddFolder: () -> Unit,
+    onCreateFolder: () -> Unit,
+    onOpenDocument: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    when (view) {
+        HomeView.DASHBOARD -> DashboardPlaceholder(modifier = modifier)
+        HomeView.FILES -> FileGridContent(
+            sections = sections,
+            isImporting = isImporting,
+            error = error,
+            selection = selection,
+            onOpenDocument = onOpenDocument,
+            modifier = modifier,
         )
+        HomeView.FOLDERS -> FolderBrowserContent(
+            moveMode = moveMode,
+            atRoot = atRoot,
+            browseFolderName = browseFolderName,
+            subFolders = subFolders,
+            isImporting = isImporting,
+            error = error,
+            onBrowseUp = onBrowseUp,
+            onOpenBrowseFolder = onOpenBrowseFolder,
+            onAddFolder = onAddFolder,
+            onCreateFolder = onCreateFolder,
+            modifier = modifier,
+        )
+    }
+}
+
+/** Dashboard provisoire — vide pour l'instant. */
+@Composable
+private fun DashboardPlaceholder(modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = stringResource(R.string.dashboard_coming_soon),
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+    }
+}
+
+/** Layer Fichiers : tous les fichiers visibles, groupés par jour. */
+@Composable
+private fun FileGridContent(
+    sections: List<FileSection>,
+    isImporting: Boolean,
+    error: String?,
+    selection: SelectionState,
+    onOpenDocument: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    LazyColumn(
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(horizontal = 16.dp),
+    ) {
+        if (isImporting) {
+            item(key = "importing") {
+                LinearProgressIndicator(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 12.dp),
+                )
+            }
+        }
+
+        error?.let { message ->
+            item(key = "error") {
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 12.dp),
+                )
+            }
+        }
+
+        if (sections.isEmpty() && !isImporting) {
+            item(key = "empty") {
+                Text(
+                    text = stringResource(R.string.no_files_yet),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 32.dp),
+                )
+            }
+        }
+
+        sections.forEach { section ->
+            item(key = "header-${section.dayKey}") {
+                SectionHeader(section.dayLabel)
+            }
+            items(section.rows, key = { it.key }) { row ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    FileCard(
+                        file = row.left,
+                        selection = selection,
+                        onClick = { onOpenDocument(row.left.resourceId) },
+                        modifier = Modifier.weight(1f),
+                    )
+                    if (row.right != null) {
+                        FileCard(
+                            file = row.right,
+                            selection = selection,
+                            onClick = { onOpenDocument(row.right.resourceId) },
+                            modifier = Modifier.weight(1f),
+                        )
+                    } else {
+                        Spacer(Modifier.weight(1f))
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Layer Dossiers : explorateur hiérarchique, en place sur la page. */
+@Composable
+private fun FolderBrowserContent(
+    moveMode: Boolean,
+    atRoot: Boolean,
+    browseFolderName: String?,
+    subFolders: List<FolderEntity>,
+    isImporting: Boolean,
+    error: String?,
+    onBrowseUp: () -> Unit,
+    onOpenBrowseFolder: (String) -> Unit,
+    onAddFolder: () -> Unit,
+    onCreateFolder: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    LazyColumn(
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(horizontal = 16.dp),
+    ) {
+        item(key = "breadcrumb") {
+            // La racine VaultDrop n'est pas affichée : on ne peut pas remonter au-dessus.
+            if (atRoot) {
+                Spacer(Modifier.height(8.dp))
+            } else {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp, bottom = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    IconButton(onClick = onBrowseUp) {
+                        Icon(
+                            Icons.Filled.ArrowUpward,
+                            contentDescription = stringResource(R.string.browse_up),
+                        )
+                    }
+                    if (browseFolderName != null) {
+                        Text(
+                            text = browseFolderName,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
+            }
+        }
+
+        if (!moveMode) {
+            item(key = "create") {
+                if (atRoot) {
+                    Button(
+                        onClick = onAddFolder,
+                        enabled = !isImporting,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 12.dp),
+                    ) {
+                        Icon(Icons.Filled.Add, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text(stringResource(R.string.add_folder))
+                    }
+                }
+                OutlinedButton(
+                    onClick = onCreateFolder,
+                    enabled = !isImporting,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = if (atRoot) 8.dp else 4.dp, bottom = 4.dp),
+                ) {
+                    Icon(Icons.Filled.CreateNewFolder, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.create_folder))
+                }
+            }
+        }
+
+        if (isImporting) {
+            item(key = "importing") {
+                LinearProgressIndicator(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 12.dp),
+                )
+            }
+        }
+
+        error?.let { message ->
+            item(key = "error") {
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 12.dp),
+                )
+            }
+        }
+
+        items(subFolders, key = { it.resourceId }) { folder ->
+            FolderRow(folder, onClick = { onOpenBrowseFolder(folder.resourceId) })
+        }
+
+        if (subFolders.isEmpty() && !isImporting) {
+            item(key = "empty") {
+                Text(
+                    text = stringResource(if (atRoot) R.string.no_folders_yet else R.string.empty_folder),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 32.dp),
+                )
+            }
+        }
     }
 }
 
@@ -354,126 +747,6 @@ private fun Uri.displayName(context: Context): String? = runCatching {
 }.getOrNull()
 
 @Composable
-private fun FolderListContent(
-    uiState: FolderListUiState,
-    isImporting: Boolean,
-    error: String?,
-    selection: SelectionState,
-    onAddFolder: () -> Unit,
-    onCreateFolder: () -> Unit,
-    onOpenFolder: (String) -> Unit,
-    onOpenDocument: (String) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    LazyColumn(
-        modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 16.dp),
-    ) {
-        item(key = "actions") {
-            Button(
-                onClick = onAddFolder,
-                enabled = !isImporting,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 12.dp),
-            ) {
-                Icon(Icons.Filled.Add, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text(stringResource(R.string.add_folder))
-            }
-            OutlinedButton(
-                onClick = onCreateFolder,
-                enabled = !isImporting,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 8.dp, bottom = 4.dp),
-            ) {
-                Icon(Icons.Filled.CreateNewFolder, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text(stringResource(R.string.create_folder))
-            }
-        }
-
-        if (isImporting) {
-            item(key = "importing") {
-                LinearProgressIndicator(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 12.dp),
-                )
-            }
-        }
-
-        error?.let { message ->
-            item(key = "error") {
-                Text(
-                    text = message,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 12.dp),
-                )
-            }
-        }
-
-        if (uiState.subFolders.isNotEmpty()) {
-            item(key = "folders-header") {
-                SectionHeader(stringResource(R.string.folders_section))
-            }
-            items(uiState.subFolders, key = { it.resourceId }) { folder ->
-                FolderRow(folder, onClick = { onOpenFolder(folder.resourceId) })
-            }
-        }
-
-        if (uiState.sections.isEmpty() && !isImporting) {
-            item(key = "empty") {
-                Text(
-                    text = stringResource(R.string.no_files_yet),
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 32.dp),
-                )
-            }
-        }
-
-        uiState.sections.forEach { section ->
-            item(key = "header-${section.dayKey}") {
-                SectionHeader(section.dayLabel)
-            }
-            items(section.rows, key = { it.key }) { row ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    FileCard(
-                        file = row.left,
-                        selection = selection,
-                        onClick = { onOpenDocument(row.left.resourceId) },
-                        modifier = Modifier.weight(1f),
-                    )
-                    if (row.right != null) {
-                        FileCard(
-                            file = row.right,
-                            selection = selection,
-                            onClick = { onOpenDocument(row.right.resourceId) },
-                            modifier = Modifier.weight(1f),
-                        )
-                    } else {
-                        Spacer(Modifier.weight(1f))
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
 private fun SectionHeader(label: String) {
     Text(
         text = label,
@@ -484,7 +757,7 @@ private fun SectionHeader(label: String) {
     )
 }
 
-/** Carte dossier de la section Dossiers — ouvre le dossier au tap. */
+/** Carte dossier de l'explorateur — descend d'un niveau au tap. */
 @Composable
 private fun FolderRow(folder: FolderEntity, onClick: () -> Unit) {
     Card(

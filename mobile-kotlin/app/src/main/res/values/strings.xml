@@ -8,6 +8,14 @@
     <string name="default_root_folder_label">VaultDrop</string>
     <string name="files">Fichiers</string>
     <string name="folder">Dossier</string>
+    <string name="view_files">Fichiers</string>
+    <string name="view_folders">Dossiers</string>
+    <string name="view_dashboard">Dashboard</string>
+    <string name="dashboard_coming_soon">Dashboard à venir</string>
+    <string name="browse_up">Remonter</string>
+    <string name="move_here_count">Déplacer ici (%1$d)</string>
+    <string name="move_pick_title">Déplacer %1$d fichier(s)…</string>
+    <string name="move_success">Fichier(s) déplacé(s)</string>
     <string name="add_folder">Ajouter un dossier</string>
     <string name="create_folder">Créer un dossier</string>
     <string name="new_folder_name_title">Nom du dossier</string>

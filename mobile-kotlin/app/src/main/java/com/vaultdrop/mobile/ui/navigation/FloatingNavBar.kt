@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -20,6 +21,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -161,6 +163,50 @@ fun SelectionNavBar(
                     onClick = onBuildPdf,
                     modifier = Modifier.weight(1f),
                 )
+            }
+        }
+    }
+}
+
+/** Barre du mode déplacement : bouton « Déplacer ici (N) » vers le dossier courant. */
+@Composable
+fun MoveTargetBar(
+    fileCount: Int,
+    onMoveHere: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(start = 20.dp, end = 20.dp, bottom = 16.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Surface(
+            shape = RoundedCornerShape(30.dp),
+            color = MaterialTheme.colorScheme.surface,
+            shadowElevation = 8.dp,
+            modifier = Modifier.widthIn(max = 400.dp).fillMaxWidth(),
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Button(
+                    onClick = onMoveHere,
+                    modifier = Modifier
+                        .weight(1f)
+                        .heightIn(min = 52.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.DriveFileMove,
+                        contentDescription = null,
+                    )
+                    Text(
+                        text = stringResource(R.string.move_here_count, fileCount),
+                        modifier = Modifier.padding(start = 8.dp),
+                    )
+                }
             }
         }
     }
