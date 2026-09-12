@@ -9,6 +9,13 @@
     <string name="files">Fichiers</string>
     <string name="folder">Dossier</string>
     <string name="add_folder">Ajouter un dossier</string>
+    <string name="create_folder">Créer un dossier</string>
+    <string name="new_folder_name_title">Nom du dossier</string>
+    <string name="new_folder_name_hint">ex. factures</string>
+    <string name="new_folder_name_required">Le nom du dossier ne peut pas être vide.</string>
+    <string name="new_folder_cloud_only">Ce dossier est disponible uniquement sur le cloud — importe d\'abord un dossier physique pour y créer des sous-dossiers.</string>
+    <string name="new_folder_error">Impossible de créer le dossier.</string>
+    <string name="folders_section">Dossiers</string>
     <string name="no_folders_yet">Aucun dossier pour le moment. Appuie sur « Ajouter un dossier » pour synchroniser un dossier.</string>
     <string name="no_files_yet">Aucun fichier pour le moment. Appuie sur « Ajouter un dossier » pour synchroniser tes fichiers.</string>
     <string name="empty_folder">Dossier vide — le prochain syncDevice l\'actualisera.</string>

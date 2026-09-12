@@ -8,14 +8,17 @@ import androidx.lifecycle.viewModelScope
 import com.vaultdrop.mobile.R
 import com.vaultdrop.mobile.auth.TokenProvider
 import com.vaultdrop.mobile.data.local.entity.FileEntity
+import com.vaultdrop.mobile.data.local.entity.FolderEntity
 import com.vaultdrop.mobile.data.local.referenceDate
 import com.vaultdrop.mobile.data.preferences.DefaultRootStore
 import com.vaultdrop.mobile.data.remote.ApiException
 import com.vaultdrop.mobile.data.repository.FileRepository
 import com.vaultdrop.mobile.data.repository.FolderRepository
 import com.vaultdrop.mobile.data.repository.SaveFolderInput
+import com.vaultdrop.mobile.features.saf.SafFolderCreator
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -36,6 +39,7 @@ class FolderListViewModel @Inject constructor(
     private val fileRepository: FileRepository,
     private val tokenProvider: TokenProvider,
     private val defaultRootStore: DefaultRootStore,
+    private val safFolderCreator: SafFolderCreator,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
 
@@ -46,7 +50,10 @@ class FolderListViewModel @Inject constructor(
     private val _defaultRootId = MutableStateFlow(defaultRootStore.get())
     val defaultRootId: StateFlow<String?> = _defaultRootId.asStateFlow()
 
+    private var subFolderJob: Job? = null
+
     init {
+        observeSubFolders()
         observeFiles()
         refresh()
     }
@@ -92,6 +99,66 @@ class FolderListViewModel @Inject constructor(
             parentResourceId = rootRoomId,
         )
         return saved.resourceId
+    }
+
+    /**
+     * Sous-dossiers visibles de la racine par défaut, ré-abonnés quand la
+     * racine change (onboarding). Un dossier créé y apparaît immédiatement.
+     */
+    private fun observeSubFolders() {
+        viewModelScope.launch {
+            _defaultRootId.collect { rootId ->
+                subFolderJob?.cancel()
+                if (rootId == null) {
+                    _uiState.update { it.copy(subFolders = emptyList()) }
+                    return@collect
+                }
+                subFolderJob = viewModelScope.launch {
+                    folderRepository.observeSubFolders(rootId).collect { subFolders ->
+                        _uiState.update { it.copy(subFolders = subFolders) }
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Crée un dossier physique dans la racine par défaut (VaultDrop) puis
+     * l'enregistre en Room comme enfant de la racine.
+     */
+    fun createFolderInDefaultRoot(name: String) {
+        val trimmed = name.trim()
+        if (trimmed.isBlank()) {
+            _uiState.update { it.copy(createError = context.getString(R.string.new_folder_name_required)) }
+            return
+        }
+        viewModelScope.launch {
+            val rootId = _defaultRootId.value
+            val root = rootId?.let { folderRepository.getFolder(it) }
+            if (root == null) {
+                _uiState.update { it.copy(createError = context.getString(R.string.new_folder_error)) }
+                return@launch
+            }
+            val message = if (root.uri == null) {
+                context.getString(R.string.new_folder_cloud_only)
+            } else {
+                context.getString(R.string.new_folder_error)
+            }
+            val created = safFolderCreator.createFolder(root.uri, trimmed)
+            if (created == null) {
+                _uiState.update { it.copy(createError = message) }
+                return@launch
+            }
+            folderRepository.saveFolder(
+                input = SaveFolderInput(uri = created.toString(), name = trimmed, exists = true),
+                parentResourceId = root.resourceId,
+            )
+        }
+    }
+
+    /** Consomme une erreur transitoire de création (Snackbar). */
+    fun clearCreateError() {
+        _uiState.update { it.copy(createError = null) }
     }
 
     /** Grille d'accueil : tous les fichiers visibles, groupés par jour (date de référence). */

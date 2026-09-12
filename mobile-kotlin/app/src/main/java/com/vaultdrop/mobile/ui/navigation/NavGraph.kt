@@ -80,6 +80,7 @@ fun NavGraph(
                     selectedTab = selectedTab,
                     onTabSelected = onTabSelected,
                     onOpenDocument = { id -> navController.navigate(Routes.document(id)) },
+                    onOpenFolder = { id -> navController.navigate(Routes.folder(id)) },
                     onBuildPdf = { ids -> navController.navigate(Routes.pdfBuilder(ids)) },
                     syncViewModel = syncViewModel,
                     connectionStatusViewModel = connectionStatusViewModel,

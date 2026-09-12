@@ -1,6 +1,7 @@
 package com.vaultdrop.mobile.ui.folderlist
 
 import com.vaultdrop.mobile.data.local.entity.FileEntity
+import com.vaultdrop.mobile.data.local.entity.FolderEntity
 
 /** Section d'un jour dans la grille d'accueil — miroir de `FileSection` (app/index.tsx). */
 data class FileSection(
@@ -18,7 +19,10 @@ data class FilePair(
 )
 
 data class FolderListUiState(
+    val subFolders: List<FolderEntity> = emptyList(),
     val sections: List<FileSection> = emptyList(),
     val isRefreshing: Boolean = false,
     val error: String? = null,
+    /** Erreur transitoire de création de dossier — affichée en Snackbar puis effacée. */
+    val createError: String? = null,
 )

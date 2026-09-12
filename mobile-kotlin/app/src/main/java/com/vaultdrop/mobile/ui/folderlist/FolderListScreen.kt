@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -28,6 +29,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.CreateNewFolder
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.MergeType
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
@@ -38,7 +41,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -60,9 +66,11 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.vaultdrop.mobile.R
 import com.vaultdrop.mobile.data.local.entity.FileEntity
+import com.vaultdrop.mobile.data.local.entity.FolderEntity
 import com.vaultdrop.mobile.features.connection.ConnectionStatusViewModel
 import com.vaultdrop.mobile.features.sync.SyncViewModel
 import com.vaultdrop.mobile.ui.components.FileCategoryIcon
+import com.vaultdrop.mobile.ui.components.FolderNameDialog
 import com.vaultdrop.mobile.ui.components.SelectionState
 import com.vaultdrop.mobile.ui.components.SelectionStatusIcon
 import com.vaultdrop.mobile.ui.components.ServerStatusBadge
@@ -79,6 +87,7 @@ fun FolderListScreen(
     selectedTab: NavTab,
     onTabSelected: (NavTab) -> Unit,
     onOpenDocument: (String) -> Unit,
+    onOpenFolder: (String) -> Unit,
     onBuildPdf: (List<String>) -> Unit,
     syncViewModel: SyncViewModel,
     connectionStatusViewModel: ConnectionStatusViewModel,
@@ -91,6 +100,16 @@ fun FolderListScreen(
     val context = LocalContext.current
     val folderLabel = stringResource(R.string.folder)
     val selection = rememberSelectionState()
+    var showCreateDialog by remember { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    val createError = uiState.createError
+    LaunchedEffect(createError) {
+        if (createError != null) {
+            snackbarHostState.showSnackbar(createError)
+            viewModel.clearCreateError()
+        }
+    }
 
     // Racine par défaut : dossier VaultDrop choisi au premier lancement.
     val defaultRootLabel = stringResource(R.string.default_root_folder_label)
@@ -210,6 +229,7 @@ fun FolderListScreen(
         bottomBar = {
             FloatingNavBar(selected = selectedTab, onSelect = onTabSelected)
         },
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
     ) { padding ->
         FolderListContent(
             uiState = uiState,
@@ -217,8 +237,20 @@ fun FolderListScreen(
             error = uiState.error ?: importState.error,
             selection = selection,
             onAddFolder = { pickFolderLauncher.launch(null) },
+            onCreateFolder = { showCreateDialog = true },
+            onOpenFolder = onOpenFolder,
             onOpenDocument = onOpenDocument,
             modifier = Modifier.padding(padding),
+        )
+    }
+
+    if (showCreateDialog) {
+        FolderNameDialog(
+            onDismiss = { showCreateDialog = false },
+            onConfirm = { name ->
+                showCreateDialog = false
+                viewModel.createFolderInDefaultRoot(name)
+            },
         )
     }
 }
@@ -298,6 +330,8 @@ private fun FolderListContent(
     error: String?,
     selection: SelectionState,
     onAddFolder: () -> Unit,
+    onCreateFolder: () -> Unit,
+    onOpenFolder: (String) -> Unit,
     onOpenDocument: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -316,6 +350,17 @@ private fun FolderListContent(
                 Icon(Icons.Filled.Add, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
                 Text(stringResource(R.string.add_folder))
+            }
+            OutlinedButton(
+                onClick = onCreateFolder,
+                enabled = !isImporting,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp, bottom = 4.dp),
+            ) {
+                Icon(Icons.Filled.CreateNewFolder, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.create_folder))
             }
         }
 
@@ -339,6 +384,15 @@ private fun FolderListContent(
                         .fillMaxWidth()
                         .padding(top = 12.dp),
                 )
+            }
+        }
+
+        if (uiState.subFolders.isNotEmpty()) {
+            item(key = "folders-header") {
+                SectionHeader(stringResource(R.string.folders_section))
+            }
+            items(uiState.subFolders, key = { it.resourceId }) { folder ->
+                FolderRow(folder, onClick = { onOpenFolder(folder.resourceId) })
             }
         }
 
@@ -398,6 +452,47 @@ private fun SectionHeader(label: String) {
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(top = 16.dp, bottom = 4.dp),
     )
+}
+
+/** Carte dossier de la section Dossiers — ouvre le dossier au tap. */
+@Composable
+private fun FolderRow(folder: FolderEntity, onClick: () -> Unit) {
+    Card(
+        onClick = onClick,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 8.dp),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Folder,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(28.dp),
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = folder.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    fontWeight = FontWeight.Medium,
+                )
+                Text(
+                    text = stringResource(R.string.folder),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
 }
 
 /** Carte fichier — clic long pour la sélection multi-fichiers, clic pour ouvrir. */

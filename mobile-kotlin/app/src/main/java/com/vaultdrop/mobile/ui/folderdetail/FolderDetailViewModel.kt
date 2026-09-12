@@ -1,14 +1,19 @@
 package com.vaultdrop.mobile.ui.folderdetail
 
+import android.content.Context
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.vaultdrop.mobile.R
 import com.vaultdrop.mobile.auth.TokenProvider
 import com.vaultdrop.mobile.data.local.entity.FileEntity
 import com.vaultdrop.mobile.data.local.entity.FolderEntity
 import com.vaultdrop.mobile.data.repository.FileRepository
 import com.vaultdrop.mobile.data.repository.FolderRepository
+import com.vaultdrop.mobile.data.repository.SaveFolderInput
+import com.vaultdrop.mobile.features.saf.SafFolderCreator
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -23,6 +28,8 @@ data class FolderDetailUiState(
     val files: List<FileEntity> = emptyList(),
     val isRefreshing: Boolean = false,
     val error: String? = null,
+    /** Erreur transitoire de création — affichée en Snackbar puis effacée. */
+    val createError: String? = null,
 )
 
 @HiltViewModel
@@ -31,6 +38,8 @@ class FolderDetailViewModel @Inject constructor(
     private val folderRepository: FolderRepository,
     private val fileRepository: FileRepository,
     private val tokenProvider: TokenProvider,
+    private val safFolderCreator: SafFolderCreator,
+    @ApplicationContext private val context: Context,
 ) : ViewModel() {
 
     private val folderResourceId: String =
@@ -77,5 +86,46 @@ class FolderDetailViewModel @Inject constructor(
                 }
             _uiState.update { it.copy(isRefreshing = false) }
         }
+    }
+
+    /**
+     * Crée un sous-dossier physique dans le dossier courant puis l'enregistre
+     * en Room. Impossible si le dossier parent est cloud-only (pas d'uri SAF).
+     */
+    fun createFolder(name: String) {
+        val trimmed = name.trim()
+        if (trimmed.isBlank()) {
+            _uiState.update {
+                it.copy(createError = context.getString(R.string.new_folder_name_required))
+            }
+            return
+        }
+        viewModelScope.launch {
+            val folder = _uiState.value.folder
+                ?: run {
+                    _uiState.update { it.copy(createError = context.getString(R.string.new_folder_error)) }
+                    return@launch
+                }
+            val physical = folder.uri != null
+            val created = safFolderCreator.createFolder(folder.uri, trimmed)
+            if (created == null) {
+                val message = if (physical) {
+                    context.getString(R.string.new_folder_error)
+                } else {
+                    context.getString(R.string.new_folder_cloud_only)
+                }
+                _uiState.update { it.copy(createError = message) }
+                return@launch
+            }
+            folderRepository.saveFolder(
+                input = SaveFolderInput(uri = created.toString(), name = trimmed, exists = true),
+                parentResourceId = folder.resourceId,
+            )
+        }
+    }
+
+    /** Consomme une erreur transitoire de création (Snackbar). */
+    fun clearCreateError() {
+        _uiState.update { it.copy(createError = null) }
     }
 }

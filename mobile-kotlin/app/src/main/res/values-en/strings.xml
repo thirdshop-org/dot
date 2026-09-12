@@ -8,6 +8,13 @@
     <string name="default_root_pick">Choose my VaultDrop folder</string>
     <string name="default_root_folder_label">VaultDrop</string>
     <string name="add_folder">Add a folder</string>
+    <string name="create_folder">Create a folder</string>
+    <string name="new_folder_name_title">Folder name</string>
+    <string name="new_folder_name_hint">e.g. invoices</string>
+    <string name="new_folder_name_required">The folder name cannot be empty.</string>
+    <string name="new_folder_cloud_only">This folder is cloud-only — import a physical folder first to create subfolders inside it.</string>
+    <string name="new_folder_error">Could not create the folder.</string>
+    <string name="folders_section">Folders</string>
     <string name="no_folders_yet">No folders yet. Tap "Add a folder" to sync a folder.</string>
     <string name="no_files_yet">No files yet. Tap "Add a folder" to sync your files.</string>
     <string name="empty_folder">Empty folder — next sync will refresh it.</string>

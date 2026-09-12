@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.MergeType
 import androidx.compose.material.icons.filled.Refresh
@@ -26,11 +27,16 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -44,6 +50,7 @@ import com.vaultdrop.mobile.data.local.entity.FileEntity
 import com.vaultdrop.mobile.data.local.entity.FolderEntity
 import com.vaultdrop.mobile.features.connection.ConnectionStatusViewModel
 import com.vaultdrop.mobile.ui.components.FileCategoryIcon
+import com.vaultdrop.mobile.ui.components.FolderNameDialog
 import com.vaultdrop.mobile.ui.components.SelectionState
 import com.vaultdrop.mobile.ui.components.SelectionStatusIcon
 import com.vaultdrop.mobile.ui.components.ServerStatusBadge
@@ -64,9 +71,19 @@ fun FolderDetailScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val connectionStatus by connectionStatusViewModel.status.collectAsStateWithLifecycle()
     val selection = rememberSelectionState()
+    var showCreateDialog by remember { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(uiState.folderMissing) {
         if (uiState.folderMissing) onBack()
+    }
+
+    LaunchedEffect(uiState.createError) {
+        val createError = uiState.createError
+        if (createError != null) {
+            snackbarHostState.showSnackbar(createError)
+            viewModel.clearCreateError()
+        }
     }
 
     BackHandler(enabled = selection.active) { selection.clear() }
@@ -114,6 +131,12 @@ fun FolderDetailScreen(
                             )
                         }
                     } else {
+                        IconButton(onClick = { showCreateDialog = true }) {
+                            Icon(
+                                Icons.Filled.CreateNewFolder,
+                                contentDescription = stringResource(R.string.create_folder),
+                            )
+                        }
                         ServerStatusBadge(
                             status = connectionStatus,
                             onClick = connectionStatusViewModel::checkNow,
@@ -125,6 +148,7 @@ fun FolderDetailScreen(
                 },
             )
         },
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
     ) { padding ->
         FolderDetailContent(
             subFolders = uiState.subFolders,
@@ -135,6 +159,16 @@ fun FolderDetailScreen(
             onOpenFolder = onOpenFolder,
             onOpenDocument = onOpenDocument,
             modifier = Modifier.padding(padding),
+        )
+    }
+
+    if (showCreateDialog) {
+        FolderNameDialog(
+            onDismiss = { showCreateDialog = false },
+            onConfirm = { name ->
+                showCreateDialog = false
+                viewModel.createFolder(name)
+            },
         )
     }
 }
