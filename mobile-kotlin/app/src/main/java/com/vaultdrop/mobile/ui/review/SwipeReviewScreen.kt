@@ -128,8 +128,6 @@ fun SwipeReviewScreen(
                 ) {
                     SwipeCardDeck(
                         cards = state.cards,
-                        onKeep = viewModel::keep,
-                        onDelete = viewModel::delete,
                         onOpenExternalFailed = {
                             scope.launch { snackbarHostState.showSnackbar(openExternalErrorMsg) }
                         },
