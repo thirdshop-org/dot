@@ -14,6 +14,8 @@ import com.squareup.moshi.JsonAdapter
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
 import com.vaultdrop.mobile.auth.TokenProvider
+import com.vaultdrop.mobile.data.local.dao.FileDao
+import com.vaultdrop.mobile.data.local.dao.FolderDao
 import com.vaultdrop.mobile.data.local.dao.PendingOperationDao
 import com.vaultdrop.mobile.data.local.entity.PendingOperationEntity
 import com.vaultdrop.mobile.data.local.entity.PendingOperationType
@@ -50,6 +52,8 @@ class OutboxSyncWorker @AssistedInject constructor(
     @Assisted workerParams: WorkerParameters,
     private val apiClient: ApiClient,
     private val pendingOperationDao: PendingOperationDao,
+    private val fileDao: FileDao,
+    private val folderDao: FolderDao,
     private val tokenProvider: TokenProvider,
     moshi: Moshi,
 ) : CoroutineWorker(appContext, workerParams) {
@@ -61,6 +65,11 @@ class OutboxSyncWorker @AssistedInject constructor(
     override suspend fun doWork(): Result {
         // Mode local : sans compte connecté, rien à pousser.
         if (tokenProvider.current == null) return Result.success()
+
+        // Backfill : promeut les ressources déjà confirmées par le serveur mais
+        // dont le placement était resté `local` (poussées avant ce mécanisme).
+        fileDao.backfillSyncedStatus(System.currentTimeMillis())
+        folderDao.backfillSyncedStatus(System.currentTimeMillis())
 
         while (true) {
             val pending = pendingOperationDao.selectPending(BATCH_SIZE)
@@ -95,6 +104,7 @@ class OutboxSyncWorker @AssistedInject constructor(
             // Ops appliquées par le serveur (indices < applied).
             for (i in 0 until result.applied) {
                 pendingOperationDao.markSynced(pending[i].id, now)
+                promotePlacement(pending[i])
                 Timber.d("outbox synced %s", pending[i].operationId)
             }
 
@@ -114,6 +124,25 @@ class OutboxSyncWorker @AssistedInject constructor(
             }
 
             // Boucle : d'autres batchs attendent → traité dans le même run.
+        }
+    }
+
+    /**
+     * Après confirmation serveur, promeut le placement de la ressource touchée :
+     * `create_resource`/`move_resource` appliqués → `local-cloud` si copie
+     * physique présente, `cloud` sinon. Rappelle le statut d'une ressource déjà
+     * cloud (idempotent), `delete_resource` n'en modifie pas.
+     */
+    private suspend fun promotePlacement(op: PendingOperationEntity) {
+        val resourceId = op.resourceId ?: return
+        when (op.operation) {
+            PendingOperationType.CREATE_RESOURCE,
+            PendingOperationType.MOVE_RESOURCE -> {
+                when (op.resourceType) {
+                    "file" -> fileDao.promoteSyncStatus(resourceId, System.currentTimeMillis())
+                    "folder" -> folderDao.promoteSyncStatus(resourceId, System.currentTimeMillis())
+                }
+            }
         }
     }
 

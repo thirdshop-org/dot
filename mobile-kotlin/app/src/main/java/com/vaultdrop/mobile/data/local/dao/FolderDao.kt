@@ -52,6 +52,38 @@ interface FolderDao {
     @Query("UPDATE folders SET \"exists\" = 0, updated_at = :updatedAt WHERE resource_id = :resourceId")
     suspend fun markMissing(resourceId: String, updatedAt: Long)
 
+    /**
+     * Promote le placement après confirmation serveur (`POST /sync/ops` appliqué) :
+     * `local-cloud` si une copie physique existe, sinon `cloud`. Idempotent.
+     */
+    @Query("""
+        UPDATE folders
+        SET sync_status = CASE WHEN uri IS NOT NULL THEN 'local-cloud' ELSE 'cloud' END,
+            updated_at = :now
+        WHERE resource_id = :resourceId
+    """)
+    suspend fun promoteSyncStatus(resourceId: String, now: Long)
+
+    /**
+     * Backfill : promu toutes les lignes restées `local` dont une op outbox
+     * `create_resource`/`move_resource` a déjà été `synced` (poussées avant ce
+     * mécanisme). Rattrape le pas pour les données préexistantes.
+     */
+    @Query("""
+        UPDATE folders
+        SET sync_status = CASE WHEN uri IS NOT NULL THEN 'local-cloud' ELSE 'cloud' END,
+            updated_at = :now
+        WHERE sync_status = 'local'
+          AND EXISTS (
+              SELECT 1 FROM pending_operations
+              WHERE pending_operations.resource_id = folders.resource_id
+                AND pending_operations.resource_type = 'folder'
+                AND pending_operations.status = 'synced'
+                AND pending_operations.operation IN ('create_resource', 'move_resource')
+          )
+    """)
+    suspend fun backfillSyncedStatus(now: Long)
+
     @Query("DELETE FROM folders WHERE resource_id = :resourceId")
     suspend fun remove(resourceId: String)
 }

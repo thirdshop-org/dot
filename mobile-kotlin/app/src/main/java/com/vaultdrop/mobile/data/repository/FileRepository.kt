@@ -160,7 +160,7 @@ class FileRepository @Inject constructor(
         return FileEntity(
             id = existing?.id ?: 0L,
             resourceId = dto.id,
-            uri = null,
+            uri = existing?.uri,
             name = dto.name,
             folderResourceId = dto.folderId ?: folderResourceId,
             extension = extension,
@@ -170,7 +170,10 @@ class FileRepository @Inject constructor(
             exists = 1,
             lastModified = existing?.lastModified,
             ownerId = existing?.ownerId,
-            syncStatus = existing?.syncStatus ?: FileStatus.CLOUD,
+            // Le snapshot serveur confirme la présence cloud : si une copie
+            // physique existe aussi, placement local-cloud (jamais d'écrasement
+            // de l'uri / de régression du placement).
+            syncStatus = if (existing?.uri != null) FileStatus.LOCAL_CLOUD else FileStatus.CLOUD,
             processed = existing?.processed ?: false,
             addedAt = existing?.addedAt ?: now,
             updatedAt = now,

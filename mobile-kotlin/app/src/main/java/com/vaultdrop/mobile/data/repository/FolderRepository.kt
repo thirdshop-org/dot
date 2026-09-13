@@ -69,12 +69,15 @@ class FolderRepository @Inject constructor(
         return FolderEntity(
             id = existing?.id ?: 0L,
             resourceId = dto.id,
-            uri = null,
+            uri = existing?.uri,
             name = dto.name,
-            exists = null,
+            exists = existing?.exists,
             parentResourceId = dto.parentId,
             ownerId = existing?.ownerId,
-            syncStatus = existing?.syncStatus ?: FolderStatus.CLOUD,
+            // Le snapshot serveur confirme la présence cloud : si une copie
+            // physique existe aussi, placement local-cloud (jamais d'écrasement
+            // de l'uri / de régression du placement).
+            syncStatus = if (existing?.uri != null) FolderStatus.LOCAL_CLOUD else FolderStatus.CLOUD,
             addedAt = existing?.addedAt ?: now,
             updatedAt = now,
         )
