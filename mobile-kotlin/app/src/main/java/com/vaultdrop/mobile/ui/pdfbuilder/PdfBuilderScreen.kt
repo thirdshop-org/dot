@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.MergeType
 import androidx.compose.material.icons.filled.TextSnippet
 import androidx.compose.material3.AlertDialog
@@ -411,6 +412,12 @@ private fun BuilderItemRow(
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(24.dp),
                 )
+                is PdfBuilderItem.FilePathItem -> Icon(
+                    imageVector = Icons.Filled.Image,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(24.dp),
+                )
             }
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
@@ -419,6 +426,7 @@ private fun BuilderItemRow(
                     text = when (item) {
                         is PdfBuilderItem.FileItem -> item.file.name
                         is PdfBuilderItem.NoteItem -> stringResource(R.string.pdf_builder_note)
+                        is PdfBuilderItem.FilePathItem -> item.file.name
                     },
                     style = MaterialTheme.typography.bodyLarge,
                     maxLines = 1,
@@ -437,6 +445,8 @@ private fun BuilderItemRow(
                         is PdfBuilderItem.NoteItem -> item.body
                             .replace('\n', ' ')
                             .take(80)
+
+                        is PdfBuilderItem.FilePathItem -> formatSize(item.file.length())
                     },
                     style = MaterialTheme.typography.labelMedium,
                     color = if (isFailed) MaterialTheme.colorScheme.error

@@ -55,6 +55,7 @@ class PdfBuilderEngine @Inject constructor() {
                     val ok = when (item) {
                         is PdfBuilderItem.FileItem -> renderFileItem(context, document, item.file)
                         is PdfBuilderItem.NoteItem -> renderNoteItem(document, item.body)
+                        is PdfBuilderItem.FilePathItem -> appendImageFile(document, item.file)
                     }
                     if (!ok) failed += item.id
                     onProgress((index + 1).toFloat() / total)
@@ -152,6 +153,38 @@ class PdfBuilderEngine @Inject constructor() {
                 BitmapFactory.decodeStream(input, null, options)
             }
             ?: return false
+
+        val landscape = bitmap.width > bitmap.height
+        val pageWidth = if (landscape) A4_H.toInt() else A4_W.toInt()
+        val pageHeight = if (landscape) A4_W.toInt() else A4_H.toInt()
+        val dst = fitRect(bitmap.width, bitmap.height, pageWidth.toFloat(), pageHeight.toFloat())
+        appendBitmapPage(document, bitmap, pageWidth, pageHeight, dst)
+        bitmap.recycle()
+        return true
+    }
+
+    /** Page image brute sur disque (ex. JPEG scanné), A4 selon l'orientation. */
+    private fun appendImageFile(
+        document: PdfDocument,
+        file: File,
+    ): Boolean {
+        val sample = runCatching {
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeFile(file.absolutePath, bounds)
+            if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return false
+            var sampler = 1
+            while (bounds.outWidth / sampler > MAX_IMAGE_PX ||
+                bounds.outHeight / sampler > MAX_IMAGE_PX
+            ) {
+                sampler *= 2
+            }
+            sampler
+        }.getOrNull() ?: return false
+
+        val bitmap = runCatching {
+            val options = BitmapFactory.Options().apply { inSampleSize = sample }
+            BitmapFactory.decodeFile(file.absolutePath, options)
+        }.getOrNull() ?: return false
 
         val landscape = bitmap.width > bitmap.height
         val pageWidth = if (landscape) A4_H.toInt() else A4_W.toInt()

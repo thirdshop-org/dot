@@ -24,6 +24,8 @@ import com.vaultdrop.mobile.features.scan.CornerGeometry
 import com.vaultdrop.mobile.features.scan.ScanImageProcessor
 import com.vaultdrop.mobile.features.scan.ScanQuad
 import com.vaultdrop.mobile.features.scan.ScanRenderMode
+import com.vaultdrop.mobile.ui.pdfbuilder.PdfBuilderEngine
+import com.vaultdrop.mobile.ui.pdfbuilder.PdfBuilderItem
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
@@ -64,6 +66,7 @@ class ScanViewModel @Inject constructor(
     private val folderRepository: FolderRepository,
     private val defaultRootStore: DefaultRootStore,
     private val imageProcessor: ScanImageProcessor,
+    private val pdfEngine: PdfBuilderEngine,
 ) : ViewModel() {
 
     private val _session = MutableStateFlow<ScanSessionEntity?>(null)
@@ -286,6 +289,8 @@ class ScanViewModel @Inject constructor(
                             mimeType = "image/jpeg",
                             lastModified = file.lastModified(),
                             exists = true,
+                            // Déjà traité au scan : ne pas remonter dans la review.
+                            processed = true,
                         ),
                         folderResourceId = folderId,
                     )
@@ -295,6 +300,97 @@ class ScanViewModel @Inject constructor(
                 _exported.value = true
             } catch (e: Exception) {
                 Timber.e(e, "scan export failed")
+                _message.value = when (e) {
+                    is SecurityException -> context.getString(R.string.pdf_builder_save_error_permission)
+                    else -> context.getString(R.string.scan_error_export)
+                }
+            } finally {
+                _busy.value = false
+            }
+        }
+    }
+
+    /**
+     * Exporte toutes les pages en une seule PDF dans le dossier racine
+     * (PdfBuilderEngine + SAF), ré-importée dans Room comme fichier déjà traité.
+     * Équivaut à l'export JPEG qui marque pages + session terminées.
+     */
+    fun exportPdf() {
+        val currentSession = _session.value ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            if (_busy.value) return@launch
+            _busy.value = true
+            try {
+                val rootFolderId = currentSession.rootFolderId ?: defaultRootStore.get()
+                    ?: error("no default root")
+                val rootFolder = folderRepository.getFolder(rootFolderId)
+                    ?: error("default root not found: $rootFolderId")
+                val rootUri = SafUris.toDocumentUri(rootFolder.uri)
+                    ?: error("default root has no uri")
+
+                val pages = scanRepository.getPages(currentSession.id)
+                if (pages.isEmpty()) return@launch
+
+                val stamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+                val displayName = "scan_$stamp.pdf"
+                val cacheFile = File(context.cacheDir, displayName)
+                val items = pages.map { page ->
+                    PdfBuilderItem.FilePathItem(
+                        file = File(page.tempUri),
+                        id = page.resourceId,
+                    )
+                }
+                val result = pdfEngine.buildPdf(
+                    context = context,
+                    items = items,
+                    outputFile = cacheFile,
+                    onProgress = {},
+                )
+                if (cacheFile.length() == 0L) error("pdf build produced empty output")
+
+                val createdUri = SafWriter.createDocument(
+                    resolver = context.contentResolver,
+                    treeUri = rootUri.toString(),
+                    mimeType = "application/pdf",
+                    displayName = displayName,
+                ) ?: error("cannot create document in default root")
+                SafWriter.copyInto(createdUri, cacheFile, context.contentResolver)
+                runCatching {
+                    context.contentResolver.takePersistableUriPermission(
+                        createdUri,
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
+                    )
+                }.onFailure { Timber.w(it, "persistable uri permission absent") }
+
+                val folderId = SafWriter.resolveTargetFolder(folderRepository, createdUri)
+                    ?: rootFolderId
+                val name = SafWriter.displayName(context.contentResolver, createdUri)
+                    ?: displayName
+                fileRepository.saveLocalFile(
+                    input = SaveFileInput(
+                        uri = createdUri.toString(),
+                        name = name,
+                        extension = "pdf",
+                        size = cacheFile.length(),
+                        mimeType = "application/pdf",
+                        lastModified = System.currentTimeMillis(),
+                        exists = true,
+                        processed = true,
+                    ),
+                    folderResourceId = folderId,
+                )
+                cacheFile.delete()
+
+                if (result.failedIds.isNotEmpty()) {
+                    Timber.w("scan pdf: %d page(s) not embedded", result.failedIds.size)
+                }
+                pages.forEach { page ->
+                    scanRepository.markPageExported(page.copy(status = ScanPageStatus.EXPORTED))
+                }
+                scanRepository.finishSession(currentSession.id)
+                _exported.value = true
+            } catch (e: Exception) {
+                Timber.e(e, "scan pdf export failed")
                 _message.value = when (e) {
                     is SecurityException -> context.getString(R.string.pdf_builder_save_error_permission)
                     else -> context.getString(R.string.scan_error_export)

@@ -101,7 +101,9 @@ class FileRepository @Inject constructor(
             lastModified = input.lastModified,
             ownerId = ownerId ?: existing?.ownerId,
             syncStatus = existing?.syncStatus ?: input.syncStatus ?: FileStatus.LOCAL,
-            processed = existing?.processed ?: false,
+            // Une ligne existante liée reste à son état ; une nouvelle ligne est
+            // « traitée » si la source l'a demandé (ex. scan), sinon à traiter.
+            processed = existing?.processed ?: input.processed,
             addedAt = existing?.addedAt ?: now,
             updatedAt = now,
         )
@@ -198,4 +200,6 @@ data class SaveFileInput(
     val resourceId: String? = null,
     /** Fallback de sync_status pour une nouvelle ligne (défaut local). */
     val syncStatus: String? = null,
+    /** Le fichier arrive déjà « traité » (ex. scan) ou à traiter dans la review. */
+    val processed: Boolean = false,
 )

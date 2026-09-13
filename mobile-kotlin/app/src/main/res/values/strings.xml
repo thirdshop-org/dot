@@ -201,6 +201,7 @@
     <string name="scan_move_down">Descendre</string>
     <string name="scan_empty">Aucune page pour le moment.\nCapture ta première page.</string>
     <string name="scan_export">Exporter vers le dossier VaultDrop</string>
+    <string name="scan_export_pdf">Sauvegarder en PDF</string>
     <string name="scan_exporting">Export en cours…</string>
     <string name="scan_abandon">Abandonner</string>
     <string name="scan_abandon_title">Abandonner le scan ?</string>

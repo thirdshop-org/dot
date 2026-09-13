@@ -16,6 +16,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -99,6 +100,14 @@ fun SessionStage(
             ) {
                 Icon(imageVector = Icons.Filled.Add, contentDescription = null)
                 Text(stringResource(R.string.scan_add_page), modifier = Modifier.padding(start = 4.dp))
+            }
+            OutlinedButton(
+                onClick = viewModel::exportPdf,
+                modifier = Modifier.weight(1f),
+                enabled = pages.isNotEmpty(),
+            ) {
+                Icon(imageVector = Icons.Filled.PictureAsPdf, contentDescription = null)
+                Text(stringResource(R.string.scan_export_pdf), modifier = Modifier.padding(start = 4.dp))
             }
             Button(
                 onClick = viewModel::export,

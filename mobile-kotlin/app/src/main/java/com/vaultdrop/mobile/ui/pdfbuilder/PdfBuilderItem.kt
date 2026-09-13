@@ -3,10 +3,12 @@ package com.vaultdrop.mobile.ui.pdfbuilder
 import com.vaultdrop.mobile.data.local.entity.FileEntity
 import com.vaultdrop.mobile.domain.FileCategory
 import com.vaultdrop.mobile.ui.components.categoryValue
+import java.io.File
 
 /**
- * Item de l'assemblage PDF : un fichier lisible localement (PDF / image / texte)
- * ou une note de texte libre. L'ordre de la liste est l'ordre du PDF final.
+ * Item de l'assemblage PDF : un fichier lisible localement (PDF / image / texte),
+ * une note de texte libre, ou une image brute sur disque (pages scannées).
+ * L'ordre de la liste est l'ordre du PDF final.
  */
 sealed interface PdfBuilderItem {
     val id: String
@@ -21,6 +23,12 @@ sealed interface PdfBuilderItem {
     data class NoteItem(
         override val id: String,
         val body: String,
+    ) : PdfBuilderItem
+
+    /** Image JPEG sur disque (ex. une page du scanner) déjà mise à l'endroit. */
+    data class FilePathItem(
+        val file: File,
+        override val id: String,
     ) : PdfBuilderItem
 }
 
