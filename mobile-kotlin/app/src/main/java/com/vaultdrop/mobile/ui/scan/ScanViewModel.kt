@@ -26,7 +26,9 @@ import com.vaultdrop.mobile.features.scan.ScanQuad
 import com.vaultdrop.mobile.features.scan.ScanRenderMode
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -95,6 +97,13 @@ class ScanViewModel @Inject constructor(
 
     private val _pages = MutableStateFlow<List<ScanPageEntity>>(emptyList())
     val pages: StateFlow<List<ScanPageEntity>> = _pages.asStateFlow()
+
+    /**
+     * Scope de nettoyage indépendant du ViewModel : la suppression des fichiers
+     * d'une session abandonnée est lancée puis on quitte l'écran, ce qui détruit
+     * le ViewModel — `viewModelScope` serait annulé en plein nettoyage.
+     */
+    private val cleanupScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     init {
         viewModelScope.launch {
@@ -303,7 +312,7 @@ class ScanViewModel @Inject constructor(
     /** Annule la session : suppression des fichiers temp + fermeture. */
     fun abandon() {
         val currentSession = _session.value ?: return
-        viewModelScope.launch(Dispatchers.IO) {
+        cleanupScope.launch {
             scanRepository.getPages(currentSession.id).forEach { File(it.tempUri).delete() }
             sessionDir(currentSession.id)?.delete()
             _pages.value = emptyList()

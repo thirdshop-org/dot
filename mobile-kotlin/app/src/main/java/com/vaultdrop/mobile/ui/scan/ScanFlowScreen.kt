@@ -2,11 +2,13 @@ package com.vaultdrop.mobile.ui.scan
 
 import android.Manifest.permission.CAMERA
 import android.content.pm.PackageManager
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts.RequestPermission
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Scaffold
@@ -80,6 +82,36 @@ fun ScanFlowScreen(
         }
     }
 
+    // Confirmation avant de quitter le scanner quand des pages sont en cours :
+    // la flèche CAMERA et le back système feront tous deux valider par un
+    // dialogue (sinon abandon = suppression des pages capturées).
+    var showExitConfirm by remember { mutableStateOf(false) }
+
+    val requestExit: () -> Unit = {
+        if (pages.isNotEmpty()) {
+            showExitConfirm = true
+        } else {
+            viewModel.abandon()
+            onBack()
+        }
+    }
+
+    val confirmExit: () -> Unit = {
+        showExitConfirm = false
+        viewModel.abandon()
+        onBack()
+    }
+
+    // Retour système : étage courant (CROP/SESSION) → reprise dans le scanner ;
+    // seul CAMERA quitte l'écran (avec confirmation si pages présentes).
+    BackHandler {
+        when (stage) {
+            ScanStage.CAMERA -> requestExit()
+            ScanStage.CROP -> viewModel.retake()
+            ScanStage.SESSION -> viewModel.openCamera()
+        }
+    }
+
     // Retour arrière contextuel (géré par BackHandler dans le content).
     val title = when (stage) {
         ScanStage.CAMERA -> stringResource(R.string.scan_title)
@@ -94,7 +126,7 @@ fun ScanFlowScreen(
                 navigationIcon = {
                     IconButton(onClick = {
                         when (stage) {
-                            ScanStage.CAMERA -> { viewModel.abandon(); onBack() }
+                            ScanStage.CAMERA -> requestExit()
                             ScanStage.CROP -> viewModel.retake()
                             ScanStage.SESSION -> viewModel.openCamera()
                         }
@@ -144,6 +176,23 @@ fun ScanFlowScreen(
                     modifier = Modifier.align(Alignment.Center),
                 )
             }
+        }
+        if (showExitConfirm) {
+            AlertDialog(
+                onDismissRequest = { showExitConfirm = false },
+                title = { Text(stringResource(R.string.scan_abandon_title)) },
+                text = { Text(stringResource(R.string.scan_abandon_message)) },
+                confirmButton = {
+                    TextButton(onClick = confirmExit) {
+                        Text(stringResource(R.string.scan_confirm))
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showExitConfirm = false }) {
+                        Text(stringResource(R.string.scan_cancel))
+                    }
+                },
+            )
         }
     }
 }
