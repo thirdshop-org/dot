@@ -52,6 +52,7 @@ import com.vaultdrop.mobile.data.local.entity.FolderEntity
 import com.vaultdrop.mobile.features.connection.ConnectionStatusViewModel
 import com.vaultdrop.mobile.features.sync.SyncViewModel
 import com.vaultdrop.mobile.ui.components.FileCategoryIcon
+import com.vaultdrop.mobile.ui.components.FileSyncStatusIcon
 import com.vaultdrop.mobile.ui.components.FolderNameDialog
 import com.vaultdrop.mobile.ui.components.MoveFolderPickerDialog
 import com.vaultdrop.mobile.ui.components.SelectionState
@@ -359,6 +360,8 @@ private fun FileRow(
             }
             if (selection.active) {
                 SelectionStatusIcon(selected = selected)
+            } else {
+                FileSyncStatusIcon(file = file, size = 20.dp)
             }
         }
     }

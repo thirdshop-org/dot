@@ -73,6 +73,7 @@ import com.vaultdrop.mobile.features.connection.ConnectionStatusViewModel
 import com.vaultdrop.mobile.features.saf.safDisplayName
 import com.vaultdrop.mobile.features.sync.SyncViewModel
 import com.vaultdrop.mobile.ui.components.FileCategoryIcon
+import com.vaultdrop.mobile.ui.components.FileSyncStatusIcon
 import com.vaultdrop.mobile.ui.components.FolderNameDialog
 import com.vaultdrop.mobile.ui.components.SelectionState
 import com.vaultdrop.mobile.ui.components.SelectionStatusIcon
@@ -749,9 +750,11 @@ private fun FileCard(
         Column(modifier = Modifier.padding(12.dp)) {
             Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                 FileCategoryIcon(file = file, size = 36.dp)
+                Spacer(Modifier.weight(1f))
                 if (selection.active) {
-                    Spacer(Modifier.weight(1f))
                     SelectionStatusIcon(selected = selected)
+                } else {
+                    FileSyncStatusIcon(file = file, size = 20.dp)
                 }
             }
             Spacer(Modifier.height(8.dp))
