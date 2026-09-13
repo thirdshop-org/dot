@@ -95,3 +95,26 @@ func TestVerifyRequiresDeviceClaim(t *testing.T) {
 		t.Fatal("expected token without device claim to be rejected")
 	}
 }
+
+func TestIssueSetsExpiration(t *testing.T) {
+	m, _ := NewManager("test-secret")
+	before := time.Now()
+	signed, err := m.Issue(testUserID, testDeviceID)
+	if err != nil {
+		t.Fatalf("Issue: %v", err)
+	}
+	parsed, err := paseto.NewParserForValidNow().ParseV4Local(m.key, signed, nil)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	exp, err := parsed.GetExpiration()
+	if err != nil {
+		t.Fatalf("GetExpiration: %v", err)
+	}
+	// Le TTL est fixé à 7 jours (docs/api-v1.md) — marge de 1 min par sécurité.
+	lower := before.Add(TokenTTL - time.Minute)
+	upper := before.Add(TokenTTL + time.Minute)
+	if exp.Before(lower) || exp.After(upper) {
+		t.Errorf("expiration = %v, attendu ≈ now+%v (fenêtre [%v, %v])", exp, TokenTTL, lower, upper)
+	}
+}

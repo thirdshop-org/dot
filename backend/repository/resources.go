@@ -305,7 +305,7 @@ func (r *Resources) SyncDelete(ownerID, resourceID string) error {
 	_, err := r.DB.Exec(
 		`UPDATE resources SET deleted_at = NOW(), updated_at = NOW()
 		 WHERE resource_id = $1 AND user_id = $2 AND deleted_at IS NULL`,
-		ownerID, resourceID,
+		resourceID, ownerID,
 	)
 	return err
 }

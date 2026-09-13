@@ -3,6 +3,7 @@ package repository
 import (
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/vaultdrop/backend/dbtest"
 )
@@ -115,5 +116,119 @@ func TestNameConflictAndUnknownFolder(t *testing.T) {
 	err := repo.InsertFile(owner, NewID(), "x.txt", unknown, 1, nil, nil)
 	if !errors.Is(err, ErrNotFound) {
 		t.Errorf("folder inconnu doit être NOT_FOUND, got %v", err)
+	}
+}
+
+func TestSearchFilesEscapesWildcards(t *testing.T) {
+	repo := newTestResources(t)
+	owner := NewID()
+	mustInsertUser(t, repo, owner)
+
+	insert := func(name string) {
+		t.Helper()
+		if err := repo.InsertFile(owner, NewID(), name, "", 1, nil, nil); err != nil {
+			t.Fatalf("insert %q: %v", name, err)
+		}
+	}
+	insert("half%price.txt")
+	insert("plain.txt")
+	insert("a_b.txt")
+	insert("abx.txt")
+	insert(`win\file.txt`)
+
+	// '%' littéral → uniquement le nom contenant un '%'
+	files, total, err := repo.SearchFiles(owner, "%", 50, 0)
+	if err != nil {
+		t.Fatalf("search %%: %v", err)
+	}
+	if total != 1 || len(files) != 1 || files[0].Name != "half%price.txt" {
+		t.Errorf("'%%' littéral : total=%d files=%+v", total, files)
+	}
+
+	// '_' littéral → uniquement a_b.txt (pas abx.txt)
+	files, total, err = repo.SearchFiles(owner, "_", 50, 0)
+	if err != nil {
+		t.Fatalf("search _: %v", err)
+	}
+	if total != 1 || files[0].Name != "a_b.txt" {
+		t.Errorf("'_' littéral : total=%d files=%+v", total, files)
+	}
+
+	// '\' littéral → uniquement win\file.txt
+	files, total, err = repo.SearchFiles(owner, `win\file`, 50, 0)
+	if err != nil {
+		t.Fatalf("search backslash: %v", err)
+	}
+	if total != 1 || files[0].Name != `win\file.txt` {
+		t.Errorf("'\\' littéral : total=%d files=%+v", total, files)
+	}
+}
+
+func TestListFilesPagination(t *testing.T) {
+	repo := newTestResources(t)
+	owner := NewID()
+	mustInsertUser(t, repo, owner)
+
+	for _, name := range []string{"a.txt", "b.txt", "c.txt"} {
+		if err := repo.InsertFile(owner, NewID(), name, "", 1, nil, nil); err != nil {
+			t.Fatalf("insert %q: %v", name, err)
+		}
+	}
+
+	files, total, err := repo.ListFiles(owner, "", 2, 0, "name", "asc")
+	if err != nil {
+		t.Fatalf("list page 1: %v", err)
+	}
+	if total != 3 || len(files) != 2 || files[0].Name != "a.txt" || files[1].Name != "b.txt" {
+		t.Errorf("page 1 : total=%d files=%+v", total, files)
+	}
+
+	files, total, err = repo.ListFiles(owner, "", 2, 2, "name", "asc")
+	if err != nil {
+		t.Fatalf("list page 2: %v", err)
+	}
+	if total != 3 || len(files) != 1 || files[0].Name != "c.txt" {
+		t.Errorf("page 2 : total=%d files=%+v", total, files)
+	}
+}
+
+func TestListOwnedDelta(t *testing.T) {
+	repo := newTestResources(t)
+	owner := NewID()
+	mustInsertUser(t, repo, owner)
+
+	if err := repo.InsertFolder(owner, NewID(), "Docs", ""); err != nil {
+		t.Fatalf("insert folder: %v", err)
+	}
+	if err := repo.InsertFile(owner, NewID(), "old.txt", "", 1, nil, nil); err != nil {
+		t.Fatalf("insert old: %v", err)
+	}
+
+	// aprèsMs=0 → tout
+	all, err := repo.ListOwned(owner, 0)
+	if err != nil || len(all) != 2 {
+		t.Fatalf("snapshot complet: %+v err=%v", all, err)
+	}
+
+	// aprèsMs dans le futur → vide
+	far, err := repo.ListOwned(owner, time.Now().Add(time.Hour).UnixMilli())
+	if err != nil || len(far) != 0 {
+		t.Errorf("aprèsMs futur : attendu vide, got %+v err=%v", far, err)
+	}
+
+	// Delta : une ressource insérée APRÈS baseline → uniquement celle-là.
+	baseline := time.Now()
+	time.Sleep(5 * time.Millisecond)
+	freshID := NewID()
+	if err := repo.InsertFile(owner, freshID, "fresh.txt", "", 1, nil, nil); err != nil {
+		t.Fatalf("insert fresh: %v", err)
+	}
+
+	delta, err := repo.ListOwned(owner, baseline.UnixMilli())
+	if err != nil {
+		t.Fatalf("delta: %v", err)
+	}
+	if len(delta) != 1 || delta[0].ID != freshID {
+		t.Errorf("delta attendu uniquement fresh.txt, got %+v", delta)
 	}
 }

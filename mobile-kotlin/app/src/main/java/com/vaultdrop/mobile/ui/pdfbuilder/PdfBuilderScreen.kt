@@ -37,6 +37,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -48,19 +49,25 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.vaultdrop.mobile.R
 import com.vaultdrop.mobile.data.local.entity.FileEntity
 import com.vaultdrop.mobile.ui.components.FileCategoryIcon
+import com.vaultdrop.mobile.ui.document.content.DocumentContentViewer
+import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -82,6 +89,7 @@ fun PdfBuilderScreen(
     var showNoteDialog by remember { mutableStateOf(false) }
     var showFileSheet by remember { mutableStateOf(false) }
     var showNameDialog by remember { mutableStateOf(false) }
+    var previewFile by remember { mutableStateOf<FileEntity?>(null) }
 
     // Nom suggéré par défaut : date du jour au format jour-mois-année.
     val defaultPdfName = remember {
@@ -171,6 +179,13 @@ fun PdfBuilderScreen(
                 )
             }
 
+            previewFile?.let { file ->
+                FilePreviewDialog(
+                    file = file,
+                    onDismiss = { previewFile = null },
+                )
+            }
+
             if (items.isEmpty()) {
                 Box(
                     modifier = Modifier
@@ -198,6 +213,9 @@ fun PdfBuilderScreen(
                             onMoveUp = { viewModel.moveUp(item.id) },
                             onMoveDown = { viewModel.moveDown(item.id) },
                             onRemove = { viewModel.removeItem(item.id) },
+                            onPreview = (item as? PdfBuilderItem.FileItem)?.let {
+                                { previewFile = it.file }
+                            },
                         )
                     }
                 }
@@ -371,7 +389,9 @@ private fun BuilderItemRow(
     onMoveUp: () -> Unit,
     onMoveDown: () -> Unit,
     onRemove: () -> Unit,
+    onPreview: (() -> Unit)?,
 ) {
+    val previewModifier = if (onPreview != null) Modifier.clickable(onClick = onPreview) else Modifier
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
@@ -379,6 +399,7 @@ private fun BuilderItemRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .then(previewModifier)
                 .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -433,6 +454,62 @@ private fun BuilderItemRow(
             }
             IconButton(onClick = onRemove) {
                 Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.pdf_builder_remove))
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun FilePreviewDialog(
+    file: FileEntity,
+    onDismiss: () -> Unit,
+) {
+    val context = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    val onOpenExternalFailed: () -> Unit = {
+        scope.launch {
+            snackbarHostState.showSnackbar(
+                context.getString(R.string.document_open_error),
+            )
+        }
+    }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        Surface(modifier = Modifier.fillMaxSize()) {
+            Scaffold(
+                snackbarHost = { SnackbarHost(snackbarHostState) },
+                topBar = {
+                    TopAppBar(
+                        title = {
+                            Text(
+                                text = file.name,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        },
+                        navigationIcon = {
+                            IconButton(onClick = onDismiss) {
+                                Icon(
+                                    Icons.Filled.Close,
+                                    contentDescription = stringResource(R.string.pdf_builder_close_preview),
+                                )
+                            }
+                        },
+                    )
+                },
+            ) { padding ->
+                DocumentContentViewer(
+                    file = file,
+                    onOpenExternalFailed = onOpenExternalFailed,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(padding),
+                )
             }
         }
     }

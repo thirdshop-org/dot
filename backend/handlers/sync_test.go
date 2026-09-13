@@ -151,6 +151,109 @@ func TestSyncOpsCreateResourceWithParent(t *testing.T) {
 	}
 }
 
+func TestSyncOpsRejectsMalformedBody(t *testing.T) {
+	r, _, repo := setup(t)
+	device := repository.NewID()
+	token, _ := registerAndLogin(t, r, repo, testUserUsername(device, "sm"), "sync-test-password", device)
+
+	rec, _ := doRequest(t, r, http.MethodPost, "/api/v1/sync/ops", token, []byte(`{invalid`), "application/json")
+	expectError(t, rec, http.StatusBadRequest, "INVALID_REQUEST", "sync-malformed")
+}
+
+func TestSyncOpsEmptyBatch(t *testing.T) {
+	r, _, repo := setup(t)
+	device := repository.NewID()
+	token, _ := registerAndLogin(t, r, repo, testUserUsername(device, "se"), "sync-test-password", device)
+
+	rec, _ := doRequest(t, r, http.MethodPost, "/api/v1/sync/ops", token, syncOpsBody(nil), "application/json")
+	env := expectOK(t, rec, "sync-empty")
+	var result struct {
+		Applied int `json:"applied"`
+	}
+	if err := json.Unmarshal(env.Data, &result); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if result.Applied != 0 {
+		t.Errorf("batch vide: applied attendu 0, got %d", result.Applied)
+	}
+}
+
+func TestSyncOpsReplayCreateIsNoop(t *testing.T) {
+	r, _, repo := setup(t)
+	device := repository.NewID()
+	token, user := registerAndLogin(t, r, repo, testUserUsername(device, "srn"), "sync-test-password", device)
+
+	fileID := repository.NewID()
+
+	send := func(batch []map[string]any) int {
+		t.Helper()
+		rec, _ := doRequest(t, r, http.MethodPost, "/api/v1/sync/ops", token, syncOpsBody(batch), "application/json")
+		env := expectOK(t, rec, "sync-send")
+		var result struct {
+			Applied int `json:"applied"`
+		}
+		if err := json.Unmarshal(env.Data, &result); err != nil {
+			t.Fatalf("unmarshal: %v body=%s", err, rec.Body.String())
+		}
+		return result.Applied
+	}
+
+	ops := []map[string]any{
+		op(repository.NewID(), fileID, "create_resource", "file", map[string]any{"name": "note.txt"}),
+	}
+	if applied := send(ops); applied != 1 {
+		t.Fatalf("premier envoi: applied attendu 1, got %d", applied)
+	}
+
+	// Rejeu avec le MÊME resource_id mais un operation_id neuf → idempotent
+	// (la ressource existe déjà : no-op), pas de doublon côté ressources.
+	if applied := send([]map[string]any{
+		op(repository.NewID(), fileID, "create_resource", "file", map[string]any{"name": "note.txt"}),
+	}); applied != 1 {
+		t.Fatalf("rejeu: applied attendu 1, got %d", applied)
+	}
+
+	files, total, err := repo.Resources.ListFiles(user, "", 10, 0, "created_at", "desc")
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if total != 1 || len(files) != 1 || files[0].ID != fileID {
+		t.Errorf("pas de doublon attendu: total=%d files=%+v", total, files)
+	}
+}
+
+func TestSyncOpsLargeBatchAccepted(t *testing.T) {
+	r, _, repo := setup(t)
+	device := repository.NewID()
+	token, user := registerAndLogin(t, r, repo, testUserUsername(device, "sl"), "sync-test-password", device)
+
+	ops := make([]map[string]any, 0, 25)
+	for i := 0; i < 25; i++ {
+		ops = append(ops, op(repository.NewID(), repository.NewID(), "create_resource", "file", map[string]any{"name": fmt.Sprintf("f%02d.txt", i)}))
+	}
+
+	rec, _ := doRequest(t, r, http.MethodPost, "/api/v1/sync/ops", token, syncOpsBody(ops), "application/json")
+	env := expectOK(t, rec, "sync-large")
+	var result struct {
+		Applied int `json:"applied"`
+		Failed  any `json:"failed"`
+	}
+	if err := json.Unmarshal(env.Data, &result); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if result.Applied != 25 || result.Failed != nil {
+		t.Errorf("attendu applied=25 failed=null, got %+v", result)
+	}
+
+	files, total, err := repo.Resources.ListFiles(user, "", 50, 0, "created_at", "desc")
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if total != 25 || len(files) != 25 {
+		t.Errorf("les 25 ressources doivent être persistées, total=%d files=%d", total, len(files))
+	}
+}
+
 func TestSyncOpsStopsAtFirstNonIdempotentFailure(t *testing.T) {
 	r, _, repo := setup(t)
 	device := repository.NewID()

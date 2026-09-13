@@ -328,6 +328,30 @@ func TestSearchFiles(t *testing.T) {
 	}
 }
 
+func TestSearchFilesEscapesPercent(t *testing.T) {
+	r, _, repo := setup(t)
+	device := repository.NewID()
+	token, user := registerAndLogin(t, r, repo, testUserUsername(device, "sp"), "search-test-password", device)
+
+	if err := repo.Resources.InsertFile(user, repository.NewID(), "half%price.txt", "", 1, nil, nil); err != nil {
+		t.Fatalf("insert percent file: %v", err)
+	}
+	if err := repo.Resources.InsertFile(user, repository.NewID(), "plain.txt", "", 1, nil, nil); err != nil {
+		t.Fatalf("insert plain file: %v", err)
+	}
+
+	// q=% (encodé %25) ne doit matcher QUE le nom contenant un '%' littéral.
+	rec, _ := doRequest(t, r, http.MethodGet, "/api/v1/files/search?q=%25", token, nil, "")
+	env := expectOK(t, rec, "search-percent")
+	var files []fileDTO
+	if err := json.Unmarshal(env.Data, &files); err != nil {
+		t.Fatalf("search-percent: unmarshal: %v", err)
+	}
+	if len(files) != 1 || files[0].Name != "half%price.txt" {
+		t.Errorf("'%%' littéral : attendu 1 résultat, got %+v", files)
+	}
+}
+
 func TestUploadTooLarge(t *testing.T) {
 	r, _, repo := setup(t)
 	device := repository.NewID()
@@ -335,6 +359,30 @@ func TestUploadTooLarge(t *testing.T) {
 
 	rec := uploadMultipart(t, r, token, "", "big.txt", []byte("0123456789ABCDEF"))
 	expectError(t, rec, http.StatusRequestEntityTooLarge, "FILE_TOO_LARGE", "upload-big")
+}
+
+func TestUploadIntoUnknownFolder(t *testing.T) {
+	r, _, repo := setup(t)
+	device := repository.NewID()
+	token, _ := registerAndLogin(t, r, repo, testUserUsername(device, "uf"), "upload-test-password", device)
+
+	rec := uploadMultipart(t, r, token, repository.NewID(), "orphan.txt", []byte("hi"))
+	expectError(t, rec, http.StatusNotFound, "NOT_FOUND", "upload-unknown-folder")
+}
+
+func TestUploadNameConflict(t *testing.T) {
+	r, _, repo := setup(t)
+	device := repository.NewID()
+	token, _ := registerAndLogin(t, r, repo, testUserUsername(device, "uc"), "upload-test-password", device)
+
+	rec := uploadMultipart(t, r, token, "", "dupe.txt", []byte("hi"))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("premier upload: status %d body=%s", rec.Code, rec.Body.String())
+	}
+
+	// Même nom à la racine → conflit d'unicité (parent_id NULL)
+	rec = uploadMultipart(t, r, token, "", "dupe.txt", []byte("hi"))
+	expectError(t, rec, http.StatusConflict, "NAME_CONFLICT", "upload-dupe")
 }
 
 func TestFoldersListAndScoping(t *testing.T) {
@@ -366,4 +414,82 @@ func TestFoldersListAndScoping(t *testing.T) {
 	if len(folders) != 2 || folders[0].Name != "AA" || folders[1].Name != "BB" {
 		t.Errorf("folders A: %+v", folders)
 	}
+}
+
+func TestFilesPaginationDefaultsAndClamp(t *testing.T) {
+	r, _, repo := setup(t)
+	device := repository.NewID()
+	token, _ := registerAndLogin(t, r, repo, testUserUsername(device, "pg"), "pagination-test-password", device)
+
+	// pageSize au-delà de 200 → clampé à 200
+	rec, _ := doRequest(t, r, http.MethodGet, "/api/v1/files?pageSize=9999", token, nil, "")
+	env := expectOK(t, rec, "pageSize-clamp")
+	if env.Meta == nil || env.Meta.Page != 1 || env.Meta.PageSize != 200 {
+		t.Errorf("clamp pageSize: %+v", env.Meta)
+	}
+
+	// Paramètres invalides → défauts (page=1, pageSize=50)
+	rec, _ = doRequest(t, r, http.MethodGet, "/api/v1/files?page=0&pageSize=-5", token, nil, "")
+	env = expectOK(t, rec, "invalid-params")
+	if env.Meta == nil || env.Meta.Page != 1 || env.Meta.PageSize != 50 {
+		t.Errorf("defauts page/pageSize: %+v", env.Meta)
+	}
+
+	// sort/order inconnus → pas d'erreur (défaut created_at desc)
+	rec, _ = doRequest(t, r, http.MethodGet, "/api/v1/files?sort=zzz&order=up&pageSize=10", token, nil, "")
+	expectOK(t, rec, "invalid-sort")
+}
+
+func TestFilesListSortBySize(t *testing.T) {
+	r, _, repo := setup(t)
+	device := repository.NewID()
+	token, user := registerAndLogin(t, r, repo, testUserUsername(device, "sr"), "sort-test-password", device)
+
+	// Tri volontairement désordonné : 30, 10, 20.
+	if err := repo.Resources.InsertFile(user, repository.NewID(), "a.txt", "", 30, nil, nil); err != nil {
+		t.Fatalf("insert a: %v", err)
+	}
+	if err := repo.Resources.InsertFile(user, repository.NewID(), "b.txt", "", 10, nil, nil); err != nil {
+		t.Fatalf("insert b: %v", err)
+	}
+	if err := repo.Resources.InsertFile(user, repository.NewID(), "c.txt", "", 20, nil, nil); err != nil {
+		t.Fatalf("insert c: %v", err)
+	}
+
+	rec, _ := doRequest(t, r, http.MethodGet, "/api/v1/files?sort=size&order=asc", token, nil, "")
+	env := expectOK(t, rec, "sort-size")
+	var files []fileDTO
+	if err := json.Unmarshal(env.Data, &files); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(files) != 3 || files[0].Size != 10 || files[1].Size != 20 || files[2].Size != 30 {
+		t.Errorf("ordre size asc inattendu: %+v", files)
+	}
+}
+
+func TestFilesGetDeleteRejectInvalidID(t *testing.T) {
+	r, _, repo := setup(t)
+	device := repository.NewID()
+	token, user := registerAndLogin(t, r, repo, testUserUsername(device, "ii"), "invalid-id-test-password", device)
+
+	// ID non 32-hex → 404 avant toute requête.
+	rec, _ := doRequest(t, r, http.MethodGet, "/api/v1/files/NOT-HEX-ID", token, nil, "")
+	expectError(t, rec, http.StatusNotFound, "NOT_FOUND", "get-invalid-id")
+
+	rec, _ = doRequest(t, r, http.MethodDelete, "/api/v1/files/xyz", token, nil, "")
+	expectError(t, rec, http.StatusNotFound, "NOT_FOUND", "delete-invalid-id")
+
+	// ID 32-hex mais inconnu (du même user) → 404.
+	rec, _ = doRequest(t, r, http.MethodGet, "/api/v1/files/"+repository.NewID(), token, nil, "")
+	expectError(t, rec, http.StatusNotFound, "NOT_FOUND", "get-unknown")
+
+	// Le user ne voit jamais les fichiers d'un autre même avec un ID valide.
+	fileID := repository.NewID()
+	if err := repo.Resources.InsertFile(user, fileID, "mine.txt", "", 4, nil, nil); err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+	otherDevice := repository.NewID()
+	otherToken, _ := registerAndLogin(t, r, repo, testUserUsername(otherDevice, "ii2"), "invalid-id-test-password-b", otherDevice)
+	rec, _ = doRequest(t, r, http.MethodGet, "/api/v1/files/"+fileID, otherToken, nil, "")
+	expectError(t, rec, http.StatusNotFound, "NOT_FOUND", "get-cross-user")
 }

@@ -1,9 +1,12 @@
 package handlers
 
 import (
+	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
+
+	"github.com/vaultdrop/backend/pkg/api"
 )
 
 // RegisterRoutes wires the full /api/v1 surface (public + protected).
@@ -36,6 +39,11 @@ func RegisterRoutes(r *gin.Engine) {
 		protected.POST("/sync/ops", SyncOpsPush)
 		protected.GET("/sync/permissions", SyncPermissionsGet)
 	}
+
+	// Route inconnue → enveloppe d'erreur du contrat (jamais de HTML).
+	r.NoRoute(func(c *gin.Context) {
+		api.Error(c, http.StatusNotFound, "NOT_FOUND", "route not found")
+	})
 }
 
 // userID lit la clé de scoping posée par RequireAuth. Un empty string est
