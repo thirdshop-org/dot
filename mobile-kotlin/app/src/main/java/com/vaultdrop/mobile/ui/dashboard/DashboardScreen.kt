@@ -11,11 +11,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.DocumentScanner
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -43,6 +46,7 @@ fun DashboardScreen(
     connectionStatusViewModel: ConnectionStatusViewModel,
     syncViewModel: SyncViewModel,
     onOpenReview: () -> Unit,
+    onOpenScan: () -> Unit,
     viewModel: DashboardViewModel = hiltViewModel(),
 ) {
     val connectionStatus by connectionStatusViewModel.status.collectAsStateWithLifecycle()
@@ -63,6 +67,18 @@ fun DashboardScreen(
         },
         bottomBar = {
             FloatingNavBar(selected = selectedTab, onSelect = onTabSelected)
+        },
+        floatingActionButton = {
+            SmallFloatingActionButton(
+                onClick = onOpenScan,
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.DocumentScanner,
+                    contentDescription = stringResource(R.string.scan_title),
+                )
+            }
         },
     ) { padding ->
         Column(

@@ -15,9 +15,18 @@ android {
     defaultConfig {
         applicationId = "com.vaultdrop.mobile"
         minSdk = 26
-        targetSdk = 35
+        // targetSdk 35 exige des .so alignés en 16K ; les libs précompilées
+        // OpenCV/CameraX sont en 4K (warning de compatibilité sur devices
+        // 16K-pages). On reste en 34 tant qu'elles ne sont pas mises à jour.
+        targetSdk = 34
         versionCode = 1
         versionName = "0.1.0"
+
+        // OpenCV natif : on conserve uniquement les ABIs ciblés
+        // (arm64 = devices, x86_64 = émulateur) pour garder l'APK raisonnable.
+        ndk {
+            abiFilters += listOf("arm64-v8a", "x86_64")
+        }
     }
 
     buildTypes {
@@ -72,6 +81,11 @@ dependencies {
     implementation(libs.androidx.hilt.work)
     ksp(libs.androidx.hilt.compiler)
     implementation(libs.androidx.work.runtime.ktx)
+
+    implementation(libs.androidx.camera.camera2)
+    implementation(libs.androidx.camera.lifecycle)
+    implementation(libs.androidx.camera.view)
+    implementation(libs.opencv)
 
     implementation(libs.retrofit)
     implementation(libs.retrofit.converter.moshi)

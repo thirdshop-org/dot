@@ -20,6 +20,8 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  * v7 : table `pending_operations` (outbox) — file des mutations locales à
  *   pousser vers `POST /sync/ops` (uuid 32-hex client-generated, cf.
  *   docs/api-v1.md §6.1).
+ * v8 : tables `scan_sessions` + `scan_pages` (scanner appareil photo) — session
+ *   multi-pages persistée pour survivre au process death avant export SAF.
  */
 object Migrations {
 
@@ -117,7 +119,46 @@ object Migrations {
         }
     }
 
+    private val MIGRATION_7_8 = object : Migration(7, 8) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `scan_sessions` (
+                    `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    `resource_id` TEXT NOT NULL,
+                    `root_folder_id` TEXT,
+                    `status` TEXT NOT NULL,
+                    `created_at` INTEGER NOT NULL,
+                    `updated_at` INTEGER NOT NULL
+                )
+                """.trimIndent(),
+            )
+            db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_scan_sessions_resource_id` ON `scan_sessions` (`resource_id`)")
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `scan_pages` (
+                    `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    `resource_id` TEXT NOT NULL,
+                    `session_id` INTEGER NOT NULL,
+                    `temp_uri` TEXT NOT NULL,
+                    `corners_json` TEXT NOT NULL,
+                    `width` INTEGER NOT NULL,
+                    `height` INTEGER NOT NULL,
+                    `sort_order` INTEGER NOT NULL,
+                    `status` TEXT NOT NULL,
+                    `created_at` INTEGER NOT NULL,
+                    FOREIGN KEY(`session_id`) REFERENCES `scan_sessions`(`id`)
+                        ON UPDATE NO ACTION ON DELETE CASCADE
+                )
+                """.trimIndent(),
+            )
+            db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_scan_pages_resource_id` ON `scan_pages` (`resource_id`)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_scan_pages_session_id` ON `scan_pages` (`session_id`)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_scan_pages_sort_order` ON `scan_pages` (`sort_order`)")
+        }
+    }
+
     val ALL: Array<Migration> = arrayOf(
-        MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7,
+        MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8,
     )
 }

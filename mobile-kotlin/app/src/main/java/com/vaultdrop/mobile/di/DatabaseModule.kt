@@ -6,6 +6,7 @@ import com.vaultdrop.mobile.data.local.AppDatabase
 import com.vaultdrop.mobile.data.local.dao.FileDao
 import com.vaultdrop.mobile.data.local.dao.FolderDao
 import com.vaultdrop.mobile.data.local.dao.PendingOperationDao
+import com.vaultdrop.mobile.data.local.dao.ScanDao
 import com.vaultdrop.mobile.data.local.dao.UserPreferenceDao
 import com.vaultdrop.mobile.data.local.migration.Migrations
 import dagger.Module
@@ -37,4 +38,7 @@ object DatabaseModule {
 
     @Provides
     fun providePendingOperationDao(db: AppDatabase): PendingOperationDao = db.pendingOperationDao()
+
+    @Provides
+    fun provideScanDao(db: AppDatabase): ScanDao = db.scanDao()
 }

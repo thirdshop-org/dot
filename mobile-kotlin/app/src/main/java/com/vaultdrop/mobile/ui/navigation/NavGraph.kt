@@ -25,6 +25,7 @@ import com.vaultdrop.mobile.ui.folderdetail.FolderDetailScreen
 import com.vaultdrop.mobile.ui.folderlist.FolderListScreen
 import com.vaultdrop.mobile.ui.pdfbuilder.PdfBuilderScreen
 import com.vaultdrop.mobile.ui.review.SwipeReviewScreen
+import com.vaultdrop.mobile.ui.scan.ScanFlowScreen
 import com.vaultdrop.mobile.ui.search.SearchScreen
 import com.vaultdrop.mobile.ui.settings.SettingsScreen
 import com.vaultdrop.mobile.ui.watchedfolders.WatchedFoldersScreen
@@ -42,6 +43,7 @@ object Routes {
     const val ARG_DOCUMENT = "documentResourceId"
     const val PDF_BUILDER = "pdfbuilder/{ids}"
     const val ARG_BUILDER_IDS = "ids"
+    const val SCAN = "scan"
 
     fun folder(folderResourceId: String): String = "folder/$folderResourceId"
     fun document(documentResourceId: String): String = "document/$documentResourceId"
@@ -126,6 +128,12 @@ fun NavGraph(
                     connectionStatusViewModel = connectionStatusViewModel,
                     syncViewModel = syncViewModel,
                     onOpenReview = { navController.navigate(Routes.REVIEW) },
+                    onOpenScan = { navController.navigate(Routes.SCAN) },
+                )
+            }
+            composable(Routes.SCAN) {
+                ScanFlowScreen(
+                    onBack = { navController.popBackStack() },
                 )
             }
             composable(Routes.REVIEW) {

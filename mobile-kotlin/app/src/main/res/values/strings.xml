@@ -179,4 +179,37 @@
     <string name="pdf_builder_preview">Aperçu</string>
     <string name="pdf_builder_close_preview">Fermer l\'aperçu</string>
     <string name="pdf_generated_folder">PDF générés</string>
+
+    <!-- Scanner appareil photo -->
+    <string name="scan_title">Scanner</string>
+    <string name="scan_capture">Capturer</string>
+    <string name="scan_pages_count">%1$d page(s)</string>
+    <string name="scan_view_session">Voir les pages</string>
+    <string name="scan_camera_hint">Cadre le document puis capture.</string>
+    <string name="scan_permission_rationale">Autorise la caméra pour scanner des documents.</string>
+    <string name="scan_permission_grant">Autoriser la caméra</string>
+    <string name="scan_crop_title">Recadrer</string>
+    <string name="scan_confirm_page">Valider la page</string>
+    <string name="scan_retake">Reprendre</string>
+    <string name="scan_render_color">Couleur</string>
+    <string name="scan_render_gray">N&amp;B</string>
+    <string name="scan_render_high">N&amp;B contrasté</string>
+    <string name="scan_add_page">Ajouter une page</string>
+    <string name="scan_session_title">Pages scannées</string>
+    <string name="scan_delete_page">Supprimer</string>
+    <string name="scan_move_up">Monter</string>
+    <string name="scan_move_down">Descendre</string>
+    <string name="scan_empty">Aucune page pour le moment.\nCapture ta première page.</string>
+    <string name="scan_export">Exporter vers le dossier VaultDrop</string>
+    <string name="scan_exporting">Export en cours…</string>
+    <string name="scan_abandon">Abandonner</string>
+    <string name="scan_abandon_title">Abandonner le scan ?</string>
+    <string name="scan_abandon_message">Les pages capturées seront supprimées.</string>
+    <string name="scan_confirm">Confirmer</string>
+    <string name="scan_cancel">Annuler</string>
+    <string name="scan_error_session">Session de scan indisponible.</string>
+    <string name="scan_error_capture">Impossible d\'utiliser cette capture.</string>
+    <string name="scan_error_page">Impossible d\'enregistrer la page.</string>
+    <string name="scan_error_export">Impossible d\'exporter les pages.</string>
+    <string name="scan_export_done">Pages exportées</string>
 </resources>
