@@ -106,6 +106,7 @@ fun NavGraph(
                     onOpenDocument = { id -> navController.navigate(Routes.document(id)) },
                     onBuildPdf = { ids -> navController.navigate(Routes.pdfBuilder(ids)) },
                     connectionStatusViewModel = connectionStatusViewModel,
+                    syncViewModel = syncViewModel,
                 )
             }
             composable(Routes.SETTINGS) {
@@ -115,6 +116,7 @@ fun NavGraph(
                     onOpenWatchedFolders = onOpenWatchedFolders,
                     authViewModel = authViewModel,
                     connectionStatusViewModel = connectionStatusViewModel,
+                    syncViewModel = syncViewModel,
                 )
             }
             composable(Routes.DASHBOARD) {
@@ -122,6 +124,7 @@ fun NavGraph(
                     selectedTab = selectedTab,
                     onTabSelected = onTabSelected,
                     connectionStatusViewModel = connectionStatusViewModel,
+                    syncViewModel = syncViewModel,
                     onOpenReview = { navController.navigate(Routes.REVIEW) },
                 )
             }
@@ -129,6 +132,7 @@ fun NavGraph(
                 SwipeReviewScreen(
                     onBack = { navController.popBackStack() },
                     connectionStatusViewModel = connectionStatusViewModel,
+                    syncViewModel = syncViewModel,
                 )
             }
             composable(Routes.WATCHED_FOLDERS) {
@@ -153,6 +157,7 @@ fun NavGraph(
                     onOpenDocument = { id -> navController.navigate(Routes.document(id)) },
                     onBuildPdf = { ids -> navController.navigate(Routes.pdfBuilder(ids)) },
                     connectionStatusViewModel = connectionStatusViewModel,
+                    syncViewModel = syncViewModel,
                 )
             }
             composable(
@@ -168,6 +173,7 @@ fun NavGraph(
                     initialResourceId = documentId,
                     onBack = { navController.popBackStack() },
                     connectionStatusViewModel = connectionStatusViewModel,
+                    syncViewModel = syncViewModel,
                 )
             }
             composable(

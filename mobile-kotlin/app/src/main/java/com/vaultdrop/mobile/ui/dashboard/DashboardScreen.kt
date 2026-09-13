@@ -29,7 +29,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.vaultdrop.mobile.R
 import com.vaultdrop.mobile.features.connection.ConnectionStatusViewModel
+import com.vaultdrop.mobile.features.sync.SyncViewModel
 import com.vaultdrop.mobile.ui.components.ServerStatusBadge
+import com.vaultdrop.mobile.ui.components.SyncStatusAction
 import com.vaultdrop.mobile.ui.navigation.FloatingNavBar
 import com.vaultdrop.mobile.ui.navigation.NavTab
 
@@ -39,6 +41,7 @@ fun DashboardScreen(
     selectedTab: NavTab,
     onTabSelected: (NavTab) -> Unit,
     connectionStatusViewModel: ConnectionStatusViewModel,
+    syncViewModel: SyncViewModel,
     onOpenReview: () -> Unit,
     viewModel: DashboardViewModel = hiltViewModel(),
 ) {
@@ -50,6 +53,7 @@ fun DashboardScreen(
             TopAppBar(
                 title = { Text(stringResource(R.string.dashboard)) },
                 actions = {
+                    SyncStatusAction(syncViewModel = syncViewModel)
                     ServerStatusBadge(
                         status = connectionStatus,
                         onClick = connectionStatusViewModel::checkNow,

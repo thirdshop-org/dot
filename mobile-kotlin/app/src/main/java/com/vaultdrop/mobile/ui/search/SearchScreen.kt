@@ -56,11 +56,13 @@ import com.vaultdrop.mobile.R
 import com.vaultdrop.mobile.data.local.entity.FileEntity
 import com.vaultdrop.mobile.domain.FileCategory
 import com.vaultdrop.mobile.features.connection.ConnectionStatusViewModel
+import com.vaultdrop.mobile.features.sync.SyncViewModel
 import com.vaultdrop.mobile.ui.components.FileCategoryIcon
 import com.vaultdrop.mobile.ui.components.MoveFolderPickerDialog
 import com.vaultdrop.mobile.ui.components.SelectionState
 import com.vaultdrop.mobile.ui.components.SelectionStatusIcon
 import com.vaultdrop.mobile.ui.components.ServerStatusBadge
+import com.vaultdrop.mobile.ui.components.SyncStatusAction
 import com.vaultdrop.mobile.ui.components.color
 import com.vaultdrop.mobile.ui.components.icon
 import com.vaultdrop.mobile.ui.components.rememberSelectionState
@@ -77,6 +79,7 @@ fun SearchScreen(
     onOpenDocument: (String) -> Unit,
     onBuildPdf: (List<String>) -> Unit,
     connectionStatusViewModel: ConnectionStatusViewModel,
+    syncViewModel: SyncViewModel,
     viewModel: SearchViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -123,6 +126,7 @@ fun SearchScreen(
                 },
                 actions = {
                     if (!selection.active) {
+                        SyncStatusAction(syncViewModel = syncViewModel)
                         ServerStatusBadge(
                             status = connectionStatus,
                             onClick = connectionStatusViewModel::checkNow,

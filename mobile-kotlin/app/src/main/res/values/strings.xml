@@ -129,6 +129,26 @@
     <string name="status_local">Mode local</string>
     <string name="status_tap_to_recheck">Statut serveur — appuyer pour vérifier</string>
 
+    <!-- Statut de synchronisation (badge + liste outbox) -->
+    <string name="sync_syncing">Synchro…</string>
+    <string name="sync_pending_count">%1$d en attente</string>
+    <string name="sync_pending_count_one">1 en attente</string>
+    <string name="sync_idle">À jour</string>
+    <string name="sync_tap_to_view">Synchro — appuyer pour voir la liste des ops</string>
+    <string name="sync_list_title">Liste des sync</string>
+    <string name="sync_list_empty">Aucune opération pour le moment.</string>
+    <string name="sync_list_close">Fermer</string>
+    <string name="sync_summary_total">%1$d opérations</string>
+    <string name="sync_summary_pending">%1$d en attente</string>
+    <string name="sync_summary_failed">%1$d échouée(s)</string>
+    <string name="sync_status_pending">En attente</string>
+    <string name="sync_status_synced">Poussée</string>
+    <string name="sync_status_failed">Échouée</string>
+    <string name="sync_op_create">Création de ressource</string>
+    <string name="sync_op_move">Déplacement</string>
+    <string name="sync_op_delete">Suppression</string>
+    <string name="sync_op_update">Mise à jour</string>
+
     <!-- Sélection multi-fichiers + assemblage PDF -->
     <string name="selection_count">%1$d sélectionné(s)</string>
     <string name="selection_assemble">Assembler en PDF</string>

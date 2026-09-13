@@ -50,12 +50,14 @@ import com.vaultdrop.mobile.R
 import com.vaultdrop.mobile.data.local.entity.FileEntity
 import com.vaultdrop.mobile.data.local.entity.FolderEntity
 import com.vaultdrop.mobile.features.connection.ConnectionStatusViewModel
+import com.vaultdrop.mobile.features.sync.SyncViewModel
 import com.vaultdrop.mobile.ui.components.FileCategoryIcon
 import com.vaultdrop.mobile.ui.components.FolderNameDialog
 import com.vaultdrop.mobile.ui.components.MoveFolderPickerDialog
 import com.vaultdrop.mobile.ui.components.SelectionState
 import com.vaultdrop.mobile.ui.components.SelectionStatusIcon
 import com.vaultdrop.mobile.ui.components.ServerStatusBadge
+import com.vaultdrop.mobile.ui.components.SyncStatusAction
 import com.vaultdrop.mobile.ui.components.rememberSelectionState
 import java.util.Locale
 
@@ -68,6 +70,7 @@ fun FolderDetailScreen(
     onOpenDocument: (String) -> Unit,
     onBuildPdf: (List<String>) -> Unit,
     connectionStatusViewModel: ConnectionStatusViewModel,
+    syncViewModel: SyncViewModel,
     viewModel: FolderDetailViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -161,6 +164,7 @@ fun FolderDetailScreen(
                                 contentDescription = stringResource(R.string.create_folder),
                             )
                         }
+                        SyncStatusAction(syncViewModel = syncViewModel)
                         ServerStatusBadge(
                             status = connectionStatus,
                             onClick = connectionStatusViewModel::checkNow,

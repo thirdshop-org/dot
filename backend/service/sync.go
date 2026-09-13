@@ -33,10 +33,10 @@ var ackOnlyOps = map[string]bool{
 // SyncOperation is one outbox entry (shadow of mobile PendingOperationRow).
 type SyncOperation struct {
 	OperationID  string          `json:"operation_id"`
-	RefType      string          `json:"ref_type"`
-	RefID        int64           `json:"ref_id"`
-	ResourceID   string          `json:"resource_id"`
-	ResourceType string          `json:"resource_type"`
+	RefType      *string         `json:"ref_type"`
+	RefID        *int64          `json:"ref_id"`
+	ResourceID   *string         `json:"resource_id"`
+	ResourceType *string         `json:"resource_type"`
 	Operation    string          `json:"operation"`
 	Payload      json.RawMessage `json:"payload"`
 }
@@ -123,7 +123,7 @@ func validateSyncOp(op *SyncOperation) error {
 	if ackOnlyOps[op.Operation] {
 		return nil
 	}
-	if !resourceIDPattern.MatchString(op.ResourceID) {
+	if !resourceIDPattern.MatchString(derefString(op.ResourceID)) {
 		return errors.New("resource_id must be 32 lowercase hex chars")
 	}
 	switch op.Operation {
@@ -131,16 +131,17 @@ func validateSyncOp(op *SyncOperation) error {
 	default:
 		return errors.New("unknown operation " + op.Operation)
 	}
-	if op.ResourceType != "folder" && op.ResourceType != "file" {
+	if derefString(op.ResourceType) != "folder" && derefString(op.ResourceType) != "file" {
 		return errors.New("resource_type must be 'folder' or 'file'")
 	}
 	return nil
 }
 
 func (s *Resources) applySyncOp(ownerID string, op *SyncOperation) error {
+	resourceID := derefString(op.ResourceID)
 	switch op.Operation {
 	case OpCreateResource:
-		exists, err := s.Repo.ExistsOwner(ownerID, op.ResourceID)
+		exists, err := s.Repo.ExistsOwner(ownerID, resourceID)
 		if err != nil {
 			return err
 		}
@@ -161,14 +162,14 @@ func (s *Resources) applySyncOp(ownerID string, op *SyncOperation) error {
 				return err
 			}
 		}
-		if op.ResourceType == "folder" {
-			return s.Repo.InsertFolder(ownerID, op.ResourceID, p.Name, p.ParentResourceID)
+		if derefString(op.ResourceType) == "folder" {
+			return s.Repo.InsertFolder(ownerID, resourceID, p.Name, p.ParentResourceID)
 		}
 		mime := p.MimeType
-		return s.Repo.InsertFile(ownerID, op.ResourceID, p.Name, p.ParentResourceID, 0, &mime, nullableString(p.Extension))
+		return s.Repo.InsertFile(ownerID, resourceID, p.Name, p.ParentResourceID, 0, &mime, nullableString(p.Extension))
 
 	case OpUpdateMetadata:
-		exists, err := s.Repo.ExistsOwner(ownerID, op.ResourceID)
+		exists, err := s.Repo.ExistsOwner(ownerID, resourceID)
 		if err != nil {
 			return err
 		}
@@ -182,10 +183,10 @@ func (s *Resources) applySyncOp(ownerID string, op *SyncOperation) error {
 		if p.Name == "" {
 			return errors.New("payload.name required")
 		}
-		return s.Repo.UpdateName(ownerID, op.ResourceID, p.Name)
+		return s.Repo.UpdateName(ownerID, resourceID, p.Name)
 
 	case OpMoveResource:
-		exists, err := s.Repo.ExistsOwner(ownerID, op.ResourceID)
+		exists, err := s.Repo.ExistsOwner(ownerID, resourceID)
 		if err != nil {
 			return err
 		}
@@ -196,13 +197,13 @@ func (s *Resources) applySyncOp(ownerID string, op *SyncOperation) error {
 		if err := json.Unmarshal(op.Payload, &p); err != nil {
 			return errors.New("invalid payload: " + err.Error())
 		}
-		if p.ToFolderResourceID == op.ResourceID {
+		if p.ToFolderResourceID == resourceID {
 			return errors.New("cannot move a resource into itself")
 		}
-		return s.Repo.MoveResource(ownerID, op.ResourceID, p.ToFolderResourceID)
+		return s.Repo.MoveResource(ownerID, resourceID, p.ToFolderResourceID)
 
 	case OpDeleteResource:
-		return s.Repo.SyncDelete(ownerID, op.ResourceID)
+		return s.Repo.SyncDelete(ownerID, resourceID)
 
 	default:
 		return errors.New("unknown operation " + op.Operation)
@@ -210,7 +211,21 @@ func (s *Resources) applySyncOp(ownerID string, op *SyncOperation) error {
 }
 
 func (s *Resources) recordApplied(deviceID string, op *SyncOperation) error {
-	return s.Repository.Operations.Record(deviceID, op.OperationID, op.Operation, op.RefType, nullableInt64(op.RefID), op.ResourceID, op.Payload)
+	return s.Repository.Operations.Record(deviceID, op.OperationID, op.Operation, derefString(op.RefType), nullableInt64(derefInt64(op.RefID)), derefString(op.ResourceID), op.Payload)
+}
+
+func derefString(v *string) string {
+	if v == nil {
+		return ""
+	}
+	return *v
+}
+
+func derefInt64(v *int64) int64 {
+	if v == nil {
+		return 0
+	}
+	return *v
 }
 
 func nullableString(value string) *string {

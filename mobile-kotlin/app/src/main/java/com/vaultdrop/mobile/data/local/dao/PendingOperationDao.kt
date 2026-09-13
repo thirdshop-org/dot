@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.Query
 import com.vaultdrop.mobile.data.local.entity.PendingOperationEntity
+import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface PendingOperationDao {
@@ -11,6 +12,14 @@ interface PendingOperationDao {
     /** Prochaines opérations à pousser, strictement par ordre de création. */
     @Query("SELECT * FROM pending_operations WHERE status = 'pending' ORDER BY id ASC LIMIT :limit")
     suspend fun selectPending(limit: Int): List<PendingOperationEntity>
+
+    /** Dernières opérations (tous statuts), pour l'affichage UI « liste des sync ». */
+    @Query("SELECT * FROM pending_operations ORDER BY id DESC LIMIT :limit")
+    fun observeRecent(limit: Int): Flow<List<PendingOperationEntity>>
+
+    /** Nombre d'ops encore en attente de push (indicateur du header). */
+    @Query("SELECT COUNT(*) FROM pending_operations WHERE status = 'pending'")
+    fun observePendingCount(): Flow<Int>
 
     @Insert
     suspend fun insert(op: PendingOperationEntity): Long

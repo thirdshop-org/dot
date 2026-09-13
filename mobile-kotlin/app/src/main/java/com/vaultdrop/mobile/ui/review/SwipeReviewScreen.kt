@@ -43,7 +43,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.vaultdrop.mobile.R
 import com.vaultdrop.mobile.features.connection.ConnectionStatusViewModel
+import com.vaultdrop.mobile.features.sync.SyncViewModel
 import com.vaultdrop.mobile.ui.components.ServerStatusBadge
+import com.vaultdrop.mobile.ui.components.SyncStatusAction
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -51,6 +53,7 @@ import kotlinx.coroutines.launch
 fun SwipeReviewScreen(
     onBack: () -> Unit,
     connectionStatusViewModel: ConnectionStatusViewModel,
+    syncViewModel: SyncViewModel,
     viewModel: SwipeReviewViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -88,6 +91,7 @@ fun SwipeReviewScreen(
                     }
                 },
                 actions = {
+                    SyncStatusAction(syncViewModel = syncViewModel)
                     ServerStatusBadge(
                         status = connectionStatus,
                         onClick = connectionStatusViewModel::checkNow,

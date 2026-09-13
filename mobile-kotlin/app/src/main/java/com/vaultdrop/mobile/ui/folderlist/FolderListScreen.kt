@@ -77,6 +77,7 @@ import com.vaultdrop.mobile.ui.components.FolderNameDialog
 import com.vaultdrop.mobile.ui.components.SelectionState
 import com.vaultdrop.mobile.ui.components.SelectionStatusIcon
 import com.vaultdrop.mobile.ui.components.ServerStatusBadge
+import com.vaultdrop.mobile.ui.components.SyncStatusAction
 import com.vaultdrop.mobile.ui.components.rememberSelectionState
 import com.vaultdrop.mobile.ui.navigation.FloatingNavBar
 import com.vaultdrop.mobile.ui.navigation.MoveTargetBar
@@ -212,6 +213,7 @@ fun FolderListScreen(
                 },
                 actions = {
                     if (!uiState.moveMode && !selection.active) {
+                        SyncStatusAction(syncViewModel = syncViewModel)
                         ServerStatusBadge(
                             status = connectionStatus,
                             onClick = connectionStatusViewModel::checkNow,

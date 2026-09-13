@@ -61,7 +61,9 @@ import com.vaultdrop.mobile.R
 import com.vaultdrop.mobile.data.local.entity.FileEntity
 import com.vaultdrop.mobile.domain.FileCategory
 import com.vaultdrop.mobile.features.connection.ConnectionStatusViewModel
+import com.vaultdrop.mobile.features.sync.SyncViewModel
 import com.vaultdrop.mobile.ui.components.ServerStatusBadge
+import com.vaultdrop.mobile.ui.components.SyncStatusAction
 import com.vaultdrop.mobile.ui.components.categoryValue
 import com.vaultdrop.mobile.ui.document.content.DocumentContentViewer
 import com.vaultdrop.mobile.ui.document.content.ImageViewer
@@ -90,6 +92,7 @@ fun DocumentViewerScreen(
     initialResourceId: String,
     onBack: () -> Unit,
     connectionStatusViewModel: ConnectionStatusViewModel,
+    syncViewModel: SyncViewModel,
     viewModel: DocumentViewerViewModel = hiltViewModel(),
 ) {
     val documents by viewModel.documents.collectAsStateWithLifecycle()
@@ -171,6 +174,7 @@ fun DocumentViewerScreen(
                         }
                     },
                     actions = {
+                        SyncStatusAction(syncViewModel = syncViewModel)
                         ServerStatusBadge(
                             status = connectionStatus,
                             onClick = connectionStatusViewModel::checkNow,
