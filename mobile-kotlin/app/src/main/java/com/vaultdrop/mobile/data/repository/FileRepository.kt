@@ -8,6 +8,7 @@ import com.vaultdrop.mobile.data.local.entity.FileStatus
 import com.vaultdrop.mobile.data.remote.ApiClient
 import com.vaultdrop.mobile.data.remote.dto.FileDto
 import com.vaultdrop.mobile.domain.GenerateId
+import com.vaultdrop.mobile.domain.SyncPlacement
 import com.vaultdrop.mobile.domain.computeCategory
 import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
@@ -173,7 +174,7 @@ class FileRepository @Inject constructor(
             // Le snapshot serveur confirme la présence cloud : si une copie
             // physique existe aussi, placement local-cloud (jamais d'écrasement
             // de l'uri / de régression du placement).
-            syncStatus = if (existing?.uri != null) FileStatus.LOCAL_CLOUD else FileStatus.CLOUD,
+            syncStatus = SyncPlacement.confirmed(existing?.uri != null),
             processed = existing?.processed ?: false,
             addedAt = existing?.addedAt ?: now,
             updatedAt = now,

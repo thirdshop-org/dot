@@ -23,11 +23,14 @@ cd backend && go test ./...
 mise up_mobile [device|emulator]  # défaut: emulator
 cd mobile-kotlin && ./gradlew :app:assembleDebug
 
+# Frontend tests (JVM, Robolectric + Room in-memory)
+cd mobile-kotlin && ./gradlew :app:testDebugUnitTest
+
 # PostgreSQL (via docker-compose)
 docker compose up postgres -d
 ```
 
-Il n'y a **pas** de tests mobiles (pas de dossier `src/test` ni `src/androidTest`).
+Tests mobiles : JVM unit tests dans `app/src/test` (JUnit + Robolectric + Room in-memory), lancés via `:app:testDebugUnitTest`. Pas de tests instrumentés (`androidTest`).
 
 ## Backend Structure
 
