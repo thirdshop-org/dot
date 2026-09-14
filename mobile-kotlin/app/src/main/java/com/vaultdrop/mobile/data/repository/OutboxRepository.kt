@@ -150,6 +150,15 @@ class OutboxRepository @Inject constructor(
         pendingOperationDao.countCreateOperations(resourceId) > 0
 
     /**
+     * Variante toutes ressources : un `create_resource` a-t-il jamais été
+     * journalisé pour ce dossier ? Un `delete_resource` n'est émis que si le
+     * serveur connaît déjà la ressource (les dossiers sont poussés à la
+     * découverte avec `resource_type = 'folder'`).
+     */
+    suspend fun hasCreateOperationAnyType(resourceId: String): Boolean =
+        pendingOperationDao.countCreateOperationsAnyType(resourceId) > 0
+
+    /**
      * Un `move_resource` est-il encore en attente de push ? Tant que l'op est
      * pendante, le `folder_resource_id` local reflète la cible future : ni le
      * refresh serveur (qui renvoie l'ancien dossier) ni le walk SAF (snapshot

@@ -37,6 +37,10 @@ interface FolderDao {
     @Query("SELECT * FROM folders WHERE parent_resource_id = :parentResourceId ORDER BY name ASC")
     suspend fun getByParent(parentResourceId: String): List<FolderEntity>
 
+    /** Snapshot des sous-dossiers visibles (filtre `exists = 1`) — opérations batch hors UI. */
+    @Query("SELECT * FROM folders WHERE parent_resource_id = :parentResourceId AND \"exists\" = 1 ORDER BY name ASC")
+    suspend fun getByParentOnce(parentResourceId: String): List<FolderEntity>
+
     @Query("SELECT * FROM folders WHERE resource_id = :resourceId LIMIT 1")
     suspend fun getByResourceId(resourceId: String): FolderEntity?
 
@@ -51,6 +55,10 @@ interface FolderDao {
 
     @Query("UPDATE folders SET \"exists\" = 0, updated_at = :updatedAt WHERE resource_id = :resourceId")
     suspend fun markMissing(resourceId: String, updatedAt: Long)
+
+    /** Re-parente des sous-dossiers vers un nouveau parent (fusion). */
+    @Query("UPDATE folders SET parent_resource_id = :newParentId, updated_at = :updatedAt WHERE resource_id IN (:resourceIds)")
+    suspend fun reparent(resourceIds: List<String>, newParentId: String, updatedAt: Long)
 
     /**
      * Promote le placement après confirmation serveur (`POST /sync/ops` appliqué) :

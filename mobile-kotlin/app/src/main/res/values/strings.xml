@@ -155,6 +155,15 @@
     <string name="selection_count">%1$d sélectionné(s)</string>
     <string name="selection_assemble">Assembler en PDF</string>
     <string name="selection_cancel">Annuler la sélection</string>
+
+    <!-- Fusion de dossiers (multi-sélection de l\'explorateur Dossiers) -->
+    <string name="merge_folders">Fusionner</string>
+    <string name="merge_folders_title">Fusionner %1$d dossier(s)</string>
+    <string name="merge_name_hint">ex. documents_importants</string>
+    <string name="merge_sources_label">Dossiers sources — leur contenu sera déplacé :</string>
+    <string name="merge_confirm">Fusionner</string>
+    <string name="merge_success">Dossier(s) fusionné(s)</string>
+    <string name="merge_error">Impossible de fusionner les dossiers</string>
     <string name="pdf_builder_title">Assembler un PDF</string>
     <string name="pdf_builder_empty">Aucun élément. Ajoute des fichiers ou une note pour commencer l\'assemblage.</string>
     <string name="pdf_builder_add_files">Ajouter un fichier</string>

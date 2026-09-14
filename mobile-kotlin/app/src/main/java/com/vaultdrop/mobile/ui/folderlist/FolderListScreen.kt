@@ -68,7 +68,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.vaultdrop.mobile.R
 import com.vaultdrop.mobile.data.local.entity.FileEntity
+import com.vaultdrop.mobile.data.local.entity.FileStatus
 import com.vaultdrop.mobile.data.local.entity.FolderEntity
+import com.vaultdrop.mobile.data.local.entity.FolderStatus
 import com.vaultdrop.mobile.features.connection.ConnectionStatusViewModel
 import com.vaultdrop.mobile.features.saf.safDisplayName
 import com.vaultdrop.mobile.features.sync.SyncViewModel
@@ -80,6 +82,7 @@ import com.vaultdrop.mobile.ui.components.FileCategoryIcon
 import com.vaultdrop.mobile.ui.components.FilePendingReviewBadge
 import com.vaultdrop.mobile.ui.components.FileSyncStatusIcon
 import com.vaultdrop.mobile.ui.components.FolderNameDialog
+
 import com.vaultdrop.mobile.ui.components.SelectionState
 import com.vaultdrop.mobile.ui.components.SelectionStatusIcon
 import com.vaultdrop.mobile.ui.components.ServerStatusBadge
@@ -87,6 +90,7 @@ import com.vaultdrop.mobile.ui.components.SyncStatusAction
 import com.vaultdrop.mobile.ui.components.rememberSelectionState
 import com.vaultdrop.mobile.ui.components.reviewDelete
 import com.vaultdrop.mobile.ui.navigation.FloatingNavBar
+import com.vaultdrop.mobile.ui.navigation.FolderSelectionNavBar
 import com.vaultdrop.mobile.ui.navigation.MoveTargetBar
 import com.vaultdrop.mobile.ui.navigation.NavTab
 import com.vaultdrop.mobile.ui.navigation.SelectionNavBar
@@ -116,6 +120,8 @@ fun FolderListScreen(
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var pendingDeleteMode by remember { mutableStateOf<FileDeleter.DeleteMode?>(null) }
     var pendingDeleteReview by remember { mutableStateOf<DeleteReview?>(null) }
+    var pendingFolderIds by remember { mutableStateOf<List<String>>(emptyList()) }
+    var pendingFileIds by remember { mutableStateOf<List<String>>(emptyList()) }
     val snackbarHostState = remember { SnackbarHostState() }
 
     val createError = uiState.createError
@@ -261,29 +267,72 @@ fun FolderListScreen(
                         viewModel.moveSelectionHere(ids)
                     },
                 )
-                selection.active -> SelectionNavBar(
-                    onMove = { viewModel.startMove() },
-                    onBuildPdf = {
-                        val ids = selection.ids.toList()
-                        selection.clear()
-                        onBuildPdf(ids)
-                    },
-                    onDeleteModeSelected = { mode ->
-                        val allFiles = uiState.sections.flatMap { section ->
-                            section.rows.flatMap { row -> listOfNotNull(row.left, row.right) }
-                        }
-                        val selectedFiles = allFiles.filter { it.resourceId in selection.ids }
-                        val review = reviewDelete(selectedFiles, mode)
-                        pendingDeleteMode = mode
-                        pendingDeleteReview = review
-                        if (review.hasWarning) {
-                            showDeleteWarning = true
-                        } else {
-                            showDeleteConfirm = true
-                        }
-                    },
-                    enabled = selection.ids.isNotEmpty(),
-                )
+                selection.active -> if (uiState.view == HomeView.FOLDERS) {
+                    FolderSelectionNavBar(
+                        onDeleteModeSelected = { mode ->
+                            val selectedFolders = uiState.browseSubFolders.filter {
+                                it.resourceId in selection.ids
+                            }
+                            val selectedFiles = uiState.browseFiles.filter {
+                                it.resourceId in selection.ids
+                            }
+                            val incompatible = when (mode) {
+                                FileDeleter.DeleteMode.IN_CLOUD ->
+                                    selectedFolders.count { it.syncStatus == FolderStatus.LOCAL } +
+                                        selectedFiles.count { it.syncStatus == FileStatus.LOCAL }
+                                FileDeleter.DeleteMode.LOCALLY ->
+                                    selectedFolders.count { it.syncStatus == FolderStatus.CLOUD } +
+                                        selectedFiles.count { it.syncStatus == FileStatus.CLOUD }
+                                FileDeleter.DeleteMode.FULL ->
+                                    selectedFolders.count {
+                                        it.syncStatus == FolderStatus.LOCAL || it.syncStatus == FolderStatus.CLOUD
+                                    } + selectedFiles.count {
+                                        it.syncStatus == FileStatus.LOCAL || it.syncStatus == FileStatus.CLOUD
+                                    }
+                            }
+                            pendingFolderIds = selectedFolders.map { it.resourceId }
+                            pendingFileIds = selectedFiles.map { it.resourceId }
+                            pendingDeleteMode = mode
+                            pendingDeleteReview = DeleteReview(
+                                mode = mode,
+                                total = selectedFolders.size + selectedFiles.size,
+                                incompatibleCount = incompatible,
+                            )
+                            if (incompatible > 0) {
+                                showDeleteWarning = true
+                            } else {
+                                showDeleteConfirm = true
+                            }
+                        },
+                        deleteEnabled = selection.ids.isNotEmpty(),
+                    )
+                } else {
+                    SelectionNavBar(
+                        onMove = { viewModel.startMove() },
+                        onBuildPdf = {
+                            val ids = selection.ids.toList()
+                            selection.clear()
+                            onBuildPdf(ids)
+                        },
+                        onDeleteModeSelected = { mode ->
+                            val allFiles = uiState.sections.flatMap { section ->
+                                section.rows.flatMap { row -> listOfNotNull(row.left, row.right) }
+                            }
+                            val selectedFiles = allFiles.filter { it.resourceId in selection.ids }
+                            pendingFolderIds = emptyList()
+                            pendingFileIds = selectedFiles.map { it.resourceId }
+                            val review = reviewDelete(selectedFiles, mode)
+                            pendingDeleteMode = mode
+                            pendingDeleteReview = review
+                            if (review.hasWarning) {
+                                showDeleteWarning = true
+                            } else {
+                                showDeleteConfirm = true
+                            }
+                        },
+                        enabled = selection.ids.isNotEmpty(),
+                    )
+                }
                 else -> FloatingNavBar(selected = selectedTab, onSelect = onTabSelected)
             }
         },
@@ -341,26 +390,36 @@ fun FolderListScreen(
                 showDeleteWarning = false
                 pendingDeleteMode = null
                 pendingDeleteReview = null
+                pendingFolderIds = emptyList()
+                pendingFileIds = emptyList()
             },
         )
     }
 
     if (showDeleteConfirm && pendingDeleteMode != null) {
         DeleteConfirmDialog(
-            count = selection.ids.size,
+            count = pendingFolderIds.size + pendingFileIds.size,
             onConfirm = {
-                val ids = selection.ids.toList()
                 val mode = pendingDeleteMode!!
+                val fileIds = selection.ids.toList()
                 selection.clear()
                 showDeleteConfirm = false
                 pendingDeleteMode = null
                 pendingDeleteReview = null
-                viewModel.deleteSelectedFiles(ids, mode)
+                if (uiState.view == HomeView.FOLDERS) {
+                    viewModel.deleteFolderSelection(pendingFolderIds, pendingFileIds, mode)
+                } else {
+                    viewModel.deleteSelectedFiles(fileIds, mode)
+                }
+                pendingFolderIds = emptyList()
+                pendingFileIds = emptyList()
             },
             onDismiss = {
                 showDeleteConfirm = false
                 pendingDeleteMode = null
                 pendingDeleteReview = null
+                pendingFolderIds = emptyList()
+                pendingFileIds = emptyList()
             },
         )
     }
@@ -683,7 +742,11 @@ private fun FolderBrowserContent(
         }
 
         items(subFolders, key = { it.resourceId }) { folder ->
-            FolderRow(folder, onClick = { onOpenBrowseFolder(folder.resourceId) })
+            FolderRow(
+                folder = folder,
+                selection = selection,
+                onClick = { onOpenBrowseFolder(folder.resourceId) },
+            )
         }
 
         // En mode déplacement, le navigateur sert au choix de la cible : les
@@ -779,16 +842,29 @@ private fun SectionHeader(label: String) {
     )
 }
 
-/** Carte dossier de l'explorateur — descend d'un niveau au tap. */
+/** Carte dossier de l'explorateur — descend d'un niveau au tap, clic long pour la sélection. */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun FolderRow(folder: FolderEntity, onClick: () -> Unit) {
+private fun FolderRow(
+    folder: FolderEntity,
+    selection: SelectionState,
+    onClick: () -> Unit,
+) {
+    val selected = folder.resourceId in selection.ids
     Card(
-        onClick = onClick,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
         modifier = Modifier
             .fillMaxWidth()
-            .padding(bottom = 8.dp),
+            .padding(bottom = 8.dp)
+            .combinedClickable(
+                onClick = {
+                    if (selection.active) selection.toggle(folder.resourceId) else onClick()
+                },
+                onLongClick = {
+                    if (!selection.active) selection.start(folder.resourceId)
+                },
+            ),
     ) {
         Row(
             modifier = Modifier
@@ -815,6 +891,9 @@ private fun FolderRow(folder: FolderEntity, onClick: () -> Unit) {
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            }
+            if (selection.active) {
+                SelectionStatusIcon(selected = selected)
             }
         }
     }

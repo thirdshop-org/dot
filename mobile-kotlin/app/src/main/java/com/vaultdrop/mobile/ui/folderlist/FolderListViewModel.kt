@@ -16,6 +16,7 @@ import com.vaultdrop.mobile.data.repository.FolderRepository
 import com.vaultdrop.mobile.data.repository.SaveFolderInput
 import com.vaultdrop.mobile.features.saf.FileMover
 import com.vaultdrop.mobile.features.saf.FileDeleter
+import com.vaultdrop.mobile.features.saf.FolderDeleter
 import com.vaultdrop.mobile.features.saf.SafFolderCreator
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -45,6 +46,7 @@ class FolderListViewModel @Inject constructor(
     private val safFolderCreator: SafFolderCreator,
     private val fileMover: FileMover,
     private val fileDeleter: FileDeleter,
+    private val folderDeleter: FolderDeleter,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
 
@@ -309,6 +311,30 @@ class FolderListViewModel @Inject constructor(
 
     fun clearDeleteSuccess() {
         _uiState.update { it.copy(deleteSuccess = false) }
+    }
+
+    /**
+     * Suppression d'une sélection mixte de l'explorateur Dossiers (dossiers
+     * et/ou fichiers) selon le mode choisi. Les dossiers sont supprimés avec
+     * leur contenu récursif, les fichiers individuellement.
+     */
+    fun deleteFolderSelection(folderIds: List<String>, fileIds: List<String>, mode: FileDeleter.DeleteMode) {
+        viewModelScope.launch {
+            var failed = 0
+            val folders = folderIds.mapNotNull { folderRepository.getFolder(it) }
+            if (folders.isNotEmpty()) {
+                failed += folderDeleter.deleteFolders(folders, mode).failed
+            }
+            val files = fileIds.mapNotNull { fileRepository.getFile(it) }
+            if (files.isNotEmpty()) {
+                failed += fileDeleter.deleteFiles(files, mode).failed
+            }
+            if (failed > 0) {
+                _uiState.update { it.copy(deleteError = context.getString(R.string.delete_error)) }
+            } else {
+                _uiState.update { it.copy(deleteSuccess = true) }
+            }
+        }
     }
 
     /** Grille d'accueil : tous les fichiers visibles, groupés par jour (date de référence). */

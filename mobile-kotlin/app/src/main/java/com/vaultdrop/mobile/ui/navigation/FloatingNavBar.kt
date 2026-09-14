@@ -180,6 +180,40 @@ fun SelectionNavBar(
     }
 }
 
+/** Barre d'actions multi-sélection propre aux dossiers : suppression. */
+@Composable
+fun FolderSelectionNavBar(
+    onDeleteModeSelected: (FileDeleter.DeleteMode) -> Unit,
+    deleteEnabled: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(start = 20.dp, end = 20.dp, bottom = 16.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Surface(
+            shape = RoundedCornerShape(30.dp),
+            color = MaterialTheme.colorScheme.surface,
+            shadowElevation = 8.dp,
+            modifier = Modifier.widthIn(max = 400.dp).fillMaxWidth(),
+        ) {
+            Row(
+                modifier = Modifier.padding(vertical = 8.dp, horizontal = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                DeleteDropdownButton(
+                    enabled = deleteEnabled,
+                    onModeSelected = onDeleteModeSelected,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+    }
+}
+
 /** Barre du mode déplacement : bouton « Déplacer ici (N) » vers le dossier courant. */
 @Composable
 fun MoveTargetBar(

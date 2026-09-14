@@ -56,6 +56,19 @@ interface PendingOperationDao {
     """)
     suspend fun countCreateOperations(resourceId: String): Int
 
+    /**
+     * Variante sans filtre `resource_type` : utilisée par la suppression de
+     * dossiers (les dossiers sont poussés à la découverte avec `resource_type =
+     * 'folder'`, pas `'file'`).
+     */
+    @Query("""
+        SELECT COUNT(*) FROM pending_operations
+        WHERE resource_id = :resourceId
+          AND operation = 'create_resource'
+          AND status IN ('pending', 'synced')
+    """)
+    suspend fun countCreateOperationsAnyType(resourceId: String): Int
+
     @Query("SELECT COUNT(*) FROM pending_operations WHERE status = 'pending'")
     suspend fun countPending(): Int
 

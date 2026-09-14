@@ -37,6 +37,10 @@ class FileRepository @Inject constructor(
     fun observeFiles(folderResourceId: String): Flow<List<FileEntity>> =
         fileDao.observeByFolder(folderResourceId)
 
+    /** Snapshot des fichiers visibles d'un dossier (opérations batch hors UI). */
+    suspend fun getFilesInFolder(folderResourceId: String): List<FileEntity> =
+        fileDao.getByFolderOnce(folderResourceId)
+
     /** Fichiers visibles de toute l'arborescence — écran d'accueil (grille par date). */
     fun observeAllVisible(): Flow<List<FileEntity>> = fileDao.observeAllVisible()
 

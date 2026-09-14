@@ -44,6 +44,10 @@ class FolderRepository @Inject constructor(
 
     suspend fun getAll(): List<FolderEntity> = folderDao.getAll()
 
+    /** Snapshot des sous-dossiers visibles d'un dossier (opérations batch hors UI). */
+    suspend fun getChildren(parentResourceId: String): List<FolderEntity> =
+        folderDao.getByParentOnce(parentResourceId)
+
     /** Dossiers créés dans l'app uniquement (cibles du picker de déplacement). */
     suspend fun getCreatedInApp(): List<FolderEntity> = folderDao.getCreatedInApp()
 
@@ -132,6 +136,25 @@ class FolderRepository @Inject constructor(
     /** Marque un dossier disparu de l'arborescence (`exists = 0`) — jamais supprimé. */
     suspend fun markMissing(resourceId: String, updatedAt: Long) =
         folderDao.markMissing(resourceId, updatedAt)
+
+    /**
+     * Re-parente des sous-dossiers vers un nouveau parent (fusion de dossiers).
+     * Transaction atomique : reparent Room + outbox `move_resource` par dossier.
+     */
+    suspend fun reparentSubFolders(resourceIds: List<String>, newParentId: String) {
+        if (resourceIds.isEmpty()) return
+        val now = System.currentTimeMillis()
+        appDatabase.withTransaction {
+            folderDao.reparent(resourceIds, newParentId, now)
+            for (resourceId in resourceIds) {
+                outboxRepository.enqueueMoveResource(
+                    resourceId = resourceId,
+                    resourceType = "folder",
+                    toFolderResourceId = newParentId,
+                )
+            }
+        }
+    }
 }
 
 data class SaveFolderInput(

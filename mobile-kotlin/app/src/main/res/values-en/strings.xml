@@ -109,6 +109,15 @@
     <string name="selection_count">%1$d selected</string>
     <string name="selection_assemble">Assemble PDF</string>
     <string name="selection_cancel">Cancel selection</string>
+
+    <!-- Folder merge (multi-select in the folder browser) -->
+    <string name="merge_folders">Merge</string>
+    <string name="merge_folders_title">Merge %1$d folder(s)</string>
+    <string name="merge_name_hint">e.g. important_documents</string>
+    <string name="merge_sources_label">Source folders — their content will be moved:</string>
+    <string name="merge_confirm">Merge</string>
+    <string name="merge_success">Folder(s) merged</string>
+    <string name="merge_error">Could not merge the folders</string>
     <string name="pdf_builder_title">Assemble a PDF</string>
     <string name="pdf_builder_empty">Nothing here yet. Add files or a note to start assembling.</string>
     <string name="pdf_builder_add_files">Add a file</string>
