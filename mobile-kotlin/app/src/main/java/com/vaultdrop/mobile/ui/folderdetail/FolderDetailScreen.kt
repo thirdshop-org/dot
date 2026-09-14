@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -18,10 +19,12 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -92,6 +95,7 @@ fun FolderDetailScreen(
     var showDeleteWarning by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var showShareSheet by remember { mutableStateOf(false) }
+    var showMoreMenu by remember { mutableStateOf(false) }
     var pendingDeleteMode by remember { mutableStateOf<FileDeleter.DeleteMode?>(null) }
     var pendingDeleteReview by remember { mutableStateOf<DeleteReview?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
@@ -178,14 +182,32 @@ fun FolderDetailScreen(
                             status = connectionStatus,
                             onClick = connectionStatusViewModel::checkNow,
                         )
-                        IconButton(onClick = { showShareSheet = true }) {
-                            Icon(
-                                Icons.Filled.Share,
-                                contentDescription = stringResource(R.string.share_content_description),
-                            )
-                        }
-                        IconButton(onClick = viewModel::refresh) {
-                            Icon(Icons.Filled.Refresh, contentDescription = stringResource(R.string.refresh))
+                        Box {
+                            IconButton(onClick = { showMoreMenu = true }) {
+                                Icon(
+                                    Icons.Filled.MoreVert,
+                                    contentDescription = stringResource(R.string.more_actions),
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = showMoreMenu,
+                                onDismissRequest = { showMoreMenu = false },
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.share_action)) },
+                                    onClick = {
+                                        showMoreMenu = false
+                                        showShareSheet = true
+                                    },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.refresh)) },
+                                    onClick = {
+                                        showMoreMenu = false
+                                        viewModel.refresh()
+                                    },
+                                )
+                            }
                         }
                     }
                 },

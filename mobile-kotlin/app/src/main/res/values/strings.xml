@@ -242,4 +242,6 @@
     <string name="share_error_not_found">Aucun utilisateur connu sous ce nom.</string>
     <string name="share_error_generic">Impossible de partager pour le moment.</string>
     <string name="share_content_description">Partager ce dossier</string>
+<string name="share_action">Partager</string>
+    <string name="more_actions">Plus d\'actions</string>
 </resources>
