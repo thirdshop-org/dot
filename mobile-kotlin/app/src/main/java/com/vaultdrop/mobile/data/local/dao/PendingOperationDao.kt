@@ -42,6 +42,20 @@ interface PendingOperationDao {
     @Query("DELETE FROM pending_operations WHERE status = 'synced' AND updated_at < :cutoff")
     suspend fun purgeSynced(cutoff: Long)
 
+    /**
+     * Une op `create_resource` (pending ou synced) existe-t-elle déjà pour ce
+     * fichier ? Le gate « processed » enqueue le create au moment du review —
+     * ce garde-fou évite de le re-enqueue (re-keep, purge > 7j, etc.).
+     */
+    @Query("""
+        SELECT COUNT(*) FROM pending_operations
+        WHERE resource_id = :resourceId
+          AND operation = 'create_resource'
+          AND resource_type = 'file'
+          AND status IN ('pending', 'synced')
+    """)
+    suspend fun countCreateOperations(resourceId: String): Int
+
     @Query("SELECT COUNT(*) FROM pending_operations WHERE status = 'pending'")
     suspend fun countPending(): Int
 }

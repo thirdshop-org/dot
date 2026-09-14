@@ -60,12 +60,55 @@ class FileRepository @Inject constructor(
     /** Snapshot de la file de review, chargé à l'entrée dans le mode traitement. */
     suspend fun getUnprocessed(): List<FileEntity> = fileDao.getUnprocessed()
 
-    /** Marque un fichier comme traité (gardé) — local au device, jamais poussé. */
-    suspend fun markProcessed(resourceId: String) =
-        fileDao.markProcessed(resourceId, System.currentTimeMillis())
+    /**
+     * Marque un fichier comme traité (gardé) — déclenche aussi le push du
+     * `create_resource` vers l'outbox, dans la même transaction (gate
+     * « processed » : un fichier n'est synchronisé que lorsqu'il est gardé).
+     * Idempotent : un `create_resource` déjà enqueue (ou synced) interdit un
+     * doublon.
+     */
+    suspend fun markProcessed(resourceId: String) {
+        val now = System.currentTimeMillis()
+        appDatabase.withTransaction {
+            val file = fileDao.getByResourceId(resourceId) ?: return@withTransaction
+            fileDao.markProcessed(resourceId, now)
+            if (file.exists == 1 && file.uri != null && !outboxRepository.hasCreateOperation(resourceId)) {
+                outboxRepository.enqueueCreateResource(
+                    resourceId = file.resourceId,
+                    resourceType = "file",
+                    name = file.name,
+                    parentResourceId = file.folderResourceId,
+                    mimeType = file.mimeType,
+                    extension = file.extension,
+                )
+            }
+        }
+    }
 
-    /** Marque tous les fichiers locaux restants comme traités. */
-    suspend fun markAllProcessed() = fileDao.markAllProcessed(System.currentTimeMillis())
+    /**
+     * Échappatoire : marque tous les fichiers locaux restants comme traités ET
+     * synchronisés (un `create_resource` par fichier, dans la même transaction).
+     */
+    suspend fun markAllProcessed() {
+        val now = System.currentTimeMillis()
+        appDatabase.withTransaction {
+            val files = fileDao.getUnprocessed()
+            if (files.isEmpty()) return@withTransaction
+            for (file in files) {
+                fileDao.markProcessed(file.resourceId, now)
+                if (!outboxRepository.hasCreateOperation(file.resourceId)) {
+                    outboxRepository.enqueueCreateResource(
+                        resourceId = file.resourceId,
+                        resourceType = "file",
+                        name = file.name,
+                        parentResourceId = file.folderResourceId,
+                        mimeType = file.mimeType,
+                        extension = file.extension,
+                    )
+                }
+            }
+        }
+    }
 
     suspend fun getFile(resourceId: String): FileEntity? =
         fileDao.getByResourceId(resourceId)
@@ -109,8 +152,11 @@ class FileRepository @Inject constructor(
         )
         appDatabase.withTransaction {
             fileDao.upsert(entity)
-            if (existing == null) {
-                // Nouveau fichier physique → le pousser vers le serveur (métadonnées).
+            if (existing == null && entity.processed) {
+                // Nouveau fichier physique déjà « traité » (ex. scan export) :
+                // poussé immédiatement. Un fichier SAF tout juste découvert
+                // reste `processed = false` → local-only, il n'est poussé qu'au
+                // « garder » de la review (`markProcessed`).
                 outboxRepository.enqueueCreateResource(
                     resourceId = entity.resourceId,
                     resourceType = "file",

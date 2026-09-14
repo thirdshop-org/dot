@@ -49,7 +49,13 @@ class SafFileDeleter @Inject constructor(
                     val now = System.currentTimeMillis()
                     appDatabase.withTransaction {
                         fileRepository.markMissing(file.resourceId, now)
-                        outboxRepository.enqueueDeleteResource(file.resourceId, "file")
+                        // Gate « processed » : si le fichier n'a jamais été poussé
+                        // (create_resource absent), le serveur n'en sait rien —
+                        // un delete_resource serait du bruit. On ne le journalise
+                        // que pour les ressources déjà synchronisées.
+                        if (outboxRepository.hasCreateOperation(file.resourceId)) {
+                            outboxRepository.enqueueDeleteResource(file.resourceId, "file")
+                        }
                     }
                     Timber.d("deleted %s", uri)
                 } else {

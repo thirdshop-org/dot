@@ -105,4 +105,12 @@ class OutboxRepository @Inject constructor(
 
     /** Nombre d'ops en attente de push (stats UI optionnelles). */
     suspend fun countPending(): Int = pendingOperationDao.countPending()
+
+    /**
+     * Un `create_resource` (pending ou synced) existe-t-il déjà pour ce fichier ?
+     * Utilisé par le gate « processed » : seuls les fichiers traités déclenchent
+     * le push, et jamais deux fois.
+     */
+    suspend fun hasCreateOperation(resourceId: String): Boolean =
+        pendingOperationDao.countCreateOperations(resourceId) > 0
 }

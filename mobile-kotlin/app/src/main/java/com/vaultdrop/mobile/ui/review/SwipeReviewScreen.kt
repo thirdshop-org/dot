@@ -143,6 +143,7 @@ fun SwipeReviewScreen(
                     ReviewActions(
                         onKeep = { state.cards.firstOrNull()?.let(viewModel::keep) },
                         onDelete = { state.cards.firstOrNull()?.let(viewModel::delete) },
+                        keepHint = stringResource(R.string.review_keep_hint),
                         modifier = Modifier.padding(top = 16.dp),
                     )
 
@@ -199,6 +200,7 @@ fun SwipeReviewScreen(
 private fun ReviewActions(
     onKeep: () -> Unit,
     onDelete: () -> Unit,
+    keepHint: String? = null,
     modifier: Modifier = Modifier,
 ) {
     Row(
@@ -209,6 +211,7 @@ private fun ReviewActions(
         ReviewAction(
             icon = { tint, size -> Icon(imageVector = Icons.Filled.Close, contentDescription = stringResource(R.string.review_delete), tint = tint, modifier = Modifier.size(size)) },
             label = stringResource(R.string.review_delete),
+            hint = null,
             containerColor = MaterialTheme.colorScheme.errorContainer,
             contentColor = MaterialTheme.colorScheme.onErrorContainer,
             onClick = onDelete,
@@ -216,6 +219,7 @@ private fun ReviewActions(
         ReviewAction(
             icon = { tint, size -> Icon(imageVector = Icons.Filled.Check, contentDescription = stringResource(R.string.review_keep), tint = tint, modifier = Modifier.size(size)) },
             label = stringResource(R.string.review_keep),
+            hint = keepHint,
             containerColor = MaterialTheme.colorScheme.primary,
             contentColor = MaterialTheme.colorScheme.onPrimary,
             onClick = onKeep,
@@ -227,6 +231,7 @@ private fun ReviewActions(
 private fun ReviewAction(
     icon: @Composable (tint: Color, size: Dp) -> Unit,
     label: String,
+    hint: String?,
     containerColor: Color,
     contentColor: Color,
     onClick: () -> Unit,
@@ -247,6 +252,14 @@ private fun ReviewAction(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 4.dp),
         )
+        if (hint != null) {
+            Text(
+                text = hint,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 2.dp),
+            )
+        }
     }
 }
 
