@@ -9,6 +9,7 @@ import com.vaultdrop.mobile.data.local.entity.FolderEntity
 import com.vaultdrop.mobile.data.repository.FileRepository
 import com.vaultdrop.mobile.data.repository.FolderRepository
 import com.vaultdrop.mobile.features.saf.FileMover
+import com.vaultdrop.mobile.features.saf.FileDeleter
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -31,6 +32,7 @@ class SearchViewModel @Inject constructor(
     private val fileRepository: FileRepository,
     private val folderRepository: FolderRepository,
     private val fileMover: FileMover,
+    private val fileDeleter: FileDeleter,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
 
@@ -42,6 +44,12 @@ class SearchViewModel @Inject constructor(
 
     private val _moveError = MutableStateFlow<String?>(null)
     val moveError: StateFlow<String?> = _moveError.asStateFlow()
+
+    private val _deleteError = MutableStateFlow<String?>(null)
+    val deleteError: StateFlow<String?> = _deleteError.asStateFlow()
+
+    private val _deleteSuccess = MutableStateFlow(false)
+    val deleteSuccess: StateFlow<Boolean> = _deleteSuccess.asStateFlow()
 
     @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
     val uiState: StateFlow<SearchUiState> = combine(
@@ -94,6 +102,31 @@ class SearchViewModel @Inject constructor(
 
     fun clearMoveError() {
         _moveError.value = null
+    }
+
+    /** Supprime les fichiers sélectionnés selon le mode choisi. */
+    fun deleteSelectedFiles(resourceIds: List<String>, mode: FileDeleter.DeleteMode) {
+        viewModelScope.launch {
+            val files = resourceIds.mapNotNull { fileRepository.getFile(it) }
+            if (files.isEmpty()) {
+                _deleteError.value = context.getString(R.string.delete_error)
+                return@launch
+            }
+            val report = fileDeleter.deleteFiles(files, mode)
+            if (report.failed > 0) {
+                _deleteError.value = context.getString(R.string.delete_error)
+            } else {
+                _deleteSuccess.value = true
+            }
+        }
+    }
+
+    fun clearDeleteError() {
+        _deleteError.value = null
+    }
+
+    fun clearDeleteSuccess() {
+        _deleteSuccess.value = false
     }
 
     private data class CategoryQuery(val query: String, val category: String?)

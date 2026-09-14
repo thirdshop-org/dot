@@ -11,6 +11,7 @@ import com.vaultdrop.mobile.data.local.entity.FolderEntity
 import com.vaultdrop.mobile.data.repository.FileRepository
 import com.vaultdrop.mobile.data.repository.FolderRepository
 import com.vaultdrop.mobile.data.repository.SaveFolderInput
+import com.vaultdrop.mobile.features.saf.FileDeleter
 import com.vaultdrop.mobile.features.saf.FileMover
 import com.vaultdrop.mobile.features.saf.SafFolderCreator
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -35,6 +36,10 @@ data class FolderDetailUiState(
     val moveFolders: List<FolderEntity>? = null,
     /** Erreur transitoire de déplacement — affichée en Snackbar puis effacée. */
     val moveError: String? = null,
+    /** Erreur transitoire de suppression — affichée en Snackbar puis effacée. */
+    val deleteError: String? = null,
+    /** Succès transitoire de suppression — affiché en Snackbar puis effacé. */
+    val deleteSuccess: Boolean = false,
 )
 
 @HiltViewModel
@@ -45,6 +50,7 @@ class FolderDetailViewModel @Inject constructor(
     private val tokenProvider: TokenProvider,
     private val safFolderCreator: SafFolderCreator,
     private val fileMover: FileMover,
+    private val fileDeleter: FileDeleter,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
 
@@ -164,5 +170,30 @@ class FolderDetailViewModel @Inject constructor(
 
     fun clearMoveError() {
         _uiState.update { it.copy(moveError = null) }
+    }
+
+    /** Supprime les fichiers sélectionnés selon le mode choisi. */
+    fun deleteSelectedFiles(resourceIds: List<String>, mode: FileDeleter.DeleteMode) {
+        viewModelScope.launch {
+            val files = resourceIds.mapNotNull { fileRepository.getFile(it) }
+            if (files.isEmpty()) {
+                _uiState.update { it.copy(deleteError = context.getString(R.string.delete_error)) }
+                return@launch
+            }
+            val report = fileDeleter.deleteFiles(files, mode)
+            if (report.failed > 0) {
+                _uiState.update { it.copy(deleteError = context.getString(R.string.delete_error)) }
+            } else {
+                _uiState.update { it.copy(deleteSuccess = true) }
+            }
+        }
+    }
+
+    fun clearDeleteError() {
+        _uiState.update { it.copy(deleteError = null) }
+    }
+
+    fun clearDeleteSuccess() {
+        _uiState.update { it.copy(deleteSuccess = false) }
     }
 }

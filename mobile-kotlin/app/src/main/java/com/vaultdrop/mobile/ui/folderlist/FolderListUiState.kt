@@ -46,4 +46,8 @@ data class FolderListUiState(
     val moveError: String? = null,
     /** Succès transitoire de déplacement — affiché en Snackbar puis effacé. */
     val moveSuccess: Boolean = false,
+    /** Erreur transitoire de suppression — affichée en Snackbar puis effacée. */
+    val deleteError: String? = null,
+    /** Succès transitoire de suppression — affiché en Snackbar puis effacé. */
+    val deleteSuccess: Boolean = false,
 )

@@ -39,6 +39,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.vaultdrop.mobile.R
+import com.vaultdrop.mobile.ui.components.DeleteDropdownButton
+import com.vaultdrop.mobile.features.saf.FileDeleter
 
 enum class NavTab(val route: String) {
     FILES(Routes.FILES),
@@ -133,6 +135,7 @@ fun FloatingNavBar(
 fun SelectionNavBar(
     onMove: () -> Unit,
     onBuildPdf: () -> Unit,
+    onDeleteModeSelected: (FileDeleter.DeleteMode) -> Unit,
     enabled: Boolean,
     modifier: Modifier = Modifier,
 ) {
@@ -165,6 +168,11 @@ fun SelectionNavBar(
                     icon = Icons.Filled.MergeType,
                     enabled = enabled,
                     onClick = onBuildPdf,
+                    modifier = Modifier.weight(1f),
+                )
+                DeleteDropdownButton(
+                    enabled = enabled,
+                    onModeSelected = onDeleteModeSelected,
                     modifier = Modifier.weight(1f),
                 )
             }

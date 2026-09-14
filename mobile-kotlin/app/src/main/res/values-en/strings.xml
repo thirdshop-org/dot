@@ -133,4 +133,18 @@
     <string name="pdf_builder_name_save">Save</string>
     <string name="pdf_builder_saved">PDF created</string>
     <string name="pdf_generated_folder">Generated PDFs</string>
+
+    <!-- Delete multi-select -->
+    <string name="delete">Delete</string>
+    <string name="delete_locally">Delete locally</string>
+    <string name="delete_in_cloud">Delete from cloud</string>
+    <string name="delete_full">Delete everywhere</string>
+    <string name="delete_confirm_title">Delete %1$d document(s)?</string>
+    <string name="delete_confirm_message">This action cannot be undone.</string>
+    <string name="delete_warning_title">Documents not synced</string>
+    <string name="delete_warning_local_only_msg">%1$d out of %2$d document(s) are not synced to the cloud and will not be deleted from the server.</string>
+    <string name="delete_warning_cloud_only_msg">%1$d out of %2$d document(s) have no local copy and will not be deleted from this device.</string>
+    <string name="delete_confirm_button">Confirm</string>
+    <string name="delete_cancel">Cancel</string>
+    <string name="delete_error">Error while deleting</string>
 </resources>

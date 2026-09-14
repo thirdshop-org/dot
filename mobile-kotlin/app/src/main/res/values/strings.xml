@@ -213,4 +213,18 @@
     <string name="scan_error_page">Impossible d\'enregistrer la page.</string>
     <string name="scan_error_export">Impossible d\'exporter les pages.</string>
     <string name="scan_export_done">Pages exportées</string>
+
+    <!-- Suppression multi-sélection -->
+    <string name="delete">Supprimer</string>
+    <string name="delete_locally">Supprimer localement</string>
+    <string name="delete_in_cloud">Supprimer dans le cloud</string>
+    <string name="delete_full">Supprimer partout</string>
+    <string name="delete_confirm_title">Supprimer %1$d document(s) ?</string>
+    <string name="delete_confirm_message">Cette action est irréversible.</string>
+    <string name="delete_warning_title">Documents non synchronisés</string>
+    <string name="delete_warning_local_only_msg">%1$d document(s) sur %2$d n\'est/sont pas synchronisés avec le cloud et ne seront pas supprimés du serveur.</string>
+    <string name="delete_warning_cloud_only_msg">%1$d document(s) sur %2$d n\'ont pas de copie locale et ne seront pas supprimés de cet appareil.</string>
+    <string name="delete_confirm_button">Confirmer</string>
+    <string name="delete_cancel">Annuler</string>
+    <string name="delete_error">Erreur lors de la suppression</string>
 </resources>

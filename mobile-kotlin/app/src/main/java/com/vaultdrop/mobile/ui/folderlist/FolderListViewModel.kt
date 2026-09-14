@@ -15,6 +15,7 @@ import com.vaultdrop.mobile.data.repository.FileRepository
 import com.vaultdrop.mobile.data.repository.FolderRepository
 import com.vaultdrop.mobile.data.repository.SaveFolderInput
 import com.vaultdrop.mobile.features.saf.FileMover
+import com.vaultdrop.mobile.features.saf.FileDeleter
 import com.vaultdrop.mobile.features.saf.SafFolderCreator
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -43,6 +44,7 @@ class FolderListViewModel @Inject constructor(
     private val defaultRootStore: DefaultRootStore,
     private val safFolderCreator: SafFolderCreator,
     private val fileMover: FileMover,
+    private val fileDeleter: FileDeleter,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
 
@@ -272,6 +274,31 @@ class FolderListViewModel @Inject constructor(
 
     fun clearMoveError() {
         _uiState.update { it.copy(moveError = null) }
+    }
+
+    /** Supprime les fichiers sélectionnés selon le mode choisi. */
+    fun deleteSelectedFiles(resourceIds: List<String>, mode: FileDeleter.DeleteMode) {
+        viewModelScope.launch {
+            val files = resourceIds.mapNotNull { fileRepository.getFile(it) }
+            if (files.isEmpty()) {
+                _uiState.update { it.copy(deleteError = context.getString(R.string.delete_error)) }
+                return@launch
+            }
+            val report = fileDeleter.deleteFiles(files, mode)
+            if (report.failed > 0) {
+                _uiState.update { it.copy(deleteError = context.getString(R.string.delete_error)) }
+            } else {
+                _uiState.update { it.copy(deleteSuccess = true) }
+            }
+        }
+    }
+
+    fun clearDeleteError() {
+        _uiState.update { it.copy(deleteError = null) }
+    }
+
+    fun clearDeleteSuccess() {
+        _uiState.update { it.copy(deleteSuccess = false) }
     }
 
     /** Grille d'accueil : tous les fichiers visibles, groupés par jour (date de référence). */

@@ -17,9 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CreateNewFolder
-import androidx.compose.material.icons.filled.DriveFileMove
 import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.MergeType
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -60,6 +58,12 @@ import com.vaultdrop.mobile.ui.components.SelectionStatusIcon
 import com.vaultdrop.mobile.ui.components.ServerStatusBadge
 import com.vaultdrop.mobile.ui.components.SyncStatusAction
 import com.vaultdrop.mobile.ui.components.rememberSelectionState
+import com.vaultdrop.mobile.features.saf.FileDeleter
+import com.vaultdrop.mobile.ui.components.DeleteConfirmDialog
+import com.vaultdrop.mobile.ui.components.DeleteReview
+import com.vaultdrop.mobile.ui.components.DeleteWarningDialog
+import com.vaultdrop.mobile.ui.components.reviewDelete
+import com.vaultdrop.mobile.ui.navigation.SelectionNavBar
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -79,7 +83,12 @@ fun FolderDetailScreen(
     val selection = rememberSelectionState()
     var showCreateDialog by remember { mutableStateOf(false) }
     var showMoveDialog by remember { mutableStateOf(false) }
+    var showDeleteWarning by remember { mutableStateOf(false) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+    var pendingDeleteMode by remember { mutableStateOf<FileDeleter.DeleteMode?>(null) }
+    var pendingDeleteReview by remember { mutableStateOf<DeleteReview?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
+    val deletedLabel = stringResource(R.string.delete)
 
     LaunchedEffect(uiState.folderMissing) {
         if (uiState.folderMissing) onBack()
@@ -98,6 +107,21 @@ fun FolderDetailScreen(
         if (moveError != null) {
             snackbarHostState.showSnackbar(moveError)
             viewModel.clearMoveError()
+        }
+    }
+
+    LaunchedEffect(uiState.deleteError) {
+        val deleteError = uiState.deleteError
+        if (deleteError != null) {
+            snackbarHostState.showSnackbar(deleteError)
+            viewModel.clearDeleteError()
+        }
+    }
+
+    LaunchedEffect(uiState.deleteSuccess) {
+        if (uiState.deleteSuccess) {
+            snackbarHostState.showSnackbar(deletedLabel)
+            viewModel.clearDeleteSuccess()
         }
     }
 
@@ -135,30 +159,7 @@ fun FolderDetailScreen(
                     }
                 },
                 actions = {
-                    if (selection.active) {
-                        IconButton(
-                            onClick = { showMoveDialog = true },
-                            enabled = selection.ids.isNotEmpty(),
-                        ) {
-                            Icon(
-                                Icons.Filled.DriveFileMove,
-                                contentDescription = stringResource(R.string.move_files),
-                            )
-                        }
-                        IconButton(
-                            onClick = {
-                                val ids = selection.ids.toList()
-                                selection.clear()
-                                onBuildPdf(ids)
-                            },
-                            enabled = selection.ids.isNotEmpty(),
-                        ) {
-                            Icon(
-                                Icons.Filled.MergeType,
-                                contentDescription = stringResource(R.string.selection_assemble),
-                            )
-                        }
-                    } else {
+                    if (!selection.active) {
                         IconButton(onClick = { showCreateDialog = true }) {
                             Icon(
                                 Icons.Filled.CreateNewFolder,
@@ -178,6 +179,30 @@ fun FolderDetailScreen(
             )
         },
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
+        bottomBar = {
+            if (selection.active) {
+                SelectionNavBar(
+                    onMove = { showMoveDialog = true },
+                    onBuildPdf = {
+                        val ids = selection.ids.toList()
+                        selection.clear()
+                        onBuildPdf(ids)
+                    },
+                    onDeleteModeSelected = { mode ->
+                        val files = uiState.files.filter { it.resourceId in selection.ids }
+                        val review = reviewDelete(files, mode)
+                        pendingDeleteMode = mode
+                        pendingDeleteReview = review
+                        if (review.hasWarning) {
+                            showDeleteWarning = true
+                        } else {
+                            showDeleteConfirm = true
+                        }
+                    },
+                    enabled = selection.ids.isNotEmpty(),
+                )
+            }
+        },
     ) { padding ->
         FolderDetailContent(
             subFolders = uiState.subFolders,
@@ -215,6 +240,42 @@ fun FolderDetailScreen(
                 selection.clear()
                 showMoveDialog = false
                 viewModel.moveSelectedFiles(ids, folderId)
+            },
+        )
+    }
+
+    val deleteReview = pendingDeleteReview
+    if (showDeleteWarning && deleteReview != null) {
+        DeleteWarningDialog(
+            review = deleteReview,
+            onContinue = {
+                showDeleteWarning = false
+                showDeleteConfirm = true
+            },
+            onDismiss = {
+                showDeleteWarning = false
+                pendingDeleteMode = null
+                pendingDeleteReview = null
+            },
+        )
+    }
+
+    if (showDeleteConfirm && pendingDeleteMode != null) {
+        DeleteConfirmDialog(
+            count = selection.ids.size,
+            onConfirm = {
+                val ids = selection.ids.toList()
+                val mode = pendingDeleteMode!!
+                selection.clear()
+                showDeleteConfirm = false
+                pendingDeleteMode = null
+                pendingDeleteReview = null
+                viewModel.deleteSelectedFiles(ids, mode)
+            },
+            onDismiss = {
+                showDeleteConfirm = false
+                pendingDeleteMode = null
+                pendingDeleteReview = null
             },
         )
     }

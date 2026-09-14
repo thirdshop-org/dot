@@ -72,6 +72,10 @@ import com.vaultdrop.mobile.data.local.entity.FolderEntity
 import com.vaultdrop.mobile.features.connection.ConnectionStatusViewModel
 import com.vaultdrop.mobile.features.saf.safDisplayName
 import com.vaultdrop.mobile.features.sync.SyncViewModel
+import com.vaultdrop.mobile.features.saf.FileDeleter
+import com.vaultdrop.mobile.ui.components.DeleteConfirmDialog
+import com.vaultdrop.mobile.ui.components.DeleteReview
+import com.vaultdrop.mobile.ui.components.DeleteWarningDialog
 import com.vaultdrop.mobile.ui.components.FileCategoryIcon
 import com.vaultdrop.mobile.ui.components.FileSyncStatusIcon
 import com.vaultdrop.mobile.ui.components.FolderNameDialog
@@ -80,6 +84,7 @@ import com.vaultdrop.mobile.ui.components.SelectionStatusIcon
 import com.vaultdrop.mobile.ui.components.ServerStatusBadge
 import com.vaultdrop.mobile.ui.components.SyncStatusAction
 import com.vaultdrop.mobile.ui.components.rememberSelectionState
+import com.vaultdrop.mobile.ui.components.reviewDelete
 import com.vaultdrop.mobile.ui.navigation.FloatingNavBar
 import com.vaultdrop.mobile.ui.navigation.MoveTargetBar
 import com.vaultdrop.mobile.ui.navigation.NavTab
@@ -106,6 +111,10 @@ fun FolderListScreen(
     val context = LocalContext.current
     val selection = rememberSelectionState()
     var showCreateDialog by remember { mutableStateOf(false) }
+    var showDeleteWarning by remember { mutableStateOf(false) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+    var pendingDeleteMode by remember { mutableStateOf<FileDeleter.DeleteMode?>(null) }
+    var pendingDeleteReview by remember { mutableStateOf<DeleteReview?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
 
     val createError = uiState.createError
@@ -128,6 +137,21 @@ fun FolderListScreen(
         if (uiState.moveSuccess) {
             snackbarHostState.showSnackbar(context.getString(R.string.move_success))
             viewModel.clearMoveSuccess()
+        }
+    }
+
+    LaunchedEffect(uiState.deleteError) {
+        val deleteError = uiState.deleteError
+        if (deleteError != null) {
+            snackbarHostState.showSnackbar(deleteError)
+            viewModel.clearDeleteError()
+        }
+    }
+
+    LaunchedEffect(uiState.deleteSuccess) {
+        if (uiState.deleteSuccess) {
+            snackbarHostState.showSnackbar(context.getString(R.string.delete))
+            viewModel.clearDeleteSuccess()
         }
     }
 
@@ -243,6 +267,20 @@ fun FolderListScreen(
                         selection.clear()
                         onBuildPdf(ids)
                     },
+                    onDeleteModeSelected = { mode ->
+                        val allFiles = uiState.sections.flatMap { section ->
+                            section.rows.flatMap { row -> listOfNotNull(row.left, row.right) }
+                        }
+                        val selectedFiles = allFiles.filter { it.resourceId in selection.ids }
+                        val review = reviewDelete(selectedFiles, mode)
+                        pendingDeleteMode = mode
+                        pendingDeleteReview = review
+                        if (review.hasWarning) {
+                            showDeleteWarning = true
+                        } else {
+                            showDeleteConfirm = true
+                        }
+                    },
                     enabled = selection.ids.isNotEmpty(),
                 )
                 else -> FloatingNavBar(selected = selectedTab, onSelect = onTabSelected)
@@ -285,6 +323,42 @@ fun FolderListScreen(
             onConfirm = { name ->
                 showCreateDialog = false
                 viewModel.createFolderInBrowse(name)
+            },
+        )
+    }
+
+    val deleteReview = pendingDeleteReview
+    if (showDeleteWarning && deleteReview != null) {
+        DeleteWarningDialog(
+            review = deleteReview,
+            onContinue = {
+                showDeleteWarning = false
+                showDeleteConfirm = true
+            },
+            onDismiss = {
+                showDeleteWarning = false
+                pendingDeleteMode = null
+                pendingDeleteReview = null
+            },
+        )
+    }
+
+    if (showDeleteConfirm && pendingDeleteMode != null) {
+        DeleteConfirmDialog(
+            count = selection.ids.size,
+            onConfirm = {
+                val ids = selection.ids.toList()
+                val mode = pendingDeleteMode!!
+                selection.clear()
+                showDeleteConfirm = false
+                pendingDeleteMode = null
+                pendingDeleteReview = null
+                viewModel.deleteSelectedFiles(ids, mode)
+            },
+            onDismiss = {
+                showDeleteConfirm = false
+                pendingDeleteMode = null
+                pendingDeleteReview = null
             },
         )
     }
