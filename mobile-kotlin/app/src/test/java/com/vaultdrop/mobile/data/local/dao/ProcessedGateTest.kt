@@ -79,17 +79,16 @@ class ProcessedGateTest {
     fun nouveau_fichier_saf_non_traite_aucune_op_enqueue() = runTest {
         saveLocal(processed = false, uri = FILE_URI)
 
-        val ops = opsDao.selectPending(20)
+        val ops = selectOps(RESOURCE_ID)
         assertTrue("un fichier SAF non traité ne doit rien pousser", ops.isEmpty())
-        val file = fileDao.getByUri(FILE_URI)!!
-        assertEquals(false, file.processed)
+        assertEquals(false, fileDao.getByResourceId(RESOURCE_ID)!!.processed)
     }
 
     @Test
     fun fichier_scan_deja_traite_pousse_immediatement() = runTest {
         saveLocal(processed = true)
 
-        val ops = opsDao.selectPending(20)
+        val ops = selectOps(RESOURCE_ID)
         assertEquals(1, ops.size)
         assertEquals(PendingOperationType.CREATE_RESOURCE, ops[0].operation)
         assertEquals("file", ops[0].resourceType)
@@ -99,27 +98,25 @@ class ProcessedGateTest {
 
     @Test
     fun garder_enqueue_create_resource_une_seule_fois() = runTest {
-        saveLocal(processed = false, uri = FILE_URI)
-        val file = fileDao.getByUri(FILE_URI)!!
+        saveLocal(processed = false)
 
-        fileRepository.markProcessed(file.resourceId)
-        assertEquals(1, selectOps(file.resourceId).size)
-        assertEquals(true, fileDao.getByResourceId(file.resourceId)!!.processed)
+        fileRepository.markProcessed(RESOURCE_ID)
+        assertEquals(1, selectOps(RESOURCE_ID).size)
+        assertEquals(true, fileDao.getByResourceId(RESOURCE_ID)!!.processed)
 
         // Idempotent : re-garder (double tap) ne re-enqueue pas.
-        fileRepository.markProcessed(file.resourceId)
-        assertEquals(1, selectOps(file.resourceId).size)
+        fileRepository.markProcessed(RESOURCE_ID)
+        assertEquals(1, selectOps(RESOURCE_ID).size)
     }
 
     @Test
     fun garder_un_fichier_deja_pousse_ne_re_enqueue_pas() = runTest {
         // Fichier scan (déjà `processed`, create déjà enqueue à l'ingestion).
         saveLocal(processed = true)
-        val file = fileDao.getByResourceId(RESOURCE_ID)!!
-        assertEquals(1, selectOps(file.resourceId).size)
+        assertEquals(1, selectOps(RESOURCE_ID).size)
 
-        fileRepository.markProcessed(file.resourceId)
-        assertEquals(1, selectOps(file.resourceId).size)
+        fileRepository.markProcessed(RESOURCE_ID)
+        assertEquals(1, selectOps(RESOURCE_ID).size)
     }
 
     // --- tout marquer (markAllProcessed) ------------------------------------
@@ -163,32 +160,34 @@ class ProcessedGateTest {
 
     // --- fixtures ------------------------------------------------------------
 
-    private fun saveLocal(processed: Boolean, uri: String = "content://tree/file", resourceId: String = RESOURCE_ID) {
-        runBlockingSafe {
-            fileRepository.saveLocalFile(
-                input = SaveFileInput(
-                    uri = uri,
-                    name = "$resourceId.txt",
-                    extension = "txt",
-                    size = 1024,
-                    mimeType = "text/plain",
-                    resourceId = resourceId,
-                    processed = processed,
-                ),
-                folderResourceId = FOLDER,
-            )
-        }
+    private suspend fun saveLocal(
+        processed: Boolean,
+        uri: String = "content://tree/file",
+        resourceId: String = RESOURCE_ID,
+    ) {
+        fileRepository.saveLocalFile(
+            input = SaveFileInput(
+                uri = uri,
+                name = "$resourceId.txt",
+                extension = "txt",
+                size = 1024,
+                mimeType = "text/plain",
+                resourceId = resourceId,
+                processed = processed,
+            ),
+            folderResourceId = FOLDER,
+        )
     }
 
-    private fun selectOps(resourceId: String): List<PendingOperationEntity> =
-        runBlockingSafe { opsDao.selectPending(100) }.filter { it.resourceId == resourceId }
+    private suspend fun selectOps(resourceId: String): List<PendingOperationEntity> =
+        opsDao.selectPending(100).filter { it.resourceId == resourceId }
 
     private fun op(
         resourceId: String,
         operation: String,
         status: String,
     ) = PendingOperationEntity(
-        operationId = operationIdSeq.format(),
+        operationId = String.format("%032x", opSeq++),
         resourceId = resourceId,
         resourceType = "file",
         operation = operation,
@@ -199,8 +198,6 @@ class ProcessedGateTest {
     )
 
     private var opSeq = 0
-    private val operationIdSeq: String get() = String.format("%032x", opSeq++)
-    private fun <T> runBlockingSafe(block: suspend () -> T): T = kotlinx.coroutines.runBlocking { block() }
 
     private companion object {
         const val NOW = 1_700_000_000_000L
