@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -65,6 +66,8 @@ import com.vaultdrop.mobile.ui.components.DeleteReview
 import com.vaultdrop.mobile.ui.components.DeleteWarningDialog
 import com.vaultdrop.mobile.ui.components.reviewDelete
 import com.vaultdrop.mobile.ui.navigation.SelectionNavBar
+import com.vaultdrop.mobile.ui.share.ShareBottomSheet
+import com.vaultdrop.mobile.ui.share.ShareViewModel
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -78,14 +81,17 @@ fun FolderDetailScreen(
     connectionStatusViewModel: ConnectionStatusViewModel,
     syncViewModel: SyncViewModel,
     viewModel: FolderDetailViewModel = hiltViewModel(),
+    shareViewModel: ShareViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val connectionStatus by connectionStatusViewModel.status.collectAsStateWithLifecycle()
+    val shareState by shareViewModel.uiState.collectAsStateWithLifecycle()
     val selection = rememberSelectionState()
     var showCreateDialog by remember { mutableStateOf(false) }
     var showMoveDialog by remember { mutableStateOf(false) }
     var showDeleteWarning by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    var showShareSheet by remember { mutableStateOf(false) }
     var pendingDeleteMode by remember { mutableStateOf<FileDeleter.DeleteMode?>(null) }
     var pendingDeleteReview by remember { mutableStateOf<DeleteReview?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
@@ -172,6 +178,12 @@ fun FolderDetailScreen(
                             status = connectionStatus,
                             onClick = connectionStatusViewModel::checkNow,
                         )
+                        IconButton(onClick = { showShareSheet = true }) {
+                            Icon(
+                                Icons.Filled.Share,
+                                contentDescription = stringResource(R.string.share_content_description),
+                            )
+                        }
                         IconButton(onClick = viewModel::refresh) {
                             Icon(Icons.Filled.Refresh, contentDescription = stringResource(R.string.refresh))
                         }
@@ -278,6 +290,22 @@ fun FolderDetailScreen(
                 pendingDeleteMode = null
                 pendingDeleteReview = null
             },
+        )
+    }
+
+    if (showShareSheet) {
+        ShareBottomSheet(
+            resourceName = uiState.folder?.name ?: stringResource(R.string.folder),
+            onDismiss = {
+                showShareSheet = false
+                shareViewModel.reset()
+            },
+            onShare = { username, access ->
+                shareViewModel.share(folderResourceId, "folder", username, access)
+            },
+            sharing = shareState.sharing,
+            error = shareState.error,
+            enqueued = shareState.enqueued,
         )
     }
 }

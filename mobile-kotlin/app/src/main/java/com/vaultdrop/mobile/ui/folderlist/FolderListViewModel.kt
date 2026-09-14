@@ -147,6 +147,16 @@ class FolderListViewModel @Inject constructor(
                     _uiState.update { it.copy(browseSubFolders = subFolders) }
                 }
         }
+        viewModelScope.launch {
+            _defaultRootId.combine(_browseFolderId) { root, browse -> browse ?: root }
+                .flatMapLatest { parentId ->
+                    if (parentId == null) flowOf(emptyList())
+                    else fileRepository.observeFiles(parentId)
+                }
+                .collect { files ->
+                    _uiState.update { it.copy(browseFiles = files) }
+                }
+        }
     }
 
     /** Descend dans l'explorateur Dossiers (aussi en mode déplacement). */

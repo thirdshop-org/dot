@@ -21,6 +21,8 @@ func writeError(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, repository.ErrNotFound):
 		api.Error(c, 404, "NOT_FOUND", "resource not found")
+	case errors.Is(err, repository.ErrGranteeNotFound):
+		api.Error(c, 404, "GRANTEE_NOT_FOUND", "the specified user does not exist")
 	case errors.Is(err, repository.ErrNameConflict):
 		api.Error(c, 409, "NAME_CONFLICT", "a resource with this name already exists here")
 	case errors.Is(err, service.FileTooLargeError):

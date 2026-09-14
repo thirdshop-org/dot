@@ -305,6 +305,7 @@ fun FolderListScreen(
                 atRoot = uiState.browseFolderId == null,
                 browseFolderName = uiState.browseFolderName,
                 subFolders = uiState.browseSubFolders,
+                browseFiles = uiState.browseFiles,
                 sections = uiState.sections,
                 isImporting = importState.isImporting,
                 error = uiState.error ?: importState.error,
@@ -467,6 +468,7 @@ private fun HomeViewContent(
     atRoot: Boolean,
     browseFolderName: String?,
     subFolders: List<FolderEntity>,
+    browseFiles: List<FileEntity>,
     sections: List<FileSection>,
     isImporting: Boolean,
     error: String?,
@@ -491,11 +493,14 @@ private fun HomeViewContent(
             atRoot = atRoot,
             browseFolderName = browseFolderName,
             subFolders = subFolders,
+            browseFiles = browseFiles,
             isImporting = isImporting,
             error = error,
+            selection = selection,
             onBrowseUp = onBrowseUp,
             onOpenBrowseFolder = onOpenBrowseFolder,
             onCreateFolder = onCreateFolder,
+            onOpenDocument = onOpenDocument,
             modifier = modifier,
         )
     }
@@ -592,13 +597,17 @@ private fun FolderBrowserContent(
     atRoot: Boolean,
     browseFolderName: String?,
     subFolders: List<FolderEntity>,
+    browseFiles: List<FileEntity>,
     isImporting: Boolean,
     error: String?,
+    selection: SelectionState,
     onBrowseUp: () -> Unit,
     onOpenBrowseFolder: (String) -> Unit,
     onCreateFolder: () -> Unit,
+    onOpenDocument: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val empty = subFolders.isEmpty() && (moveMode || browseFiles.isEmpty()) && !isImporting
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(horizontal = 16.dp),
@@ -677,7 +686,20 @@ private fun FolderBrowserContent(
             FolderRow(folder, onClick = { onOpenBrowseFolder(folder.resourceId) })
         }
 
-        if (subFolders.isEmpty() && !isImporting) {
+        // En mode déplacement, le navigateur sert au choix de la cible : les
+        // fichiers du dossier courant ne sont pas affichés (reste un pur
+        // explorateur de dossiers).
+        if (!moveMode) {
+            items(browseFiles, key = { it.resourceId }) { file ->
+                BrowseFileRow(
+                    file = file,
+                    selection = selection,
+                    onOpenDocument = { onOpenDocument(file.resourceId) },
+                )
+            }
+        }
+
+        if (empty) {
             item(key = "empty") {
                 Text(
                     text = stringResource(if (atRoot) R.string.no_folders_yet else R.string.empty_folder),
@@ -852,6 +874,67 @@ private fun FileCard(
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+        }
+    }
+}
+
+/** Carte fichier dans l'explorateur Dossiers — clic pour ouvrir, clic long pour la sélection. */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun BrowseFileRow(
+    file: FileEntity,
+    selection: SelectionState,
+    onOpenDocument: () -> Unit,
+) {
+    val selected = file.resourceId in selection.ids
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 6.dp)
+            .combinedClickable(
+                onClick = {
+                    if (selection.active) selection.toggle(file.resourceId) else onOpenDocument()
+                },
+                onLongClick = {
+                    if (!selection.active) selection.start(file.resourceId)
+                },
+            ),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            FileCategoryIcon(file = file, size = 26.dp)
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = file.name,
+                    style = MaterialTheme.typography.bodyLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    fontWeight = FontWeight.Medium,
+                )
+                Text(
+                    text = formatSize(file.size),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            if (selection.active) {
+                SelectionStatusIcon(selected = selected)
+            } else {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    FilePendingReviewBadge(file = file)
+                    FileSyncStatusIcon(file = file, size = 20.dp)
+                }
+            }
         }
     }
 }

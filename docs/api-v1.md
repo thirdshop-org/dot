@@ -32,6 +32,7 @@ Références : `V2.md` (modèle cible), `mobile/services/db/` (conventions sync)
 | GET | `/health` | — | `{ "status": "healthy" }` | — |
 | POST | `/devices` | `{ "deviceId": "…32-hex" }` (client-generated) | `{ "deviceId": "…32-hex" }` — **aucun token** (V1 finale) | `INVALID_DEVICE_ID` |
 | POST | `/auth/login` | `{ "username", "password", "device_id" }` | `{ "token", "expires_at" (ms), "user": { "id", "username", "is_admin" } }` | `UNAUTHORIZED` / `INVALID_DEVICE_ID` |
+| GET | `/shares/links/:token` | — (public, sans auth) | `{ "token", "resource_id", "resourceType", "name", "access", "expiresAt" }` | `NOT_FOUND` (inconnu/révoqué/expiré) |
 | GET | `/users/resolve` | query `username` (obligatoire) | `{ "id", "username" }` | `NOT_FOUND` |
 | PATCH | `/users/me/password` | `{ "current_password", "new_password" }` | `{ "id" }` | `INVALID_PASSWORD` (403) |
 | GET | `/files` | query `folderId?`, `page?`, `pageSize?`, `sort?` | `FileDto[]` (+ `meta`) | — |
@@ -44,6 +45,8 @@ Références : `V2.md` (modèle cible), `mobile/services/db/` (conventions sync)
 | GET | `/ocr/jobs/:id` | — | `OcrJob` | `NOT_FOUND` |
 | POST | `/sync/ops` | voir §6 | voir §6 | — |
 | GET | `/sync/permissions` | query `after?` (cached_at ms) | `ResourcePermission[]` | — |
+
+> **Lecture partagée** : `GET /files`, `GET /files/:id`, `GET /files/search` et `GET /files/folders` couvrent les ressources **possédées ET partagées** (accès `viewer+`, §6.2). Le rename d'une ressource partagée passe par l'outbox `update_metadata` (nécessite `editor+`, §6.1). `DELETE /files/:id` reste owner-only.
 
 ### DTOs (copie conforme de `mobile/api/types.ts`)
 
@@ -100,13 +103,18 @@ type OcrJob = { id: string; status: OcrJobStatus; text?: string | null; error?: 
 - **Identifiants** : `operation_id` est un **TEXT 32-hex** généré par le client (`^[0-9a-f]{32}$`, CHECK-enforced depuis la migration `000008`), distinct de `resource_id`. L'idempotence outbox reste **par device** : `UNIQUE(device_id, operation_id)` (la réinscription d'un device avec un login différent ne réutilise pas l'historique outbox d'un autre compte). Pour chaque op : si déjà traitée → **no-op** (comptée comme appliquée, les doublons arrivent à cause du backoff/retry). Sinon appliquée si valide.
 - **Ordre** : les opérations sont appliquées **séquentiellement**, dans l'ordre du batch. Le serveur **s'arrête à la première erreur non-idempotente** et renvoie l'index atteint — le client reprend à cet index.
 - Réponse : `2xx` avec `{ "applied": int, "failed": { "operation_id": "…32-hex", "code": string, "message": string } | null }` (`applied` = index de la prochaine op à envoyer).
-- Côté client, le `pushStatus` (pending/synced/failed) des shares/share_links est **dérivé** de l'état des opérations de l'outbox ; **dead-letter immédiat** sur erreur 4xx non-idempotente (`failed`, non resélectionné ; `attempts` reste un compteur diagnostic, pas un seuil) — seul le transitoire (`NETWORK_ERROR`/5xx) est rejoué avec backoff. **Côté serveur, les ops `share | revoke_share | update_share | create_link | revoke_link` sont accusées réception mais ne créent aucun état** (V1 single-owner, pas de table shares serveur) — la dérivation du pushStatus reste purement client.
+- Côté client, le `pushStatus` (pending/synced/failed) des shares/share_links est **dérivé** de l'état des opérations de l'outbox ; **dead-letter immédiat** sur erreur 4xx non-idempotente (`failed`, non resélectionné ; `attempts` reste un compteur diagnostic, pas un seuil) — seul le transitoire (`NETWORK_ERROR`/5xx) est rejoué avec backoff. **Côté serveur, les ops partage créent un état réel** (tables `shares`/`share_links`, migration `000009`) — l'outbox est le seul chemin d'écriture des droits.
 - Sémantique d'application (côté serveur) :
   - `create_resource` : crée la ressource ; **déjà présente → no-op** (rejeu idempotent). `payload.name` obligatoire ; `payload.parentResourceId` (32-hex, optionnel) = dossier parent — absent → racine. **Parent inexistant → `NOT_FOUND`** (cohérent avec `move_resource`). Ordre garanti par construction client : le walk SAF émet les `create` des dossiers (ordre préfixe) avant ceux des fichiers, dans la même transaction Room → `id ASC` = parent avant enfant.
-  - `update_metadata` / `move_resource` : ressource absente → **no-op** (état terminal atteint) ; dossier cible de `move_resource` absent → `NOT_FOUND` ; déplacement dans soi-même → `INVALID_REQUEST`.
+  - `update_metadata` : ressource absente → **no-op** (état terminal atteint) ; **ressource partagée : nécessite `editor+`** (§6.2) — sinon `NOT_FOUND` (une ressource visible mais sans droit de mutation n'est pas renommée) ; une ressource sans relation applicable (ni owner, ni grant) reste un no-op (pas d'énumération). `move_resource` / `delete_resource` restent **owner-only** (scoping par `user_id`, les ops d'un non-owner sont des no-op).
   - `delete_resource` : **idempotent** — suppression d'une ressource absente = succès.
+  - **Partage** (`share` / `update_share`, même sémantique d'upsert) : `payload = { "granteeUserId": "…32-hex", "access": "viewer"|"commenter"|"editor", "inherit"?: bool, "expiresAt"?: ms }`. La ressource doit **appartenir** au user appelant (sinon `NOT_FOUND`) ; le grantee doit exister (sinon `GRANTEE_NOT_FOUND`) ; accès déjà partagé → mis à jour (idempotent). Privilégier `viewer` < `commenter` < `editor` (< `owner` réservé à l'ownership, non partageable → `INVALID_REQUEST`).
+  - `revoke_share` : `payload = { "granteeUserId": "…32-hex" }`. **Idempotent** (déjà révoqué/absent → no-op).
+  - `create_link` : `payload = { "token": "…32-hex", "access": "viewer"|"commenter"|"editor", "expiresAt"?: ms }`. Le token est **généré côté client** (`GenerateId`), c'est l'identifiant du lien (colonne `id` de `share_links`).
+  - `revoke_link` : `payload = { "token": "…32-hex" }`. **Idempotent**.
   - Validation (deuxième champ `operation_id`, hex32 pour `resource_id` **et** `operation_id`, enum `operation`) → échec `INVALID_REQUEST` avec arrêt du batch.
   - Nom déjà pris (même parent, ou à la racine) → échec `NAME_CONFLICT`.**
+- **Lien public** : `GET /shares/links/:token` est **sans authentification** (résolution publique d'un lien) et renvoie `{ "token", "resource_id", "resourceType", "name", "access", "expiresAt" }`. `NOT_FOUND` si le lien est inconnu, révoqué ou expiré.
 
 ### 6.2 Snapshot — `GET /sync/permissions?after=<cached_at_ms>`
 
@@ -117,6 +125,8 @@ type ResourcePermission = {
   resource_id: string;            // 32-hex
   resourceType: 'folder' | 'file';
   effectiveAccess: 'viewer' | 'commenter' | 'editor' | 'owner';
+  name: string;                   // nom de la ressource (hydratation mobile)
+  parentId: string | null;        // parent 32-hex, null = racine (hydratation mobile)
   inherit: boolean;
   ownerId: string | null;         // ownership USER si applicable
   sharedById: string | null;
@@ -128,10 +138,11 @@ type ResourcePermission = {
 
 - **Calcul de `effective_access`** (le serveur est la source de vérité) :
   1. Rang : `viewer = 1 < commenter = 2 < editor = 3 < owner = 4`.
-  2. La permission **exacte sur le nœud** est autoritaire (elle n'est pas annulée par son propre `inherit=false`).
+  2. La permission **exacte sur le nœud** est autoritaire — elle n'est pas annulée par son propre `inherit=false` et n'est pas écrasée par un ancêtre de rang supérieur.
   3. Les ancêtres propagent **uniquement si leur relation a `inherit = true`** ; une relation expirée (`expires_at` passé) est ignorée **et ne propage pas**.
   4. `owner_id` == le user appelant → `owner` (fallback, quel que soit le niveau remonté).
-  5. Le **rang le plus élevé** l'emporte ; sans relation applicable et sans ownership → la ressource n'est pas dans le snapshot.
+  5. Le **rang le plus élevé** l'emporte pour les nœuds **sans permission propre** ; sans relation applicable et sans ownership → la ressource n'est pas dans le snapshot. `inherit = false` sur un nœud intermédiaire stoppe uniquement la propagation de **sa propre relation** ; une relation `inherit = true` plus haut continue de traverser.
+- **Delta** : `after` filtre sur `resource.updated_at` **et** l'`updated_at` de la relation gagnante — une ressource nouvellement partagée apparaît dans le delta du grantee dès sa création. **Révoquée/expirée, la ressource disparaît du snapshot** : la convergence côté client passe par les pulls complets (`after=0`, à chaque login et quand le cache dépasse le TTL 24h).
 - **TTL / stale** : après `PERMISSION_TTL_MS` (= 24h) sans reseed, `canAccess` **downgrade en lecture seule** (`viewer`) vers le cache.
 
 ### 6.3 Placements
@@ -142,6 +153,7 @@ type ResourcePermission = {
 
 - Authentification : `UNAUTHORIZED` (**401** — token manquant/invalide/expiré, compte supprimé, OU identifiants de login erronés : **indistinguables par design**, même code+message), `INVALID_DEVICE_ID` (**400** — device non enregistré au login).
 - Ressources : `NOT_FOUND` (404), `NAME_CONFLICT` (409 — même nom dans le même parent, cf. `UNIQUE(parent_id, name)`, **ou à la racine**, index partiel `(user_id, name) WHERE parent_id IS NULL`), `FILE_TOO_LARGE` (413), `INVALID_PASSWORD` (403 sur `PATCH /users/me/password`).
+- Partage : `GRANTEE_NOT_FOUND` (404 — grantee inexistant sur une op share), `NOT_FOUND` (404 — ressource non possédée sur une op share : scoping, pas d'énumération).
 - Client-only : `NETWORK_ERROR`, `INVALID_RESPONSE` (2xx mais corps d'enveloppe invalide), `HTTP_<status>` (fallback). Statut `SERVICE_UNAVAILABLE` (503) si le backend n'est pas initialisé.
 - **V1 finale : toutes les routes sont réelles** (pas de 501 restant).
 

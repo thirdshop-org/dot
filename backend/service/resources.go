@@ -54,7 +54,7 @@ func NewResources(repo *repository.Repository, uploadDir string, maxFileSize int
 }
 
 func (s *Resources) ListFiles(ownerID, folderID string, page, pageSize int, sort, order string) ([]FileDTO, int, error) {
-	rows, total, err := s.Repo.ListFiles(ownerID, folderID, pageSize, (page-1)*pageSize, sort, order)
+	rows, total, err := s.Repo.ListFilesVisible(ownerID, folderID, pageSize, (page-1)*pageSize, sort, order)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -66,7 +66,7 @@ func (s *Resources) ListFiles(ownerID, folderID string, page, pageSize int, sort
 }
 
 func (s *Resources) GetFile(ownerID, id string) (FileDTO, error) {
-	row, err := s.Repo.GetFile(ownerID, id)
+	row, err := s.Repo.GetFileVisible(ownerID, id)
 	if err != nil {
 		return FileDTO{}, err
 	}
@@ -78,7 +78,7 @@ func (s *Resources) DeleteFile(ownerID, id string) (string, error) {
 }
 
 func (s *Resources) ListRootFolders(ownerID string) ([]FolderDTO, error) {
-	rows, err := s.Repo.ListRootFolders(ownerID)
+	rows, err := s.Repo.ListRootFoldersVisible(ownerID)
 	if err != nil {
 		return nil, err
 	}
@@ -90,7 +90,7 @@ func (s *Resources) ListRootFolders(ownerID string) ([]FolderDTO, error) {
 }
 
 func (s *Resources) SearchFiles(ownerID, q string, page, pageSize int) ([]FileDTO, int, error) {
-	rows, total, err := s.Repo.SearchFiles(ownerID, q, pageSize, (page-1)*pageSize)
+	rows, total, err := s.Repo.SearchFilesVisible(ownerID, q, pageSize, (page-1)*pageSize)
 	if err != nil {
 		return nil, 0, err
 	}

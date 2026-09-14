@@ -6,6 +6,7 @@ import com.vaultdrop.mobile.data.remote.dto.FileDto
 import com.vaultdrop.mobile.data.remote.dto.FolderDto
 import com.vaultdrop.mobile.data.remote.dto.LoginRequestDto
 import com.vaultdrop.mobile.data.remote.dto.LoginResponseDto
+import com.vaultdrop.mobile.data.remote.dto.ResolvedUserDto
 import com.vaultdrop.mobile.data.remote.dto.ResourcePermissionDto
 import com.vaultdrop.mobile.data.remote.dto.SyncOpsRequest
 import com.vaultdrop.mobile.data.remote.dto.SyncOpsResult
@@ -50,6 +51,12 @@ interface ApiService {
     suspend fun syncOps(
         @Body body: SyncOpsRequest,
     ): Response<ApiEnvelope<SyncOpsResult>>
+
+    /** Résolution d'un destinataire par username EXACT (jamais d'énumération). */
+    @GET("users/resolve")
+    suspend fun resolveUser(
+        @Query("username") username: String,
+    ): Response<ApiEnvelope<ResolvedUserDto>>
 
     /** Snapshot des permissions effectives (delta si `after` fourni, ms epoch). */
     @GET("sync/permissions")

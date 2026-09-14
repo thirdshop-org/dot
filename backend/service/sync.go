@@ -11,8 +11,7 @@ import (
 
 var resourceIDPattern = regexp.MustCompile(`^[0-9a-f]{32}$`)
 
-// Ops de l'outbox (docs/api-v1.md §6.1). Les ops partage (share/share_link)
-// sont accusées réception mais sans état serveur en V1 (single-owner).
+// Ops de l'outbox (docs/api-v1.md §6.1).
 const (
 	OpCreateResource = "create_resource"
 	OpUpdateMetadata = "update_metadata"
@@ -24,11 +23,6 @@ const (
 	OpCreateLink     = "create_link"
 	OpRevokeLink     = "revoke_link"
 )
-
-var ackOnlyOps = map[string]bool{
-	OpShare: true, OpRevokeShare: true, OpUpdateShare: true,
-	OpCreateLink: true, OpRevokeLink: true,
-}
 
 // SyncOperation is one outbox entry (shadow of mobile PendingOperationRow).
 type SyncOperation struct {
@@ -69,12 +63,35 @@ type movePayload struct {
 	ToFolderResourceID string `json:"toFolderResourceId"`
 }
 
+type sharePayload struct {
+	GranteeUserID string `json:"granteeUserId"`
+	Access        string `json:"access"`
+	Inherit       *bool  `json:"inherit"`
+	ExpiresAt     *int64 `json:"expiresAt"`
+}
+
+type revokeSharePayload struct {
+	GranteeUserID string `json:"granteeUserId"`
+}
+
+type linkPayload struct {
+	Token     string `json:"token"`
+	Access    string `json:"access"`
+	ExpiresAt *int64 `json:"expiresAt"`
+}
+
+type revokeLinkPayload struct {
+	Token string `json:"token"`
+}
+
 func classifySyncError(err error) (string, string) {
 	switch {
 	case errors.Is(err, repository.ErrNameConflict):
 		return "NAME_CONFLICT", "a resource with this name already exists here"
 	case errors.Is(err, repository.ErrNotFound):
 		return "NOT_FOUND", "target resource or folder not found"
+	case errors.Is(err, repository.ErrGranteeNotFound):
+		return "GRANTEE_NOT_FOUND", "the specified user does not exist"
 	default:
 		return "INVALID_REQUEST", err.Error()
 	}
@@ -96,12 +113,6 @@ func (s *Resources) ApplyBatch(userID, deviceID string, ops []SyncOperation) (Sy
 		if already {
 			continue
 		}
-		if ackOnlyOps[op.Operation] {
-			if err := s.recordApplied(deviceID, op); err != nil {
-				return SyncResult{}, err
-			}
-			continue
-		}
 		if err := s.applySyncOp(userID, op); err != nil {
 			code, message := classifySyncError(err)
 			return SyncResult{Applied: i, Failed: &FailedOperation{OperationID: op.OperationID, Code: code, Message: message}}, nil
@@ -120,14 +131,12 @@ func validateSyncOp(op *SyncOperation) error {
 	if op.Operation == "" {
 		return errors.New("missing operation type")
 	}
-	if ackOnlyOps[op.Operation] {
-		return nil
-	}
 	if !resourceIDPattern.MatchString(derefString(op.ResourceID)) {
 		return errors.New("resource_id must be 32 lowercase hex chars")
 	}
 	switch op.Operation {
-	case OpCreateResource, OpUpdateMetadata, OpMoveResource, OpDeleteResource:
+	case OpCreateResource, OpUpdateMetadata, OpMoveResource, OpDeleteResource,
+		OpShare, OpRevokeShare, OpUpdateShare, OpCreateLink, OpRevokeLink:
 	default:
 		return errors.New("unknown operation " + op.Operation)
 	}
@@ -169,12 +178,19 @@ func (s *Resources) applySyncOp(ownerID string, op *SyncOperation) error {
 		return s.Repo.InsertFile(ownerID, resourceID, p.Name, p.ParentResourceID, 0, &mime, nullableString(p.Extension))
 
 	case OpUpdateMetadata:
-		exists, err := s.Repo.ExistsOwner(ownerID, resourceID)
+		// Owner can always rename. A shared resource can be renamed by an
+		// editor+ (docs §6.2 effective_access ranking). Below editor, or on
+		// a resource the caller cannot reach at all, we keep the documented
+		// terminal-state semantics: absent → no-op.
+		access, err := s.Repository.Shares.EffectiveAccess(ownerID, resourceID)
 		if err != nil {
 			return err
 		}
-		if !exists {
-			return nil
+		if access.EffectiveRank < repository.AccessEditor {
+			if !access.Accessible {
+				return nil
+			}
+			return repository.ErrNotFound
 		}
 		var p renamePayload
 		if err := json.Unmarshal(op.Payload, &p); err != nil {
@@ -183,7 +199,7 @@ func (s *Resources) applySyncOp(ownerID string, op *SyncOperation) error {
 		if p.Name == "" {
 			return errors.New("payload.name required")
 		}
-		return s.Repo.UpdateName(ownerID, resourceID, p.Name)
+		return s.Repo.UpdateNameByID(resourceID, p.Name)
 
 	case OpMoveResource:
 		exists, err := s.Repo.ExistsOwner(ownerID, resourceID)
@@ -205,9 +221,144 @@ func (s *Resources) applySyncOp(ownerID string, op *SyncOperation) error {
 	case OpDeleteResource:
 		return s.Repo.SyncDelete(ownerID, resourceID)
 
+	case OpShare, OpUpdateShare:
+		return s.applyShareOp(ownerID, resourceID, op)
+
+	case OpRevokeShare:
+		return s.applyRevokeShareOp(ownerID, resourceID, op)
+
+	case OpCreateLink:
+		return s.applyCreateLinkOp(ownerID, resourceID, op)
+
+	case OpRevokeLink:
+		return s.applyRevokeLinkOp(ownerID, resourceID, op)
+
 	default:
 		return errors.New("unknown operation " + op.Operation)
 	}
+}
+
+// applyShareOp handles OpShare and OpUpdateShare: upsert a user-to-user grant.
+func (s *Resources) applyShareOp(ownerID, resourceID string, op *SyncOperation) error {
+	exists, err := s.Repo.ExistsOwner(ownerID, resourceID)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return repository.ErrNotFound
+	}
+	var p sharePayload
+	if err := json.Unmarshal(op.Payload, &p); err != nil {
+		return errors.New("invalid payload: " + err.Error())
+	}
+	if p.GranteeUserID == "" {
+		return errors.New("payload.granteeUserId required")
+	}
+	if !resourceIDPattern.MatchString(p.GranteeUserID) {
+		return errors.New("payload.granteeUserId must be 32 lowercase hex chars")
+	}
+	rank := repository.AccessFromString(p.Access)
+	if rank < repository.AccessViewer || rank > repository.AccessEditor {
+		return errors.New("payload.access must be viewer, commenter, or editor")
+	}
+	// Validate grantee exists and is active.
+	if _, err := s.Repository.Users.GetByID(p.GranteeUserID); err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return repository.ErrGranteeNotFound
+		}
+		return err
+	}
+	inherit := true
+	if p.Inherit != nil {
+		inherit = *p.Inherit
+	}
+	var expiresAt *time.Time
+	if p.ExpiresAt != nil {
+		t := time.UnixMilli(*p.ExpiresAt)
+		expiresAt = &t
+	}
+	if err := s.Repository.Shares.Upsert(resourceID, p.GranteeUserID, p.Access, inherit, expiresAt, ownerID); err != nil {
+		return err
+	}
+	// Bump resource updated_at so the grantee's delta snapshot picks it up.
+	return s.Repo.TouchResource(resourceID)
+}
+
+// applyRevokeShareOp handles OpRevokeShare: soft-revoke a user-to-user grant.
+func (s *Resources) applyRevokeShareOp(ownerID, resourceID string, op *SyncOperation) error {
+	exists, err := s.Repo.ExistsOwner(ownerID, resourceID)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return repository.ErrNotFound
+	}
+	var p revokeSharePayload
+	if err := json.Unmarshal(op.Payload, &p); err != nil {
+		return errors.New("invalid payload: " + err.Error())
+	}
+	if p.GranteeUserID == "" {
+		return errors.New("payload.granteeUserId required")
+	}
+	if !resourceIDPattern.MatchString(p.GranteeUserID) {
+		return errors.New("payload.granteeUserId must be 32 lowercase hex chars")
+	}
+	// Revoke is idempotent: no-op if already revoked/missing.
+	_ = s.Repository.Shares.Revoke(resourceID, p.GranteeUserID)
+	// Bump resource updated_at so the grantee's delta snapshot reflects the change.
+	return s.Repo.TouchResource(resourceID)
+}
+
+// applyCreateLinkOp handles OpCreateLink: create a public share link.
+func (s *Resources) applyCreateLinkOp(ownerID, resourceID string, op *SyncOperation) error {
+	exists, err := s.Repo.ExistsOwner(ownerID, resourceID)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return repository.ErrNotFound
+	}
+	var p linkPayload
+	if err := json.Unmarshal(op.Payload, &p); err != nil {
+		return errors.New("invalid payload: " + err.Error())
+	}
+	if !resourceIDPattern.MatchString(p.Token) {
+		return errors.New("payload.token must be 32 lowercase hex chars")
+	}
+	rank := repository.AccessFromString(p.Access)
+	if rank < repository.AccessViewer || rank > repository.AccessEditor {
+		return errors.New("payload.access must be viewer, commenter, or editor")
+	}
+	var expiresAt *time.Time
+	if p.ExpiresAt != nil {
+		t := time.UnixMilli(*p.ExpiresAt)
+		expiresAt = &t
+	}
+	if err := s.Repository.Shares.CreateLink(p.Token, resourceID, p.Access, expiresAt, ownerID); err != nil {
+		return err
+	}
+	return s.Repo.TouchResource(resourceID)
+}
+
+// applyRevokeLinkOp handles OpRevokeLink: soft-revoke a public share link.
+func (s *Resources) applyRevokeLinkOp(ownerID, resourceID string, op *SyncOperation) error {
+	exists, err := s.Repo.ExistsOwner(ownerID, resourceID)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return repository.ErrNotFound
+	}
+	var p revokeLinkPayload
+	if err := json.Unmarshal(op.Payload, &p); err != nil {
+		return errors.New("invalid payload: " + err.Error())
+	}
+	if !resourceIDPattern.MatchString(p.Token) {
+		return errors.New("payload.token must be 32 lowercase hex chars")
+	}
+	// Revoke is idempotent: no-op if already revoked/missing.
+	_ = s.Repository.Shares.RevokeLink(p.Token)
+	return s.Repo.TouchResource(resourceID)
 }
 
 func (s *Resources) recordApplied(deviceID string, op *SyncOperation) error {
@@ -245,39 +396,47 @@ func nullableInt64(value int64) *int64 {
 // ResourcePermission is the snapshot shape consumed by canAccess
 // (docs/api-v1.md §6.2).
 type ResourcePermission struct {
-	ResourceID      string `json:"resource_id"`
-	ResourceType    string `json:"resourceType"`
-	EffectiveAccess string `json:"effectiveAccess"`
-	Inherit         bool   `json:"inherit"`
-	OwnerID         string `json:"ownerId"`
-	SharedByID      any    `json:"sharedById"`
-	ExpiresAt       any    `json:"expiresAt"`
-	CachedAt        int64  `json:"cachedAt"`
-	UpdatedAt       int64  `json:"updatedAt"`
+	ResourceID      string  `json:"resource_id"`
+	ResourceType    string  `json:"resourceType"`
+	EffectiveAccess string  `json:"effectiveAccess"`
+	Name            string  `json:"name"`
+	ParentID        *string `json:"parentId"`
+	Inherit         bool    `json:"inherit"`
+	OwnerID         string  `json:"ownerId"`
+	SharedByID      *string `json:"sharedById"`
+	ExpiresAt       *int64  `json:"expiresAt"`
+	CachedAt        int64   `json:"cachedAt"`
+	UpdatedAt       int64   `json:"updatedAt"`
 }
 
 // Snapshot returns the delta of effective permissions for the user since
-// afterMs (epoch ms; 0 = all). V1 : pas encore de partage entre users — toutes
-// les ressources appartiennent au user appelant (effective_access = owner).
+// afterMs (epoch ms; 0 = all). Uses the recursive CTE computed by
+// repository.Shares.ListEffectivePermissions.
 func (s *Resources) Snapshot(ownerID string, afterMs int64) ([]ResourcePermission, error) {
-	rows, err := s.Repo.ListOwned(ownerID, afterMs)
+	perms, err := s.Repository.Shares.ListEffectivePermissions(ownerID, afterMs)
 	if err != nil {
 		return nil, err
 	}
 	now := time.Now().UnixMilli()
-	perms := make([]ResourcePermission, 0, len(rows))
-	for _, row := range rows {
-		perms = append(perms, ResourcePermission{
-			ResourceID:      row.ID,
-			ResourceType:    row.Type,
-			EffectiveAccess: "owner",
-			Inherit:         false,
-			OwnerID:         ownerID,
-			SharedByID:      nil,
-			ExpiresAt:       nil,
+	out := make([]ResourcePermission, 0, len(perms))
+	for _, p := range perms {
+		rp := ResourcePermission{
+			ResourceID:      p.ResourceID,
+			ResourceType:    p.ResourceType,
+			EffectiveAccess: repository.AccessToString(p.EffectiveRank),
+			Name:            p.Name,
+			ParentID:        p.ParentID,
+			Inherit:         p.Inherit,
+			OwnerID:         p.OwnerID,
+			SharedByID:      p.SharedByID,
 			CachedAt:        now,
-			UpdatedAt:       row.UpdatedAt.UnixMilli(),
-		})
+			UpdatedAt:       p.UpdatedAt.UnixMilli(),
+		}
+		if p.ExpiresAt != nil {
+			ms := p.ExpiresAt.UnixMilli()
+			rp.ExpiresAt = &ms
+		}
+		out = append(out, rp)
 	}
-	return perms, nil
+	return out, nil
 }

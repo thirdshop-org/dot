@@ -10,14 +10,16 @@ import (
 )
 
 // RegisterRoutes wires the full /api/v1 surface (public + protected).
-// Public: /health, /devices, /auth/login. Everything else requires a user
-// bearer token (subject = user_id, claim = device_id, cf. docs/api-v1.md §2).
+// Public: /health, /devices, /auth/login, /shares/links/:token (résolution de
+// lien anonyme). Everything else requires a user bearer token (subject =
+// user_id, claim = device_id, cf. docs/api-v1.md §2).
 func RegisterRoutes(r *gin.Engine) {
 	public := r.Group("/api/v1")
 	{
 		public.GET("/health", Health)
 		public.POST("/devices", DevicesRegister)
 		public.POST("/auth/login", AuthLogin)
+		public.GET("/shares/links/:token", ShareLinkGet)
 	}
 
 	protected := r.Group("/api/v1")

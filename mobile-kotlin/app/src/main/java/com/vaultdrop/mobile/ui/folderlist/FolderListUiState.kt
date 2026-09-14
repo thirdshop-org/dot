@@ -37,6 +37,8 @@ data class FolderListUiState(
     val browseFolderName: String? = null,
     /** Sous-dossiers visibles du dossier courant de l'explorateur. */
     val browseSubFolders: List<FolderEntity> = emptyList(),
+    /** Fichiers visibles du dossier courant de l'explorateur. */
+    val browseFiles: List<FileEntity> = emptyList(),
     val sections: List<FileSection> = emptyList(),
     val isRefreshing: Boolean = false,
     val error: String? = null,

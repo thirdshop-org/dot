@@ -103,6 +103,41 @@ class OutboxRepository @Inject constructor(
         resourceType = resourceType,
     )
 
+    /**
+     * Raccourci `share` — payload `{ granteeUserId, access }` (voir
+     * docs/api-v1.md §6.1). `access`: viewer | commenter | editor.
+     */
+    suspend fun enqueueShare(
+        resourceId: String,
+        resourceType: String,
+        granteeUserId: String,
+        access: String,
+        inherit: Boolean = true,
+        expiresAt: Long? = null,
+    ): String = enqueue(
+        operation = PendingOperationType.SHARE,
+        resourceId = resourceId,
+        resourceType = resourceType,
+        payload = buildMap {
+            put("granteeUserId", granteeUserId)
+            put("access", access)
+            put("inherit", inherit)
+            expiresAt?.let { put("expiresAt", it) }
+        },
+    )
+
+    /** Raccourci `revoke_share` — payload `{ granteeUserId }`. */
+    suspend fun enqueueRevokeShare(
+        resourceId: String,
+        resourceType: String,
+        granteeUserId: String,
+    ): String = enqueue(
+        operation = PendingOperationType.REVOKE_SHARE,
+        resourceId = resourceId,
+        resourceType = resourceType,
+        payload = mapOf("granteeUserId" to granteeUserId),
+    )
+
     /** Nombre d'ops en attente de push (stats UI optionnelles). */
     suspend fun countPending(): Int = pendingOperationDao.countPending()
 
@@ -113,4 +148,21 @@ class OutboxRepository @Inject constructor(
      */
     suspend fun hasCreateOperation(resourceId: String): Boolean =
         pendingOperationDao.countCreateOperations(resourceId) > 0
+
+    /**
+     * Un `move_resource` est-il encore en attente de push ? Tant que l'op est
+     * pendante, le `folder_resource_id` local reflète la cible future : ni le
+     * refresh serveur (qui renvoie l'ancien dossier) ni le walk SAF (snapshot
+     * périmé) ne doivent l'écraser.
+     */
+    suspend fun hasPendingMoveOperation(resourceId: String): Boolean =
+        pendingOperationDao.countPendingMoveOperations(resourceId) > 0
+
+    /**
+     * Un `move_resource` (pending ou synced) a-t-il jamais été journalisé ?
+     * Utilisé par la réconciliation du walk : une ligne en transition physique
+     * ne doit pas être masquée (`exists = 0`) avant convergence.
+     */
+    suspend fun hasMoveOperation(resourceId: String): Boolean =
+        pendingOperationDao.countMoveOperations(resourceId) > 0
 }

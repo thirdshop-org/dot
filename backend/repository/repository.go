@@ -11,6 +11,7 @@ type Repository struct {
 	Operations *Operations
 	OcrJobs    *OcrJobs
 	Users      *Users
+	Shares     *Shares
 }
 
 func NewRepository(conn *sql.DB) *Repository {
@@ -20,5 +21,6 @@ func NewRepository(conn *sql.DB) *Repository {
 		Operations: &Operations{DB: conn},
 		OcrJobs:    &OcrJobs{DB: conn},
 		Users:      &Users{DB: conn},
+		Shares:     &Shares{DB: conn},
 	}
 }

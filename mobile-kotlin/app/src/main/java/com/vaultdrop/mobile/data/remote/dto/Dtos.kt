@@ -68,6 +68,12 @@ data class UserDto(
     @Json(name = "is_admin") val isAdmin: Boolean = false,
 )
 
+/** Réponse de `GET /users/resolve` — `{ id, username }` uniquement. */
+data class ResolvedUserDto(
+    @Json(name = "id") val id: String,
+    @Json(name = "username") val username: String,
+)
+
 /** Miroir de `api/types.ts` — `LoginRequest`. */
 data class LoginRequestDto(
     @Json(name = "username") val username: String,
@@ -121,4 +127,6 @@ data class ResourcePermissionDto(
     @Json(name = "expiresAt") val expiresAt: Any? = null,
     @Json(name = "cachedAt") val cachedAt: Long,
     @Json(name = "updatedAt") val updatedAt: Long,
+    @Json(name = "name") val name: String = "",
+    @Json(name = "parentId") val parentId: String? = null,
 )

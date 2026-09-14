@@ -9,6 +9,7 @@ import com.vaultdrop.mobile.data.remote.dto.FileDto
 import com.vaultdrop.mobile.data.remote.dto.FolderDto
 import com.vaultdrop.mobile.data.remote.dto.LoginRequestDto
 import com.vaultdrop.mobile.data.remote.dto.LoginResponseDto
+import com.vaultdrop.mobile.data.remote.dto.ResolvedUserDto
 import com.vaultdrop.mobile.data.remote.dto.ResourcePermissionDto
 import com.vaultdrop.mobile.data.remote.dto.SyncOpDto
 import com.vaultdrop.mobile.data.remote.dto.SyncOpsRequest
@@ -66,6 +67,10 @@ class ApiClient @Inject constructor(
     /** Push outbox : applique un batch d'opérations, séquentiel et idempotent. */
     suspend fun syncOps(operations: List<SyncOpDto>): SyncOpsResult =
         unwrap({ apiService.syncOps(SyncOpsRequest(operations)) })
+
+    /** Résout un destinataire par username EXACT — 404 si inconnu. */
+    suspend fun resolveUser(username: String): ResolvedUserDto =
+        unwrap({ apiService.resolveUser(username.trim()) })
 
     /** Snapshot des permissions effectives (delta si `after` ms fourni). */
     suspend fun syncPermissions(after: Long? = null): List<ResourcePermissionDto> =

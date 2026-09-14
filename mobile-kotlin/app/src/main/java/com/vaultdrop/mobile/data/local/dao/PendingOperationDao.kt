@@ -58,4 +58,31 @@ interface PendingOperationDao {
 
     @Query("SELECT COUNT(*) FROM pending_operations WHERE status = 'pending'")
     suspend fun countPending(): Int
+
+    /**
+     * Une op `move_resource` encore en attente de push existe-t-elle pour cette
+     * ressource ? L'antichambre outbox est alors la source de vérité du
+     * placement : ni le refresh serveur ni le walk SAF ne doivent écraser le
+     * `folder_resource_id` local avant que le serveur ait accusé le move.
+     */
+    @Query("""
+        SELECT COUNT(*) FROM pending_operations
+        WHERE resource_id = :resourceId
+          AND operation = 'move_resource'
+          AND status = 'pending'
+    """)
+    suspend fun countPendingMoveOperations(resourceId: String): Int
+
+    /**
+     * Un `move_resource` (pending ou synced) existe-t-il pour cette ressource ?
+     * La réconciliation du walk ne doit jamais masquer (`exists = 0`) une ligne
+     * en cours de transition vers une autre arborescence physique.
+     */
+    @Query("""
+        SELECT COUNT(*) FROM pending_operations
+        WHERE resource_id = :resourceId
+          AND operation = 'move_resource'
+          AND status IN ('pending', 'synced')
+    """)
+    suspend fun countMoveOperations(resourceId: String): Int
 }

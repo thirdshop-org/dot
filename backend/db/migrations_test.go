@@ -221,6 +221,55 @@ func TestMigrationsUpDown(t *testing.T) {
 		t.Error("contrainte UNIQUE(device_id, operation_id) manquante sur operations")
 	}
 
+	// --- 000009 : shares + share_links ------------------------------------
+	assertTables(t, conn, "users", "devices", "resources", "operations", "ocr_jobs", "shares", "share_links", "schema_migrations")
+
+	assertHexCheck(t, conn, "shares", "id")
+	assertHexCheck(t, conn, "share_links", "id")
+
+	// shares access CHECK
+	var sharesAccessCheck int
+	err = conn.QueryRow(`
+		SELECT COUNT(*) FROM pg_constraint c
+		JOIN pg_class t ON t.oid = c.conrelid
+		WHERE t.relname = 'shares'
+		  AND pg_get_constraintdef(c.oid) LIKE '%viewer%'
+		  AND pg_get_constraintdef(c.oid) LIKE '%editor%'`).Scan(&sharesAccessCheck)
+	if err != nil {
+		t.Fatalf("check shares access: %v", err)
+	}
+	if sharesAccessCheck == 0 {
+		t.Error("CHECK (access IN ('viewer','commenter','editor')) manquant sur shares")
+	}
+
+	// shares unique partiel (resource_id, grantee_user_id) WHERE revoked_at IS NULL
+	var sharesActiveIdx int
+	err = conn.QueryRow(`
+		SELECT COUNT(*) FROM pg_index i
+		JOIN pg_class t ON t.oid = i.indrelid
+		WHERE t.relname = 'shares' AND i.indisunique
+		  AND i.indpred IS NOT NULL`).Scan(&sharesActiveIdx)
+	if err != nil {
+		t.Fatalf("shares active index: %v", err)
+	}
+	if sharesActiveIdx == 0 {
+		t.Error("index unique partiel (resource_id, grantee_user_id) WHERE revoked_at IS NULL manquant sur shares")
+	}
+
+	// share_links token unique partiel
+	var linksTokenIdx int
+	err = conn.QueryRow(`
+		SELECT COUNT(*) FROM pg_index i
+		JOIN pg_class t ON t.oid = i.indrelid
+		WHERE t.relname = 'share_links' AND i.indisunique
+		  AND i.indpred IS NOT NULL`).Scan(&linksTokenIdx)
+	if err != nil {
+		t.Fatalf("share_links token index: %v", err)
+	}
+	if linksTokenIdx == 0 {
+		t.Error("index unique partiel (id) WHERE revoked_at IS NULL manquant sur share_links")
+	}
+
 	if err := MigrateDownDatabase(url); err != nil {
 		t.Fatalf("migrate down: %v", err)
 	}

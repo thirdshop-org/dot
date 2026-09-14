@@ -229,4 +229,17 @@
     <string name="delete_confirm_button">Confirmer</string>
     <string name="delete_cancel">Annuler</string>
     <string name="delete_error">Erreur lors de la suppression</string>
+
+    <!-- Partage (share grants) -->
+    <string name="share_title">Partager avec un utilisateur</string>
+    <string name="share_username_hint">Nom d\'utilisateur du destinataire</string>
+    <string name="share_access_label">Niveau d\'accès</string>
+    <string name="share_access_viewer">Lecture (viewer)</string>
+    <string name="share_access_commenter">Commentaire (commenter)</string>
+    <string name="share_access_editor">Édition (editor)</string>
+    <string name="share_submit">Partager</string>
+    <string name="share_cancel">Annuler</string>
+    <string name="share_error_not_found">Aucun utilisateur connu sous ce nom.</string>
+    <string name="share_error_generic">Impossible de partager pour le moment.</string>
+    <string name="share_content_description">Partager ce dossier</string>
 </resources>

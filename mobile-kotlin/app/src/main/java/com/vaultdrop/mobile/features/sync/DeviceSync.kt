@@ -6,6 +6,7 @@ import com.vaultdrop.mobile.data.local.AppDatabase
 import com.vaultdrop.mobile.data.local.entity.FolderEntity
 import com.vaultdrop.mobile.data.repository.FileRepository
 import com.vaultdrop.mobile.data.repository.FolderRepository
+import com.vaultdrop.mobile.data.repository.OutboxRepository
 import com.vaultdrop.mobile.data.repository.SaveFileInput
 import com.vaultdrop.mobile.data.repository.SaveFolderInput
 import com.vaultdrop.mobile.domain.DeviceIdentity
@@ -34,6 +35,7 @@ class DeviceSync @Inject constructor(
     private val scanner: SafScanner,
     private val folderRepository: FolderRepository,
     private val fileRepository: FileRepository,
+    private val outboxRepository: OutboxRepository,
     private val deviceIdentity: DeviceIdentity,
 ) {
 
@@ -119,7 +121,13 @@ class DeviceSync @Inject constructor(
             }
             for (file in fileRepository.getAll()) {
                 val fileUri = file.uri
-                if (file.exists != 0 && fileUri != null && isChildOf(fileUri, rootUri) && fileUri !in seen) {
+                // Un `move_resource` (pending ou synced) fait de l'outbox la
+                // source de vérité du placement : on ne masque jamais une ligne
+                // en transition vers une autre arborescence physique (le
+                // snapshot peut être périmé par rapport au move en cours).
+                if (file.exists != 0 && fileUri != null && isChildOf(fileUri, rootUri) && fileUri !in seen &&
+                    !outboxRepository.hasMoveOperation(file.resourceId)
+                ) {
                     fileRepository.markMissing(file.resourceId, now)
                     missing++
                 }

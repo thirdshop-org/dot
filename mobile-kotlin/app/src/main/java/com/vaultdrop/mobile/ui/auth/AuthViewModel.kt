@@ -7,6 +7,7 @@ import com.vaultdrop.mobile.auth.SessionManager
 import com.vaultdrop.mobile.data.remote.ApiClient
 import com.vaultdrop.mobile.data.remote.ApiException
 import com.vaultdrop.mobile.data.repository.AuthRepository
+import com.vaultdrop.mobile.data.repository.ShareRepository
 import com.vaultdrop.mobile.features.sync.OutboxSyncWorker
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -25,6 +26,7 @@ class AuthViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     private val sessionManager: SessionManager,
     private val apiClient: ApiClient,
+    private val shareRepository: ShareRepository,
     @ApplicationContext private val appContext: Context,
 ) : ViewModel() {
 
@@ -49,6 +51,11 @@ class AuthViewModel @Inject constructor(
             authRepository.registerDevice()
             // Session restaurée → drainer l'outbox laissée en attente.
             OutboxSyncWorker.enqueue(appContext)
+            if (session != null) {
+                // Snapshot complet des permissions partagées (convergence).
+                runCatching { shareRepository.syncSnapshot() }
+                    .onFailure { e -> Timber.d("syncSnapshot on restore failed: %s", e.message) }
+            }
         }
     }
 
@@ -66,6 +73,9 @@ class AuthViewModel @Inject constructor(
                     _authState.value = AuthState.SignedIn(response.user)
                     // Connexion réussie → pousser les mutations locales en attente.
                     OutboxSyncWorker.enqueue(appContext)
+                    // Snapshot complet des permissions partagées (convergence).
+                    runCatching { shareRepository.syncSnapshot() }
+                        .onFailure { e -> Timber.d("syncSnapshot on login failed: %s", e.message) }
                 }
                 .onFailure { e ->
                     val error = when (e) {

@@ -10,6 +10,7 @@ var expectedRoutes = []string{
 	"GET /api/v1/health",
 	"POST /api/v1/devices",
 	"POST /api/v1/auth/login",
+	"GET /api/v1/shares/links/:token",
 
 	"GET /api/v1/files",
 	"GET /api/v1/files/:id",

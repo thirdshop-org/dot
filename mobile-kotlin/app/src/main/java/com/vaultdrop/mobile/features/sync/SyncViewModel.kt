@@ -10,6 +10,7 @@ import com.vaultdrop.mobile.data.local.entity.PendingOpStatus
 import com.vaultdrop.mobile.data.local.entity.PendingOperationEntity
 import com.vaultdrop.mobile.data.repository.FolderRepository
 import com.vaultdrop.mobile.data.repository.SaveFolderInput
+import com.vaultdrop.mobile.data.repository.ShareRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
@@ -46,6 +47,7 @@ class SyncViewModel @Inject constructor(
     private val deviceSync: DeviceSync,
     private val folderRepository: FolderRepository,
     private val pendingOperationDao: PendingOperationDao,
+    private val shareRepository: ShareRepository,
     @ApplicationContext private val appContext: Context,
 ) : ViewModel() {
 
@@ -107,6 +109,10 @@ class SyncViewModel @Inject constructor(
                         OutboxSyncWorker.enqueue(appContext)
                     }
                     .onFailure { e -> Timber.w(e, "syncAll failed, retrying later") }
+                // Hydrate les ressources partagées depuis le snapshot serveur.
+                // Échec réseau toléré : le prochain tick réessaiera.
+                runCatching { shareRepository.syncSnapshot() }
+                    .onFailure { e -> Timber.d("syncSnapshot failed, retrying later: %s", e.message) }
                 _walkInProgress.value = false
                 delay(INTERVAL_MS)
             }

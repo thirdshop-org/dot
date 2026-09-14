@@ -74,6 +74,39 @@ func sortClause(sort, order string) (string, string) {
 	return column, direction
 }
 
+// grantedCTE expands, for the user bound to $1, the set of accessible
+// resource ids — owned rows (each its own seed) + active direct grants +
+// every node reached by an inherit=true grant up its chain (passing through
+// intermediate nodes, per docs/api-v1.md §6.2 rule 5). Only the visibility
+// SET matters here (which resources the user can read, viewer+); the effective
+// rank is validated by repository.Shares.EffectiveAccess. Walk bounded at
+// depth < 100. Append a query that references
+// `resource_id IN (SELECT id FROM granted)`.
+const grantedCTE = `
+	seeded(id, type, rank, inherit, depth) AS (
+		SELECT r.resource_id, r.type, 4::int, FALSE, 0
+		FROM resources r
+		WHERE r.user_id = $1 AND r.deleted_at IS NULL
+	  UNION ALL
+		SELECT r.resource_id, r.type,
+		       CASE sh.access WHEN 'viewer' THEN 1 WHEN 'commenter' THEN 2 WHEN 'editor' THEN 3 ELSE 0 END,
+		       sh.inherit, 0
+		FROM shares sh
+		JOIN resources r ON r.resource_id = sh.resource_id
+		WHERE sh.grantee_user_id = $1 AND sh.revoked_at IS NULL
+		  AND (sh.expires_at IS NULL OR sh.expires_at > NOW())
+		  AND r.deleted_at IS NULL
+	),
+	granted(id, rank, inherit, depth) AS (
+		SELECT id, rank, inherit, 0 FROM seeded
+	  UNION ALL
+		SELECT r.resource_id, g.rank, TRUE, g.depth + 1
+		FROM resources r
+		JOIN granted g ON r.parent_id = g.id
+		WHERE g.inherit AND g.rank BETWEEN 1 AND 3
+		  AND r.deleted_at IS NULL AND g.depth < 100
+	)`
+
 func (r *Resources) folderExists(ownerID, folderID string) (bool, error) {
 	var exists int
 	err := r.DB.QueryRow(
@@ -161,11 +194,58 @@ func (r *Resources) ListFiles(ownerID, folderResourceID string, limit, offset in
 	return files, total, rows.Err()
 }
 
+// ListFilesVisible returns the user's accessible files (owned or shared,
+// viewer+) within a folder (or at the root when folderResourceID is empty).
+func (r *Resources) ListFilesVisible(userID, folderResourceID string, limit, offset int, sort, order string) ([]FileRow, int, error) {
+	column, direction := sortClause(sort, order)
+	where := `type = 'file' AND deleted_at IS NULL AND resource_id IN (SELECT id FROM granted)
+	          AND ($2::text = '' AND parent_id IS NULL OR parent_id = $2)`
+
+	var total int
+	if err := r.DB.QueryRow(`WITH RECURSIVE `+grantedCTE+` SELECT COUNT(*) FROM resources WHERE `+where, userID, folderResourceID).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	rows, err := r.DB.Query(
+		fmt.Sprintf(`WITH RECURSIVE %s SELECT %s FROM resources WHERE %s ORDER BY %s %s LIMIT $3 OFFSET $4`,
+			grantedCTE, fileColumns, where, column, direction),
+		userID, folderResourceID, limit, offset,
+	)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+	files := make([]FileRow, 0)
+	for rows.Next() {
+		row, err := r.scanFile(rows.Scan)
+		if err != nil {
+			return nil, 0, err
+		}
+		files = append(files, row)
+	}
+	return files, total, rows.Err()
+}
+
+// GetFile returns a file owned by the device (no-rows → ErrNotFound).
 func (r *Resources) GetFile(ownerID, resourceID string) (FileRow, error) {
 	row := r.DB.QueryRow(
 		`SELECT `+fileColumns+` FROM resources
 		 WHERE type = 'file' AND deleted_at IS NULL AND user_id = $1 AND resource_id = $2`,
 		ownerID, resourceID,
+	)
+	file, err := r.scanFile(row.Scan)
+	if errors.Is(err, sql.ErrNoRows) {
+		return FileRow{}, ErrNotFound
+	}
+	return file, err
+}
+
+// GetFileVisible returns a file the user can access (owned or shared, viewer+).
+func (r *Resources) GetFileVisible(userID, resourceID string) (FileRow, error) {
+	row := r.DB.QueryRow(`WITH RECURSIVE `+grantedCTE+`
+		SELECT `+fileColumns+` FROM resources
+		WHERE type = 'file' AND deleted_at IS NULL AND resource_id = $2
+		  AND resource_id IN (SELECT id FROM granted)`,
+		userID, resourceID,
 	)
 	file, err := r.scanFile(row.Scan)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -208,6 +288,36 @@ func (r *Resources) SearchFiles(ownerID, q string, limit, offset int) ([]FileRow
 		fmt.Sprintf(`SELECT %s FROM resources WHERE %s ORDER BY name ASC LIMIT $3 OFFSET $4`,
 			fileColumns, where),
 		ownerID, pattern, limit, offset,
+	)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+	files := make([]FileRow, 0)
+	for rows.Next() {
+		row, err := r.scanFile(rows.Scan)
+		if err != nil {
+			return nil, 0, err
+		}
+		files = append(files, row)
+	}
+	return files, total, rows.Err()
+}
+
+// SearchFilesVisible returns the user's accessible files (owned or shared,
+// viewer+) whose name matches q (case-insensitive substring).
+func (r *Resources) SearchFilesVisible(userID, q string, limit, offset int) ([]FileRow, int, error) {
+	pattern := `%` + escapeLike(q) + `%`
+	where := `type = 'file' AND deleted_at IS NULL AND resource_id IN (SELECT id FROM granted) AND name ILIKE $2 ESCAPE '\'`
+
+	var total int
+	if err := r.DB.QueryRow(`WITH RECURSIVE `+grantedCTE+` SELECT COUNT(*) FROM resources WHERE `+where, userID, pattern).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	rows, err := r.DB.Query(
+		fmt.Sprintf(`WITH RECURSIVE %s SELECT %s FROM resources WHERE %s ORDER BY name ASC LIMIT $3 OFFSET $4`,
+			grantedCTE, fileColumns, where),
+		userID, pattern, limit, offset,
 	)
 	if err != nil {
 		return nil, 0, err
@@ -299,6 +409,30 @@ func (r *Resources) UpdateName(ownerID, resourceID, name string) error {
 	return nil
 }
 
+// UpdateNameByID renames a resource without owner scoping — the caller
+// (service) has already verified the user's effective access (editor+).
+func (r *Resources) UpdateNameByID(resourceID, name string) error {
+	result, err := r.DB.Exec(
+		`UPDATE resources SET name = $2, updated_at = NOW()
+		 WHERE resource_id = $1 AND deleted_at IS NULL`,
+		resourceID, name,
+	)
+	if err != nil && isUniqueViolation(err) {
+		return ErrNameConflict
+	}
+	if err != nil {
+		return err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 // SyncDelete soft-deletes a resource; absence is NOT an error (idempotent
 // terminal state for the outbox).
 func (r *Resources) SyncDelete(ownerID, resourceID string) error {
@@ -321,6 +455,16 @@ func (r *Resources) ExistsOwner(ownerID, resourceID string) (bool, error) {
 		return false, nil
 	}
 	return err == nil, err
+}
+
+// TouchResource bumps updated_at on a non-deleted resource so that the
+// grantee's delta snapshot picks it up after a share is created.
+func (r *Resources) TouchResource(resourceID string) error {
+	_, err := r.DB.Exec(
+		`UPDATE resources SET updated_at = NOW() WHERE resource_id = $1 AND deleted_at IS NULL`,
+		resourceID,
+	)
+	return err
 }
 
 // OwnedRow is a snapshot row: resource identity + freshness.
@@ -363,6 +507,31 @@ func (r *Resources) ListRootFolders(ownerID string) ([]FolderRow, error) {
 		 WHERE type = 'folder' AND parent_id IS NULL AND deleted_at IS NULL AND user_id = $1
 		 ORDER BY name ASC`,
 		ownerID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	folders := make([]FolderRow, 0)
+	for rows.Next() {
+		var folder FolderRow
+		if err := rows.Scan(&folder.ID, &folder.Name, &folder.ParentID); err != nil {
+			return nil, err
+		}
+		folders = append(folders, folder)
+	}
+	return folders, rows.Err()
+}
+
+// ListRootFoldersVisible returns the user's accessible top-level folders —
+// owned (rank 4) or shared (viewer+) at the root.
+func (r *Resources) ListRootFoldersVisible(userID string) ([]FolderRow, error) {
+	rows, err := r.DB.Query(`WITH RECURSIVE `+grantedCTE+`
+		SELECT resource_id, name, COALESCE(parent_id, '') FROM resources
+		WHERE type = 'folder' AND parent_id IS NULL AND deleted_at IS NULL
+		  AND resource_id IN (SELECT id FROM granted)
+		ORDER BY name ASC`,
+		userID,
 	)
 	if err != nil {
 		return nil, err

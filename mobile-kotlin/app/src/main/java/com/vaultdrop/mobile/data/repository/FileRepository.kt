@@ -130,12 +130,18 @@ class FileRepository @Inject constructor(
 
         val category = computeCategory(input.mimeType, input.extension).dbValue
 
+        // Un `move_resource` encore en attente fait de la cible outbox la
+        // source de vérité du placement : un snapshot SAF périmé (walk lancé
+        // avant le move) ne doit pas ré-attribuer le dossier à l'ancien parent.
+        val movePending = existing != null && outboxRepository.hasPendingMoveOperation(existing.resourceId)
+        val effectiveFolder = if (movePending) existing.folderResourceId else folderResourceId
+
         val entity = FileEntity(
             id = existing?.id ?: 0L,
             resourceId = existing?.resourceId ?: input.resourceId ?: generateId.newResourceId(),
             uri = input.uri,
             name = input.name,
-            folderResourceId = folderResourceId,
+            folderResourceId = effectiveFolder,
             extension = input.extension ?: existing?.extension,
             size = input.size,
             mimeType = input.mimeType,
@@ -192,12 +198,21 @@ class FileRepository @Inject constructor(
     /**
      * `GET /files?folderId=...` (1re page, tri serveur) puis upsert cloud de
      * chaque fichier. Ne supprime jamais de lignes locales.
+     *
+     * Garde-fou outbox : un fichier dont le `move_resource` n'a pas encore été
+     * poussé garde son placement local. Le serveur renvoie encore l'ancien
+     * dossier tant que l'op est pendante — écraser la ligne la ferait disparaître
+     * du dossier cible (et réapparaître dans l'ancien).
      */
     suspend fun refreshFromServer(folderResourceId: String) {
         val files = apiClient.listFiles(folderId = folderResourceId, pageSize = PAGE_SIZE)
         if (files.isEmpty()) return
         val now = System.currentTimeMillis()
         files.forEach { dto ->
+            if (outboxRepository.hasPendingMoveOperation(dto.id)) {
+                // L'antichambre outbox fait foi tant que le move n'est pas synced.
+                return@forEach
+            }
             fileDao.upsert(toEntity(dto, folderResourceId, now))
         }
     }
