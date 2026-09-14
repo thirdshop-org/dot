@@ -48,6 +48,8 @@
     <string name="document_open_error">No app can open this file.</string>
     <string name="document_cloud_only">Cloud only</string>
     <string name="document_cloud_only_hint">This file is not downloaded on this device. Sign in to your server to make it available.</string>
+    <string name="document_keep_done">Document kept and synced.</string>
+    <string name="document_keep_error">Could not keep this document.</string>
     <string name="document_truncated_notice">Preview truncated — the full file is not displayed.</string>
     <string name="document_loading">Reading document…</string>
     <string name="document_cannot_read">Could not read this document.</string>

@@ -67,6 +67,8 @@
     <string name="document_open_error">Aucune application ne peut ouvrir ce fichier.</string>
     <string name="document_cloud_only">Disponible uniquement sur le cloud</string>
     <string name="document_cloud_only_hint">Ce fichier n\'est pas téléchargé sur cet appareil. Connecte-toi à ton serveur pour le rendre disponible.</string>
+    <string name="document_keep_done">Document gardé et synchronisé.</string>
+    <string name="document_keep_error">Impossible de garder ce document.</string>
     <string name="document_truncated_notice">Aperçu tronqué — le fichier complet n\'est pas affiché.</string>
     <string name="document_loading">Lecture du document…</string>
     <string name="document_cannot_read">Impossible de lire ce document.</string>

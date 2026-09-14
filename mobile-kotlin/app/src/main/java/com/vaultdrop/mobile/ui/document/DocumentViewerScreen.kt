@@ -13,14 +13,23 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -44,7 +53,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
@@ -52,6 +63,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -61,7 +73,9 @@ import com.vaultdrop.mobile.R
 import com.vaultdrop.mobile.data.local.entity.FileEntity
 import com.vaultdrop.mobile.domain.FileCategory
 import com.vaultdrop.mobile.features.connection.ConnectionStatusViewModel
+import com.vaultdrop.mobile.features.saf.FileDeleter
 import com.vaultdrop.mobile.features.sync.SyncViewModel
+import com.vaultdrop.mobile.ui.components.DeleteConfirmDialog
 import com.vaultdrop.mobile.ui.components.ServerStatusBadge
 import com.vaultdrop.mobile.ui.components.SyncStatusAction
 import com.vaultdrop.mobile.ui.components.categoryValue
@@ -96,6 +110,7 @@ fun DocumentViewerScreen(
     viewModel: DocumentViewerViewModel = hiltViewModel(),
 ) {
     val documents by viewModel.documents.collectAsStateWithLifecycle()
+    val viewerState by viewModel.uiState.collectAsStateWithLifecycle()
     val connectionStatus by connectionStatusViewModel.status.collectAsStateWithLifecycle()
     val pagerState = rememberPagerState(pageCount = { documents.size })
 
@@ -108,6 +123,9 @@ fun DocumentViewerScreen(
                 pagerState.scrollToPage(index)
                 jumpPending = false
             }
+        } else if (documents.isEmpty()) {
+            // Dernier document supprimé : plus rien à afficher → retour.
+            onBack()
         }
     }
 
@@ -121,6 +139,24 @@ fun DocumentViewerScreen(
             snackbarHostState.showSnackbar(context.getString(R.string.document_open_error))
         }
     }
+
+    // Erreurs / succès transitoires (suppression, garder) → Snackbar puis effacés.
+    LaunchedEffect(viewerState.deleteError) {
+        viewerState.deleteError?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.clearDeleteError()
+        }
+    }
+    LaunchedEffect(viewerState.keepMessage) {
+        viewerState.keepMessage?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.clearKeepMessage()
+        }
+    }
+
+    // Confirmation avant suppression d'un document déjà traité.
+    var pendingDeleteMode by remember { mutableStateOf<FileDeleter.DeleteMode?>(null) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
 
     var fullscreen by rememberSaveable { mutableStateOf(false) }
     val canFullscreen = currentFile?.canFocus() == true
@@ -193,24 +229,62 @@ fun DocumentViewerScreen(
                 modifier = Modifier.fillMaxSize(),
             )
         } else {
-            HorizontalPager(
-                state = pagerState,
+            Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding),
-            ) { page ->
-                val file = documents.getOrNull(page)
-                if (file != null) {
-                    DocumentViewerPage(
-                        file = file,
-                        onOpenExternalFailed = onOpenExternalFailed,
-                        onEnterFullscreen = file.canFocus()
-                            .takeIf { it }
-                            ?.let { { fullscreen = true } },
+            ) {
+                HorizontalPager(
+                    state = pagerState,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                ) { page ->
+                    val file = documents.getOrNull(page)
+                    if (file != null) {
+                        DocumentViewerPage(
+                            file = file,
+                            onOpenExternalFailed = onOpenExternalFailed,
+                            onEnterFullscreen = file.canFocus()
+                                .takeIf { it }
+                                ?.let { { fullscreen = true } },
+                        )
+                    }
+                }
+                // Barre d'action fixe pilotée par le document affiché : garder
+                // ou supprimer un document en attente de review, ou supprimer
+                // (local / cloud / les deux) un document déjà traité.
+                if (current != null) {
+                    DocumentActionBar(
+                        file = current,
+                        busy = viewerState.busy,
+                        onKeep = { viewModel.keep(current) },
+                        onDeleteModeSelected = { mode ->
+                            pendingDeleteMode = mode
+                            showDeleteConfirm = true
+                        },
+                        modifier = Modifier.fillMaxWidth(),
                     )
                 }
             }
         }
+    }
+
+    if (showDeleteConfirm && pendingDeleteMode != null && currentFile != null) {
+        DeleteConfirmDialog(
+            count = 1,
+            onConfirm = {
+                val mode = pendingDeleteMode!!
+                val file = currentFile!!
+                showDeleteConfirm = false
+                pendingDeleteMode = null
+                viewModel.delete(file, mode)
+            },
+            onDismiss = {
+                showDeleteConfirm = false
+                pendingDeleteMode = null
+            },
+        )
     }
 }
 
@@ -430,6 +504,199 @@ private fun DocumentViewerPage(
             }
         }
     }
+}
+
+/**
+ * Barre d'action fixe du document affiché.
+ *
+ * - Document en attente de review (`processed = false`, fichier physique) :
+ *   badge « À traiter » + boutons GARDER / SUPPRIMER (même sémantique que le
+ *   mode swipe : garder pousse le `create_resource`, supprimer efface le fichier).
+ * - Document déjà traité : bouton « Supprimer » dont les options (local, cloud,
+ *   les deux) sont conditionnées au placement du fichier ([deleteModesFor]).
+ */
+@Composable
+private fun DocumentActionBar(
+    file: FileEntity,
+    busy: Boolean,
+    onKeep: () -> Unit,
+    onDeleteModeSelected: (FileDeleter.DeleteMode) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val pendingReview = !file.processed && file.uri != null
+    Surface(
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 3.dp,
+        modifier = modifier,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            if (pendingReview) {
+                Surface(
+                    shape = RoundedCornerShape(percent = 50),
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                ) {
+                    Text(
+                        text = stringResource(R.string.file_pending_review),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                    )
+                }
+                Spacer(Modifier.height(12.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(48.dp)) {
+                    DocumentActionButton(
+                        icon = Icons.Filled.Close,
+                        contentDescription = stringResource(R.string.review_delete),
+                        label = stringResource(R.string.review_delete),
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                        contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                        enabled = !busy,
+                        onClick = { onDeleteModeSelected(FileDeleter.DeleteMode.LOCALLY) },
+                    )
+                    DocumentActionButton(
+                        icon = Icons.Filled.Check,
+                        contentDescription = stringResource(R.string.review_keep),
+                        label = stringResource(R.string.review_keep),
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                        enabled = !busy,
+                        onClick = onKeep,
+                    )
+                }
+            } else {
+                DocumentDeleteMenu(
+                    file = file,
+                    enabled = !busy,
+                    onModeSelected = onDeleteModeSelected,
+                )
+            }
+        }
+    }
+}
+
+/** Bouton rond d'action (garder / supprimer), style mode review mais compact. */
+@Composable
+private fun DocumentActionButton(
+    icon: ImageVector,
+    contentDescription: String,
+    label: String,
+    containerColor: Color,
+    contentColor: Color,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        FloatingActionButton(
+            onClick = { if (enabled) onClick() },
+            shape = CircleShape,
+            containerColor = containerColor,
+            contentColor = contentColor,
+            modifier = Modifier
+                .size(56.dp)
+                .alpha(if (enabled) 1f else 0.38f),
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = contentDescription,
+                modifier = Modifier.size(24.dp),
+            )
+        }
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp),
+        )
+    }
+}
+
+/**
+ * Bouton « Supprimer ▼ » avec dropdown ne proposant que les modes compatibles
+ * avec le placement du fichier (une seule entrée pour un fichier purement
+ * local ou cloud-only).
+ */
+@Composable
+private fun DocumentDeleteMenu(
+    file: FileEntity,
+    enabled: Boolean,
+    onModeSelected: (FileDeleter.DeleteMode) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val modes = deleteModesFor(file)
+    var expanded by remember { mutableStateOf(false) }
+    val tint = if (enabled) MaterialTheme.colorScheme.error
+    else MaterialTheme.colorScheme.onSurfaceVariant
+
+    Box(modifier = modifier) {
+        Surface(
+            onClick = { if (enabled) expanded = true },
+            enabled = enabled,
+            shape = RoundedCornerShape(20.dp),
+            color = if (enabled) MaterialTheme.colorScheme.errorContainer
+            else MaterialTheme.colorScheme.surfaceVariant,
+        ) {
+            Box(
+                modifier = Modifier.size(width = 88.dp, height = 48.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Filled.Delete,
+                        contentDescription = null,
+                        tint = tint,
+                        modifier = Modifier.size(20.dp),
+                    )
+                    Text(
+                        text = stringResource(R.string.delete),
+                        color = tint,
+                        fontSize = 11.sp,
+                        maxLines = 1,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Icon(
+                        imageVector = Icons.Filled.ArrowDropDown,
+                        contentDescription = null,
+                        tint = tint,
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
+            }
+        }
+
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+        ) {
+            modes.forEach { mode ->
+                DropdownMenuItem(
+                    text = { Text(deleteModeLabel(mode)) },
+                    onClick = {
+                        expanded = false
+                        onModeSelected(mode)
+                    },
+                    leadingIcon = {
+                        Icon(
+                            Icons.Filled.Delete,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error,
+                        )
+                    },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun deleteModeLabel(mode: FileDeleter.DeleteMode): String = when (mode) {
+    FileDeleter.DeleteMode.LOCALLY -> stringResource(R.string.delete_locally)
+    FileDeleter.DeleteMode.IN_CLOUD -> stringResource(R.string.delete_in_cloud)
+    FileDeleter.DeleteMode.FULL -> stringResource(R.string.delete_full)
 }
 
 @Composable
