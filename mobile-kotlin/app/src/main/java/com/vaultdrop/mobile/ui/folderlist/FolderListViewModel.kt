@@ -8,12 +8,14 @@ import androidx.lifecycle.viewModelScope
 import com.vaultdrop.mobile.R
 import com.vaultdrop.mobile.auth.TokenProvider
 import com.vaultdrop.mobile.data.local.entity.FileEntity
+import com.vaultdrop.mobile.data.local.entity.FolderEntity
 import com.vaultdrop.mobile.data.local.referenceDate
 import com.vaultdrop.mobile.data.preferences.DefaultRootStore
 import com.vaultdrop.mobile.data.remote.ApiException
 import com.vaultdrop.mobile.data.repository.FileRepository
 import com.vaultdrop.mobile.data.repository.FolderRepository
 import com.vaultdrop.mobile.data.repository.SaveFolderInput
+import com.vaultdrop.mobile.domain.DeviceIdentity
 import com.vaultdrop.mobile.features.saf.FileMover
 import com.vaultdrop.mobile.features.saf.FileDeleter
 import com.vaultdrop.mobile.features.saf.FolderDeleter
@@ -47,6 +49,7 @@ class FolderListViewModel @Inject constructor(
     private val fileMover: FileMover,
     private val fileDeleter: FileDeleter,
     private val folderDeleter: FolderDeleter,
+    private val deviceIdentity: DeviceIdentity,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
 
@@ -159,7 +162,33 @@ class FolderListViewModel @Inject constructor(
                     _uiState.update { it.copy(browseFiles = files) }
                 }
         }
+        viewModelScope.launch {
+            _defaultRootId.combine(_browseFolderId) { root, browse -> browse ?: root }
+                .collect { targetId ->
+                    val shareable = targetId != null &&
+                        tokenProvider.current != null &&
+                        folderRepository.getFolder(targetId)?.let { isShareable(it) } == true
+                    _uiState.update { it.copy(canShare = shareable) }
+                }
+        }
     }
+
+    /**
+     * Un dossier est partageable quand l'utilisateur est connecté et que ce
+     * n'est pas une ressource reçue en partage : `ownerId` absent ou égal à
+     * l'identité du device (les lignes hydratées portent l'utilisateur réel).
+     *
+     * Pas de gate `syncStatus` : un dossier `local` a son `create_resource`
+     * enqueued avant le `share` dans le même outbox — le serveur applique la
+     * création d'abord, le partage est donc valide.
+     */
+    private suspend fun isShareable(folder: FolderEntity): Boolean {
+        if (tokenProvider.current == null) return false
+        val deviceUserId = deviceIdentity.getOrCreate()
+        return folder.ownerId == null || folder.ownerId == deviceUserId
+    }
+
+    suspend fun isShareableFolder(folder: FolderEntity): Boolean = isShareable(folder)
 
     /** Descend dans l'explorateur Dossiers (aussi en mode déplacement). */
     fun openBrowseFolder(folderId: String) {

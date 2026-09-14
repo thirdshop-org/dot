@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.MergeType
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.outlined.Dashboard
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Search
@@ -180,9 +181,11 @@ fun SelectionNavBar(
     }
 }
 
-/** Barre d'actions multi-sélection propre aux dossiers : suppression. */
+/** Barre d'actions multi-sélection propre aux dossiers : partage + suppression. */
 @Composable
 fun FolderSelectionNavBar(
+    onShare: () -> Unit,
+    shareEnabled: Boolean,
     onDeleteModeSelected: (FileDeleter.DeleteMode) -> Unit,
     deleteEnabled: Boolean,
     modifier: Modifier = Modifier,
@@ -204,6 +207,13 @@ fun FolderSelectionNavBar(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                SelectionAction(
+                    label = stringResource(R.string.share_action),
+                    icon = Icons.Filled.Share,
+                    enabled = shareEnabled,
+                    onClick = onShare,
+                    modifier = Modifier.weight(1f),
+                )
                 DeleteDropdownButton(
                     enabled = deleteEnabled,
                     onModeSelected = onDeleteModeSelected,

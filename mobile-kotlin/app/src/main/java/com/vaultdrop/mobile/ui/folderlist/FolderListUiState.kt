@@ -52,4 +52,6 @@ data class FolderListUiState(
     val deleteError: String? = null,
     /** Succès transitoire de suppression — affiché en Snackbar puis effacé. */
     val deleteSuccess: Boolean = false,
+    /** Le dossier courant de l'explorateur peut être partagé (possédé + poussé). */
+    val canShare: Boolean = false,
 )

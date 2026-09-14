@@ -31,10 +31,14 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -72,6 +76,7 @@ import com.vaultdrop.mobile.data.local.entity.FileStatus
 import com.vaultdrop.mobile.data.local.entity.FolderEntity
 import com.vaultdrop.mobile.data.local.entity.FolderStatus
 import com.vaultdrop.mobile.features.connection.ConnectionStatusViewModel
+import com.vaultdrop.mobile.features.connection.ServerConnectionStatus
 import com.vaultdrop.mobile.features.saf.safDisplayName
 import com.vaultdrop.mobile.features.sync.SyncViewModel
 import com.vaultdrop.mobile.features.saf.FileDeleter
@@ -94,9 +99,17 @@ import com.vaultdrop.mobile.ui.navigation.FolderSelectionNavBar
 import com.vaultdrop.mobile.ui.navigation.MoveTargetBar
 import com.vaultdrop.mobile.ui.navigation.NavTab
 import com.vaultdrop.mobile.ui.navigation.SelectionNavBar
+import com.vaultdrop.mobile.ui.share.ShareBottomSheet
+import com.vaultdrop.mobile.ui.share.ShareViewModel
 import kotlinx.coroutines.delay
 import timber.log.Timber
 import java.util.Locale
+
+/** Dossier cible du partage : id + nom affiché dans le sheet. */
+private data class ShareTarget(
+    val resourceId: String,
+    val name: String,
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -110,6 +123,8 @@ fun FolderListScreen(
     viewModel: FolderListViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val shareViewModel: ShareViewModel = hiltViewModel()
+    val shareState by shareViewModel.uiState.collectAsStateWithLifecycle()
     val importState by syncViewModel.importState.collectAsStateWithLifecycle()
     val connectionStatus by connectionStatusViewModel.status.collectAsStateWithLifecycle()
     val defaultRootId by viewModel.defaultRootId.collectAsStateWithLifecycle()
@@ -122,7 +137,17 @@ fun FolderListScreen(
     var pendingDeleteReview by remember { mutableStateOf<DeleteReview?>(null) }
     var pendingFolderIds by remember { mutableStateOf<List<String>>(emptyList()) }
     var pendingFileIds by remember { mutableStateOf<List<String>>(emptyList()) }
+    var shareTarget by remember { mutableStateOf<ShareTarget?>(null) }
+    var showShareMenu by remember { mutableStateOf(false) }
+    var shareEnabled by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
+
+    // Le partage multi-sélection ne vaut que pour un dossier unique sélectionné,
+    // possédé et déjà poussé au serveur (sinon dead-letter NOT_FOUND côté serveur).
+    LaunchedEffect(uiState.browseSubFolders, selection.ids) {
+        val folder = uiState.browseSubFolders.singleOrNull { it.resourceId in selection.ids }
+        shareEnabled = folder != null && viewModel.isShareableFolder(folder)
+    }
 
     val createError = uiState.createError
     LaunchedEffect(createError) {
@@ -164,6 +189,7 @@ fun FolderListScreen(
 
     // Racine par défaut : dossier VaultDrop choisi au premier lancement.
     val defaultRootLabel = stringResource(R.string.default_root_folder_label)
+    val folderLabel = stringResource(R.string.folder)
     var pendingDefaultPick by remember { mutableStateOf<Uri?>(null) }
     val pickDefaultRootLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocumentTree(),
@@ -253,6 +279,33 @@ fun FolderListScreen(
                         IconButton(onClick = viewModel::refresh) {
                             Icon(Icons.Filled.Refresh, contentDescription = stringResource(R.string.refresh))
                         }
+                        if (uiState.view == HomeView.FOLDERS && connectionStatus != ServerConnectionStatus.Local) {
+                            Box {
+                                IconButton(onClick = { showShareMenu = true }) {
+                                    Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.more_actions))
+                                }
+                                DropdownMenu(
+                                    expanded = showShareMenu,
+                                    onDismissRequest = { showShareMenu = false },
+                                ) {
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.share_action)) },
+                                        enabled = uiState.canShare,
+                                        leadingIcon = { Icon(Icons.Filled.Share, contentDescription = null) },
+                                        onClick = {
+                                            showShareMenu = false
+                                            val targetId = uiState.browseFolderId ?: defaultRootId
+                                            if (targetId != null) {
+                                                shareTarget = ShareTarget(
+                                                    resourceId = targetId,
+                                                    name = uiState.browseFolderName ?: folderLabel,
+                                                )
+                                            }
+                                        },
+                                    )
+                                }
+                            }
+                        }
                     }
                 },
             )
@@ -268,11 +321,18 @@ fun FolderListScreen(
                     },
                 )
                 selection.active -> if (uiState.view == HomeView.FOLDERS) {
+                    val selectedFolders = uiState.browseSubFolders.filter {
+                        it.resourceId in selection.ids
+                    }
+                    val onlyFolder = selectedFolders.singleOrNull()
                     FolderSelectionNavBar(
-                        onDeleteModeSelected = { mode ->
-                            val selectedFolders = uiState.browseSubFolders.filter {
-                                it.resourceId in selection.ids
+                        onShare = {
+                            onlyFolder?.let {
+                                shareTarget = ShareTarget(it.resourceId, it.name)
                             }
+                        },
+                        shareEnabled = shareEnabled,
+                        onDeleteModeSelected = { mode ->
                             val selectedFiles = uiState.browseFiles.filter {
                                 it.resourceId in selection.ids
                             }
@@ -421,6 +481,22 @@ fun FolderListScreen(
                 pendingFolderIds = emptyList()
                 pendingFileIds = emptyList()
             },
+        )
+    }
+
+    shareTarget?.let { target ->
+        ShareBottomSheet(
+            resourceName = target.name,
+            onDismiss = {
+                shareTarget = null
+                shareViewModel.reset()
+            },
+            onShare = { username, access ->
+                shareViewModel.share(target.resourceId, "folder", username, access)
+            },
+            sharing = shareState.sharing,
+            error = shareState.error,
+            enqueued = shareState.enqueued,
         )
     }
 }
