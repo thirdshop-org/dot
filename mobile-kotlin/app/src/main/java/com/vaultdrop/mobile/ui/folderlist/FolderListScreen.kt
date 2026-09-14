@@ -77,6 +77,7 @@ import com.vaultdrop.mobile.ui.components.DeleteConfirmDialog
 import com.vaultdrop.mobile.ui.components.DeleteReview
 import com.vaultdrop.mobile.ui.components.DeleteWarningDialog
 import com.vaultdrop.mobile.ui.components.FileCategoryIcon
+import com.vaultdrop.mobile.ui.components.FilePendingReviewBadge
 import com.vaultdrop.mobile.ui.components.FileSyncStatusIcon
 import com.vaultdrop.mobile.ui.components.FolderNameDialog
 import com.vaultdrop.mobile.ui.components.SelectionState
@@ -828,7 +829,13 @@ private fun FileCard(
                 if (selection.active) {
                     SelectionStatusIcon(selected = selected)
                 } else {
-                    FileSyncStatusIcon(file = file, size = 20.dp)
+                    Row(
+                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        FilePendingReviewBadge(file = file)
+                        FileSyncStatusIcon(file = file, size = 20.dp)
+                    }
                 }
             }
             Spacer(Modifier.height(8.dp))

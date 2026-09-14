@@ -62,6 +62,7 @@ import com.vaultdrop.mobile.ui.components.DeleteConfirmDialog
 import com.vaultdrop.mobile.ui.components.DeleteReview
 import com.vaultdrop.mobile.ui.components.DeleteWarningDialog
 import com.vaultdrop.mobile.ui.components.FileCategoryIcon
+import com.vaultdrop.mobile.ui.components.FilePendingReviewBadge
 import com.vaultdrop.mobile.ui.components.FileSyncStatusIcon
 import com.vaultdrop.mobile.ui.components.MoveFolderPickerDialog
 import com.vaultdrop.mobile.ui.components.SelectionState
@@ -464,6 +465,7 @@ private fun SearchResultCard(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
+                    FilePendingReviewBadge(file = file)
                     Text(
                         text = formatSize(file.size),
                         style = MaterialTheme.typography.labelMedium,
