@@ -403,11 +403,13 @@ fun FolderListScreen(
                 .padding(padding)
                 .fillMaxSize(),
         ) {
-            HomeViewSelector(
-                selected = uiState.view,
-                enabled = !selection.active && !uiState.moveMode,
-                onSelect = viewModel::selectView,
-            )
+            if (!selection.active) {
+                HomeViewSelector(
+                    selected = uiState.view,
+                    enabled = !uiState.moveMode,
+                    onSelect = viewModel::selectView,
+                )
+            }
             HomeViewContent(
                 view = uiState.view,
                 moveMode = uiState.moveMode,
