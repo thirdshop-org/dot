@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"os"
 
 	"github.com/gin-gonic/gin"
 	"github.com/vaultdrop/backend/config"
@@ -14,6 +15,8 @@ import (
 	"github.com/vaultdrop/backend/service"
 )
 
+var version = "dev"
+
 func newRouter() *gin.Engine {
 	r := gin.Default()
 	handlers.RegisterRoutes(r)
@@ -21,8 +24,12 @@ func newRouter() *gin.Engine {
 }
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "--version" {
+		fmt.Printf("vaultdrop-server %s\n", version)
+		os.Exit(0)
+	}
 
-	err, cfg := config.LoadApplicationConfig()
+	cfg, err := config.LoadApplicationConfig()
 
 	if err != nil {
 		log.Fatalln(err)

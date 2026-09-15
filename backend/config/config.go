@@ -18,22 +18,22 @@ type ApplicationConfig struct {
 	AdminPassword string
 }
 
-func LoadApplicationConfig() (error, *ApplicationConfig) {
+func LoadApplicationConfig() (*ApplicationConfig, error) {
 
 	// .env optionnel — les défauts suffisent pour le dev local.
 	_ = godotenv.Load()
 
 	port, err := getInt("PORT", 8080)
 	if err != nil {
-		return err, nil
+		return nil, err
 	}
 
 	maxSize, err := getInt("MAX_FILE_SIZE_MB", 50)
 	if err != nil {
-		return err, nil
+		return nil, err
 	}
 
-	return nil, &ApplicationConfig{
+	return &ApplicationConfig{
 		Port:          port,
 		DatabaseURL:   get("DATABASE_URL", "postgres://vaultdrop:vaultdrop@localhost:5432/vaultdrop_dev?sslmode=disable"),
 		UploadDir:     get("UPLOAD_DIR", "./uploads"),
@@ -42,7 +42,7 @@ func LoadApplicationConfig() (error, *ApplicationConfig) {
 		AuthSecret:    get("AUTH_SECRET", "dev-secret-change-me"),
 		AdminUsername: get("ADMIN_USERNAME", ""),
 		AdminPassword: get("ADMIN_PASSWORD", ""),
-	}
+	}, nil
 
 }
 

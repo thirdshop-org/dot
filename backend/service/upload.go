@@ -9,7 +9,7 @@ import (
 func (s *Services) UploadDocument(file *string, destination *models.Document) error {
 
 	if canEdit, _ := UserCanEditDocument(s.ConnectedUser, destination); !canEdit {
-		return fmt.Errorf("Can not edit")
+		return fmt.Errorf("cannot edit document")
 	}
 
 	models.NewDocument("test", models.FILE, 1)

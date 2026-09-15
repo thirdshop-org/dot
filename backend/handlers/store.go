@@ -25,7 +25,7 @@ func writeError(c *gin.Context, err error) {
 		api.Error(c, 404, "GRANTEE_NOT_FOUND", "the specified user does not exist")
 	case errors.Is(err, repository.ErrNameConflict):
 		api.Error(c, 409, "NAME_CONFLICT", "a resource with this name already exists here")
-	case errors.Is(err, service.FileTooLargeError):
+	case errors.Is(err, service.ErrFileTooLarge):
 		api.Error(c, 413, "FILE_TOO_LARGE", "file exceeds the maximum allowed size")
 	default:
 		api.Error(c, 500, "INTERNAL", err.Error())

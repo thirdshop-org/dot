@@ -8,19 +8,19 @@ type Client interface {
 	GetClientVersion() int
 }
 
-func NewClient(clientVersion int) (error, Client) {
+func NewClient(clientVersion int) (Client, error) {
 
 	isCompatible := ServerClientIsCompatibleWithClient(clientVersion)
 
 	if !isCompatible {
-		return fmt.Errorf("You client version %d is not compatible with the server verison %d", clientVersion, SERVER_VERSION), nil
+		return nil, fmt.Errorf("client version %d is not compatible with the server version %d", clientVersion, SERVER_VERSION)
 	}
 
 	client := ClientVerisonOne{
 		Version: clientVersion,
 	}
 
-	return nil, &client
+	return &client, nil
 
 }
 

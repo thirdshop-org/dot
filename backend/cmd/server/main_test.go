@@ -9,14 +9,14 @@ import (
 
 func TestUserCreation(t *testing.T) {
 
-	err, userAntoine := models.NewUser("antoine")
+	userAntoine, err := models.NewUser("antoine")
 	if err != nil {
-		t.Errorf(`Error creating antoine user %v`, err)
+		t.Fatalf("creating antoine user: %v", err)
 	}
 
-	err, userBob := models.NewUser("bob")
+	userBob, err := models.NewUser("bob")
 	if err != nil {
-		t.Errorf(`Error creating bob user %v`, err)
+		t.Fatalf("creating bob user: %v", err)
 	}
 
 	fmt.Println(userAntoine, userBob)
@@ -25,14 +25,14 @@ func TestUserCreation(t *testing.T) {
 
 func TestCreateDocument(t *testing.T) {
 
-	err, document := models.NewDocument("paper.pdf", models.FILE, 1)
+	document, err := models.NewDocument("paper.pdf", models.FILE, 1)
 	if err != nil {
-		t.Errorf(`Error creating document %v`, err)
+		t.Fatalf("creating document: %v", err)
 	}
 
-	err, directory := models.NewDocument("bob", models.DIRECTORY, 1)
+	directory, err := models.NewDocument("bob", models.DIRECTORY, 1)
 	if err != nil {
-		t.Errorf(`Error creating bob directory %v`, err)
+		t.Fatalf("creating bob directory: %v", err)
 	}
 
 	fmt.Println(document, directory)

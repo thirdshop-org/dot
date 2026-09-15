@@ -51,6 +51,7 @@ fun FileThumbnail(
 
     val context = LocalContext.current
     val thumbnailStore = rememberThumbnailStore(context)
+    @Suppress("ProduceStateDoesNotAssignValue")
     val thumb by produceState<File?>(null, file.resourceId, file.lastModified) {
         value = withContext(Dispatchers.IO) { thumbnailStore.ensure(file) }
     }

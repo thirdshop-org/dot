@@ -26,3 +26,29 @@ else
   adb -d install -r "$APK"
 fi
 '''
+
+[tasks.test]
+description = "Run all tests (Go + Kotlin)"
+run = '''
+set -euo pipefail
+cd backend && go test ./...
+cd ../mobile-kotlin && ./gradlew :app:testDebugUnitTest -q
+'''
+
+[tasks.build]
+description = "Build all artifacts (Go binary + Android APK)"
+run = '''
+set -euo pipefail
+VERSION=$(cat VERSION)
+mkdir -p backend/bin
+cd backend && go build -ldflags "-X main.version=$VERSION" -o bin/vaultdrop-server cmd/server/main.go
+cd ../mobile-kotlin && ./gradlew :app:assembleDebug -q
+'''
+
+[tasks.lint]
+description = "Lint all code (staticcheck + Android Lint)"
+run = '''
+set -euo pipefail
+cd backend && staticcheck ./...
+cd ../mobile-kotlin && ./gradlew :app:lint -q
+'''

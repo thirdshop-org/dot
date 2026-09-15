@@ -13,8 +13,8 @@ import (
 	"github.com/vaultdrop/backend/repository"
 )
 
-// FileTooLargeError signals an upload above MaxFileSize.
-var FileTooLargeError = errors.New("file too large")
+// ErrFileTooLarge signals an upload above MaxFileSize.
+var ErrFileTooLarge = errors.New("file too large")
 
 // FileDTO serializes exactly as mobile/api/types.ts FileDto.
 type FileDTO struct {
@@ -106,7 +106,7 @@ func (s *Resources) SearchFiles(ownerID, q string, page, pageSize int) ([]FileDT
 // if metadata persistence fails (e.g. name conflict).
 func (s *Resources) Upload(ownerID string, file *multipart.FileHeader, folderID string) (FileDTO, error) {
 	if file.Size > s.MaxFileSize {
-		return FileDTO{}, FileTooLargeError
+		return FileDTO{}, ErrFileTooLarge
 	}
 
 	id := repository.NewID()

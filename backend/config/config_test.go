@@ -18,7 +18,7 @@ func clearEnv(t *testing.T) {
 func TestLoadApplicationDefaults(t *testing.T) {
 	clearEnv(t)
 
-	err, cfg := LoadApplicationConfig()
+	cfg, err := LoadApplicationConfig()
 	if err != nil {
 		t.Fatalf("LoadApplicationConfig: %v", err)
 	}
@@ -56,7 +56,7 @@ func TestLoadApplicationEnvOverrides(t *testing.T) {
 	t.Setenv("ADMIN_USERNAME", "root")
 	t.Setenv("ADMIN_PASSWORD", "toor")
 
-	err, cfg := LoadApplicationConfig()
+	cfg, err := LoadApplicationConfig()
 	if err != nil {
 		t.Fatalf("LoadApplicationConfig: %v", err)
 	}
@@ -71,13 +71,13 @@ func TestLoadApplicationRejectsInvalidInt(t *testing.T) {
 	clearEnv(t)
 
 	t.Setenv("PORT", "not-a-number")
-	if err, _ := LoadApplicationConfig(); err == nil {
+	if _, err := LoadApplicationConfig(); err == nil {
 		t.Error("PORT invalide : attendu une erreur")
 	}
 
 	clearEnv(t)
 	t.Setenv("MAX_FILE_SIZE_MB", "99999999999999999999999")
-	if err, _ := LoadApplicationConfig(); err == nil {
+	if _, err := LoadApplicationConfig(); err == nil {
 		t.Error("MAX_FILE_SIZE_MB invalide : attendu une erreur")
 	}
 }

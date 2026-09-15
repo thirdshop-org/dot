@@ -1,19 +1,37 @@
 <resources>
     <string name="app_name">VaultDrop</string>
 
+    <!-- Files screen -->
+    <string name="default_root_title">Choose your VaultDrop folder</string>
+    <string name="default_root_message">VaultDrop needs a folder to store all the PDFs it creates. You can also create a new VaultDrop folder right in the picker. This step is required, once only.</string>
+    <string name="default_root_pick">Choose my VaultDrop folder</string>
+    <string name="default_root_folder_label">VaultDrop</string>
     <string name="files">Files</string>
     <string name="folder">Folder</string>
     <string name="view_files">Files</string>
     <string name="view_folders">Folders</string>
     <string name="dashboard_coming_soon">Dashboard coming soon</string>
+    <string name="dashboard_review_title">%1$d document(s) to review</string>
+    <string name="dashboard_review_hint">Review them in swipe mode: keep (and sync) or delete.</string>
+    <string name="dashboard_all_processed">All up to date — nothing to review.</string>
+
+    <!-- Review mode (swipe) -->
+    <string name="review_title">New documents</string>
+    <string name="review_remaining">%1$d remaining</string>
+    <string name="review_keep">KEEP</string>
+    <string name="review_keep_hint">keep + sync</string>
+    <string name="review_delete">DELETE</string>
+    <string name="review_done">All documents have been reviewed.</string>
+    <string name="review_finish">Finish</string>
+    <string name="review_mark_all">Mark all as reviewed</string>
+    <string name="review_mark_all_title">Mark all as reviewed?</string>
+    <string name="review_mark_all_message">The remaining documents will be marked as reviewed and synced to the cloud without being checked.</string>
+    <string name="review_load_error">Could not load the documents to review.</string>
+    <string name="review_delete_error">Could not delete this document — permission denied.</string>
     <string name="browse_up">Up</string>
     <string name="move_here_count">Move here (%1$d)</string>
     <string name="move_pick_title">Move %1$d file(s)…</string>
     <string name="move_success">File(s) moved</string>
-    <string name="default_root_title">Choose your VaultDrop folder</string>
-    <string name="default_root_message">VaultDrop needs a folder to store all the PDFs it creates. You can also create a new VaultDrop folder right in the picker. This step is required, once only.</string>
-    <string name="default_root_pick">Choose my VaultDrop folder</string>
-    <string name="default_root_folder_label">VaultDrop</string>
     <string name="add_folder">Add a folder</string>
     <string name="create_folder">Create a folder</string>
     <string name="new_folder_name_title">Folder name</string>
@@ -40,6 +58,7 @@
     <string name="no_folders_yet">No folders yet. Tap "Add a folder" to sync a folder.</string>
     <string name="no_files_yet">No files yet. Tap "Add a folder" to sync your files.</string>
     <string name="empty_folder">Empty folder — next sync will refresh it.</string>
+    <string name="file_pending_review">To review</string>
     <string name="unit_bytes">B</string>
     <string name="unit_kilobytes">KB</string>
     <string name="unit_megabytes">MB</string>
@@ -117,6 +136,33 @@
     <string name="login_skip">Continue without account</string>
     <string name="skip_message">Local mode — your folders stay on this device and are not synced.</string>
 
+    <!-- Server status (header badge) -->
+    <string name="status_online">Online</string>
+    <string name="status_offline">Offline</string>
+    <string name="status_checking">Checking…</string>
+    <string name="status_local">Local mode</string>
+    <string name="status_tap_to_recheck">Server status — tap to check</string>
+
+    <!-- Sync status (badge + outbox list) -->
+    <string name="sync_syncing">Syncing…</string>
+    <string name="sync_pending_count">%1$d pending</string>
+    <string name="sync_pending_count_one">1 pending</string>
+    <string name="sync_idle">Up to date</string>
+    <string name="sync_tap_to_view">Sync — tap to view the operations list</string>
+    <string name="sync_list_title">Sync list</string>
+    <string name="sync_list_empty">No operations yet.</string>
+    <string name="sync_list_close">Close</string>
+    <string name="sync_summary_total">%1$d operations</string>
+    <string name="sync_summary_pending">%1$d pending</string>
+    <string name="sync_summary_failed">%1$d failed</string>
+    <string name="sync_status_pending">Pending</string>
+    <string name="sync_status_synced">Synced</string>
+    <string name="sync_status_failed">Failed</string>
+    <string name="sync_op_create">Create resource</string>
+    <string name="sync_op_move">Move</string>
+    <string name="sync_op_delete">Delete</string>
+    <string name="sync_op_update">Update</string>
+
     <!-- Multi-select + PDF assembly -->
     <string name="selection_count">%1$d selected</string>
     <string name="selection_assemble">Assemble PDF</string>
@@ -153,7 +199,43 @@
     <string name="pdf_builder_name_hint">e.g. january_invoices</string>
     <string name="pdf_builder_name_save">Save</string>
     <string name="pdf_builder_saved">PDF created</string>
+    <string name="pdf_builder_preview">Preview</string>
+    <string name="pdf_builder_close_preview">Close preview</string>
     <string name="pdf_generated_folder">Generated PDFs</string>
+
+    <!-- Camera scanner -->
+    <string name="scan_title">Scan</string>
+    <string name="scan_capture">Capture</string>
+    <string name="scan_pages_count">%1$d page(s)</string>
+    <string name="scan_view_session">View pages</string>
+    <string name="scan_camera_hint">Frame the document, then capture.</string>
+    <string name="scan_permission_rationale">Allow camera access to scan documents.</string>
+    <string name="scan_permission_grant">Allow camera</string>
+    <string name="scan_crop_title">Crop</string>
+    <string name="scan_confirm_page">Confirm page</string>
+    <string name="scan_retake">Retake</string>
+    <string name="scan_render_color">Color</string>
+    <string name="scan_render_gray">B&amp;W</string>
+    <string name="scan_render_high">High-contrast B&amp;W</string>
+    <string name="scan_add_page">Add a page</string>
+    <string name="scan_session_title">Scanned pages</string>
+    <string name="scan_delete_page">Delete</string>
+    <string name="scan_move_up">Move up</string>
+    <string name="scan_move_down">Move down</string>
+    <string name="scan_empty">No pages yet.\nCapture your first page.</string>
+    <string name="scan_export">Export to the VaultDrop folder</string>
+    <string name="scan_export_pdf">Save as PDF</string>
+    <string name="scan_exporting">Exporting…</string>
+    <string name="scan_abandon">Abandon</string>
+    <string name="scan_abandon_title">Abandon the scan?</string>
+    <string name="scan_abandon_message">Captured pages will be deleted.</string>
+    <string name="scan_confirm">Confirm</string>
+    <string name="scan_cancel">Cancel</string>
+    <string name="scan_error_session">Scan session unavailable.</string>
+    <string name="scan_error_capture">Could not use this capture.</string>
+    <string name="scan_error_page">Could not save the page.</string>
+    <string name="scan_error_export">Could not export the pages.</string>
+    <string name="scan_export_done">Pages exported</string>
 
     <!-- Delete multi-select -->
     <string name="delete">Delete</string>
@@ -168,4 +250,19 @@
     <string name="delete_confirm_button">Confirm</string>
     <string name="delete_cancel">Cancel</string>
     <string name="delete_error">Error while deleting</string>
+
+    <!-- Sharing (share grants) -->
+    <string name="share_title">Share with a user</string>
+    <string name="share_username_hint">Recipient\'s username</string>
+    <string name="share_access_label">Access level</string>
+    <string name="share_access_viewer">View (viewer)</string>
+    <string name="share_access_commenter">Comment (commenter)</string>
+    <string name="share_access_editor">Edit (editor)</string>
+    <string name="share_submit">Share</string>
+    <string name="share_cancel">Cancel</string>
+    <string name="share_error_not_found">No user found with this username.</string>
+    <string name="share_error_generic">Could not share right now.</string>
+    <string name="share_content_description">Share this folder</string>
+    <string name="share_action">Share</string>
+    <string name="more_actions">More actions</string>
 </resources>

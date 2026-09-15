@@ -311,7 +311,7 @@ func TestResolveUser(t *testing.T) {
 		t.Errorf("resolve: %+v", env.Data)
 	}
 	// Jamais email ni is_admin
-	if len(rec.Body.Bytes()) < 0 || strings.Contains(rec.Body.String(), "is_admin") || strings.Contains(rec.Body.String(), "email") {
+	if len(rec.Body.Bytes()) == 0 || strings.Contains(rec.Body.String(), "is_admin") || strings.Contains(rec.Body.String(), "email") {
 		t.Error("resolve ne doit pas exposer email/is_admin")
 	}
 

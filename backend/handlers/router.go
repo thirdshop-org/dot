@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"net/http"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -46,11 +45,4 @@ func RegisterRoutes(r *gin.Engine) {
 	r.NoRoute(func(c *gin.Context) {
 		api.Error(c, http.StatusNotFound, "NOT_FOUND", "route not found")
 	})
-}
-
-// userID lit la clé de scoping posée par RequireAuth. Un empty string est
-// impossible en conditions normales (le middleware l'a validé) ; garde-fou
-// pour un appel direct dans les tests.
-func userID(c *gin.Context) string {
-	return strings.TrimSpace(c.GetString(UserIDKey))
 }

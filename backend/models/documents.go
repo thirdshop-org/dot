@@ -1,7 +1,7 @@
 package models
 
 import (
-	"fmt"
+	"errors"
 )
 
 type Document struct {
@@ -37,19 +37,19 @@ func IsDirectory(documentType int) bool {
 	return DIRECTORY == documentType
 }
 
-func NewDocument(documentName string, documentType int, documentVersion int) (error, *Document) {
+func NewDocument(documentName string, documentType int, documentVersion int) (*Document, error) {
 
 	documentTypeIsValid := IsDocumentTypeValid(documentType)
 
 	if !documentTypeIsValid {
-		return fmt.Errorf(ERROR_DOCUMENT_TYPE), nil
+		return nil, errors.New(ERROR_DOCUMENT_TYPE)
 	}
 
-	return nil, &Document{
+	return &Document{
 		Name:    &documentName,
 		Type:    documentType,
 		Version: documentVersion,
-	}
+	}, nil
 
 }
 

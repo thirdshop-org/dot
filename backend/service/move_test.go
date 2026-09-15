@@ -8,23 +8,27 @@ import (
 
 func TestMoveDocument(t *testing.T) {
 
-	err, userAntoine := models.NewUser("antoine")
+	userAntoine, err := models.NewUser("antoine")
 	if err != nil {
-		t.Errorf(`Error creating antoine user %v`, err)
+		t.Fatalf("creating antoine user: %v", err)
 	}
 
 	fakeUUID := "dsqdsq"
-	err, document := models.NewDocument("test.pdf", models.FILE, 1)
+	document, err := models.NewDocument("test.pdf", models.FILE, 1)
+	if err != nil {
+		t.Fatalf("creating document: %v", err)
+	}
 	document.UUID = &fakeUUID
 
-	err, folder := models.NewDocument("orga", models.DIRECTORY, 1)
+	folder, err := models.NewDocument("orga", models.DIRECTORY, 1)
+	if err != nil {
+		t.Fatalf("creating folder: %v", err)
+	}
 	folder.UUID = &fakeUUID
 
 	service := New(userAntoine)
 
-	err = service.MoveDocumentIntoDocument(document, folder)
-
-	if err != nil {
+	if err := service.MoveDocumentIntoDocument(document, folder); err != nil {
 		t.Error(err)
 	}
 
@@ -32,14 +36,20 @@ func TestMoveDocument(t *testing.T) {
 
 func TestMoveDocumentToAFile(t *testing.T) {
 
-	err, userAntoine := models.NewUser("antoine")
+	userAntoine, err := models.NewUser("antoine")
 	if err != nil {
-		t.Errorf(`Error creating antoine user %v`, err)
+		t.Fatalf("creating antoine user: %v", err)
 	}
 
-	err, document := models.NewDocument("test.pdf", models.FILE, 1)
+	document, err := models.NewDocument("test.pdf", models.FILE, 1)
+	if err != nil {
+		t.Fatalf("creating document: %v", err)
+	}
 
-	err, notAFolder := models.NewDocument("orga", models.FILE, 1)
+	notAFolder, err := models.NewDocument("orga", models.FILE, 1)
+	if err != nil {
+		t.Fatalf("creating file: %v", err)
+	}
 
 	service := New(userAntoine)
 
