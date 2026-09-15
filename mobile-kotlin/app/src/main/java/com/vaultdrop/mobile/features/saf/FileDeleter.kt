@@ -10,6 +10,7 @@ import com.vaultdrop.mobile.data.local.entity.FileEntity
 import com.vaultdrop.mobile.data.local.entity.FileStatus
 import com.vaultdrop.mobile.data.repository.FileRepository
 import com.vaultdrop.mobile.data.repository.OutboxRepository
+import com.vaultdrop.mobile.features.thumbnails.ThumbnailStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -33,6 +34,7 @@ class FileDeleter @Inject constructor(
     private val fileRepository: FileRepository,
     private val outboxRepository: OutboxRepository,
     private val appDatabase: AppDatabase,
+    private val thumbnailStore: ThumbnailStore,
 ) {
 
     private val resolver: ContentResolver get() = context.contentResolver
@@ -68,6 +70,7 @@ class FileDeleter @Inject constructor(
         }.onSuccess { deleted ->
             if (deleted) {
                 fileRepository.markMissing(file.resourceId, System.currentTimeMillis())
+                thumbnailStore.delete(file.resourceId)
                 Timber.d("deleted locally %s", uri)
             } else {
                 Timber.w("deleteDocument returned false for %s", uri)
@@ -115,6 +118,7 @@ class FileDeleter @Inject constructor(
                         }
                     }
                     Timber.d("deleted full %s", uri)
+                    thumbnailStore.delete(file.resourceId)
                 } else {
                     Timber.w("deleteDocument returned false for %s", uri)
                 }

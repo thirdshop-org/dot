@@ -53,9 +53,9 @@ import com.vaultdrop.mobile.data.local.entity.FileEntity
 import com.vaultdrop.mobile.data.local.entity.FolderEntity
 import com.vaultdrop.mobile.features.connection.ConnectionStatusViewModel
 import com.vaultdrop.mobile.features.sync.SyncViewModel
-import com.vaultdrop.mobile.ui.components.FileCategoryIcon
 import com.vaultdrop.mobile.ui.components.FilePendingReviewBadge
 import com.vaultdrop.mobile.ui.components.FileSyncStatusIcon
+import com.vaultdrop.mobile.ui.components.FileThumbnail
 import com.vaultdrop.mobile.ui.components.FolderNameDialog
 import com.vaultdrop.mobile.ui.components.MoveFolderPickerDialog
 import com.vaultdrop.mobile.ui.components.SelectionState
@@ -457,7 +457,7 @@ private fun FileRow(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            FileCategoryIcon(file = file, size = 24.dp)
+            FileThumbnail(file = file, size = 40.dp)
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = file.name,

@@ -11,6 +11,7 @@ import com.vaultdrop.mobile.data.local.entity.FolderEntity
 import com.vaultdrop.mobile.data.repository.FileRepository
 import com.vaultdrop.mobile.data.repository.FolderRepository
 import com.vaultdrop.mobile.data.repository.OutboxRepository
+import com.vaultdrop.mobile.features.thumbnails.ThumbnailStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -39,6 +40,7 @@ class FolderDeleter @Inject constructor(
     private val fileRepository: FileRepository,
     private val outboxRepository: OutboxRepository,
     private val appDatabase: AppDatabase,
+    private val thumbnailStore: ThumbnailStore,
 ) {
 
     private val resolver: ContentResolver get() = context.contentResolver
@@ -77,6 +79,7 @@ class FolderDeleter @Inject constructor(
             tree.files.forEach { fileRepository.markMissing(it.resourceId, now) }
             tree.folders.forEach { folderRepository.markMissing(it.resourceId, now) }
             folderRepository.markMissing(folder.resourceId, now)
+            tree.files.forEach { thumbnailStore.delete(it.resourceId) }
             Timber.d("deleted folder locally %s", uri)
             return true
         }
@@ -109,6 +112,7 @@ class FolderDeleter @Inject constructor(
                 appDatabase.withTransaction {
                     treeMarkMissing(folder, tree, now)
                 }
+                tree.files.forEach { thumbnailStore.delete(it.resourceId) }
                 Timber.d("deleted folder full %s", uri)
                 return true
             }

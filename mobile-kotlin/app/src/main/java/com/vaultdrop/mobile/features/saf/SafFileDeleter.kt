@@ -9,6 +9,7 @@ import com.vaultdrop.mobile.data.local.AppDatabase
 import com.vaultdrop.mobile.data.local.entity.FileEntity
 import com.vaultdrop.mobile.data.repository.FileRepository
 import com.vaultdrop.mobile.data.repository.OutboxRepository
+import com.vaultdrop.mobile.features.thumbnails.ThumbnailStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -35,6 +36,7 @@ class SafFileDeleter @Inject constructor(
     private val fileRepository: FileRepository,
     private val outboxRepository: OutboxRepository,
     private val appDatabase: AppDatabase,
+    private val thumbnailStore: ThumbnailStore,
 ) {
 
     private val resolver: ContentResolver get() = context.contentResolver
@@ -58,6 +60,7 @@ class SafFileDeleter @Inject constructor(
                         }
                     }
                     Timber.d("deleted %s", uri)
+                    thumbnailStore.delete(file.resourceId)
                 } else {
                     Timber.w("deleteDocument returned false for %s", uri)
                 }

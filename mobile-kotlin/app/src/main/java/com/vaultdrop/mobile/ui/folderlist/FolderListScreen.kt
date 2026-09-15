@@ -89,9 +89,9 @@ import com.vaultdrop.mobile.features.saf.FileDeleter
 import com.vaultdrop.mobile.ui.components.DeleteConfirmDialog
 import com.vaultdrop.mobile.ui.components.DeleteReview
 import com.vaultdrop.mobile.ui.components.DeleteWarningDialog
-import com.vaultdrop.mobile.ui.components.FileCategoryIcon
 import com.vaultdrop.mobile.ui.components.FilePendingReviewBadge
 import com.vaultdrop.mobile.ui.components.FileSyncStatusIcon
+import com.vaultdrop.mobile.ui.components.FileThumbnail
 import com.vaultdrop.mobile.ui.components.FolderNameDialog
 
 import com.vaultdrop.mobile.ui.components.SelectionState
@@ -1059,7 +1059,7 @@ private fun FileCard(
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                FileCategoryIcon(file = file, size = 36.dp)
+                FileThumbnail(file = file, size = 56.dp)
                 Spacer(Modifier.weight(1f))
                 if (selection.active) {
                     SelectionStatusIcon(selected = selected)
@@ -1122,7 +1122,7 @@ private fun BrowseFileRow(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            FileCategoryIcon(file = file, size = 26.dp)
+            FileThumbnail(file = file, size = 40.dp)
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = file.name,
