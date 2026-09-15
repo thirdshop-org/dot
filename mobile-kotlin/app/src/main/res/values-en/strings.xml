@@ -21,6 +21,16 @@
     <string name="new_folder_name_required">The folder name cannot be empty.</string>
     <string name="new_folder_cloud_only">This folder is cloud-only — import a physical folder first to create subfolders inside it.</string>
     <string name="new_folder_error">Could not create the folder.</string>
+    <string name="create_option_scan">Scan a document</string>
+    <string name="create_option_note">Add a note</string>
+    <string name="create_option_title">Add</string>
+    <string name="note_dialog_title">New note</string>
+    <string name="note_title_label">Title</string>
+    <string name="note_title_hint">e.g. shopping list</string>
+    <string name="note_body_label">Note text</string>
+    <string name="note_cancel">Cancel</string>
+    <string name="note_create">Create</string>
+    <string name="note_empty_title">The note title cannot be empty.</string>
     <string name="move_files">Move</string>
     <string name="move_files_title">Move to folder</string>
     <string name="move_files_count">%1$d file(s)</string>

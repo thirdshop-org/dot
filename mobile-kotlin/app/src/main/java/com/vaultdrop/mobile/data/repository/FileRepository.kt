@@ -117,6 +117,56 @@ class FileRepository @Inject constructor(
     suspend fun getFile(resourceId: String): FileEntity? =
         fileDao.getByResourceId(resourceId)
 
+    /**
+     * Crée une note fichier directement dans l'app : ligne `files` cloud-only
+     * (uri NULL — aucun copie physique, le corps est stocké dans `content`)
+     * avec `processed = 1` (jamais dans la file de review). Le `create_resource`
+     * est poussé dans la même transaction (pattern transactional outbox).
+     */
+    suspend fun createNote(
+        title: String,
+        body: String,
+        folderResourceId: String,
+        ownerId: String? = null,
+    ): FileEntity {
+        val now = System.currentTimeMillis()
+        val trimmedTitle = title.trim()
+        val noteName = if (trimmedTitle.endsWith(".txt", ignoreCase = true)) {
+            trimmedTitle
+        } else {
+            "$trimmedTitle.txt"
+        }
+        val entity = FileEntity(
+            resourceId = generateId.newResourceId(),
+            uri = null,
+            name = noteName,
+            folderResourceId = folderResourceId,
+            extension = "txt",
+            size = body.length.toLong(),
+            mimeType = "text/plain",
+            exists = 1,
+            ownerId = ownerId,
+            category = computeCategory("text/plain", "txt").dbValue,
+            syncStatus = FileStatus.CLOUD,
+            content = body,
+            processed = true,
+            addedAt = now,
+            updatedAt = now,
+        )
+        appDatabase.withTransaction {
+            fileDao.upsert(entity)
+            outboxRepository.enqueueCreateResource(
+                resourceId = entity.resourceId,
+                resourceType = "file",
+                name = entity.name,
+                parentResourceId = entity.folderResourceId,
+                mimeType = entity.mimeType,
+                extension = entity.extension,
+            )
+        }
+        return entity
+    }
+
     suspend fun getAll(): List<FileEntity> = fileDao.getAll()
 
     /**

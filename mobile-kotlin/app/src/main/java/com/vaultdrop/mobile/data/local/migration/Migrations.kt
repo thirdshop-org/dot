@@ -22,6 +22,8 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  *   docs/api-v1.md §6.1).
  * v8 : tables `scan_sessions` + `scan_pages` (scanner appareil photo) — session
  *   multi-pages persistée pour survivre au process death avant export SAF.
+ * v9 : ajout colonne `content` sur `files` — corps d'une note créée dans
+ *   l'app (fichier cloud-only, uri = NULL). Null pour les fichiers importés.
  */
 object Migrations {
 
@@ -158,7 +160,13 @@ object Migrations {
         }
     }
 
+    private val MIGRATION_8_9 = object : Migration(8, 9) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE `files` ADD COLUMN `content` TEXT")
+        }
+    }
+
     val ALL: Array<Migration> = arrayOf(
-        MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8,
+        MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9,
     )
 }

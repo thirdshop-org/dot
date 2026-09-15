@@ -252,6 +252,35 @@ class FolderListViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Crée une note fichier cloud-only dans le dossier courant de l'explorateur
+     * (racine par défaut si on est en haut). Le contenu reste local en V1.
+     */
+    fun createNote(title: String, body: String) {
+        val trimmed = title.trim()
+        if (trimmed.isBlank()) {
+            _uiState.update { it.copy(createError = context.getString(R.string.note_empty_title)) }
+            return
+        }
+        viewModelScope.launch {
+            val targetId = _browseFolderId.value ?: _defaultRootId.value
+            if (targetId == null) {
+                _uiState.update { it.copy(createError = context.getString(R.string.new_folder_error)) }
+                return@launch
+            }
+            runCatching {
+                fileRepository.createNote(
+                    title = trimmed,
+                    body = body,
+                    folderResourceId = targetId,
+                    ownerId = deviceIdentity.getOrCreate(),
+                )
+            }.onFailure {
+                _uiState.update { it.copy(createError = context.getString(R.string.new_folder_error)) }
+            }
+        }
+    }
+
     /** Consomme une erreur transitoire de création (Snackbar). */
     fun clearCreateError() {
         _uiState.update { it.copy(createError = null) }

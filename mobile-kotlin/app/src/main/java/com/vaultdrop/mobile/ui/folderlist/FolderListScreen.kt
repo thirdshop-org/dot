@@ -30,10 +30,13 @@ import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.DocumentScanner
+import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -45,11 +48,14 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -118,6 +124,7 @@ fun FolderListScreen(
     onTabSelected: (NavTab) -> Unit,
     onOpenDocument: (String) -> Unit,
     onBuildPdf: (List<String>) -> Unit,
+    onOpenScan: () -> Unit,
     syncViewModel: SyncViewModel,
     connectionStatusViewModel: ConnectionStatusViewModel,
     viewModel: FolderListViewModel = hiltViewModel(),
@@ -140,6 +147,8 @@ fun FolderListScreen(
     var shareTarget by remember { mutableStateOf<ShareTarget?>(null) }
     var showShareMenu by remember { mutableStateOf(false) }
     var shareEnabled by remember { mutableStateOf(false) }
+    var showCreateMenu by remember { mutableStateOf(false) }
+    var showNoteDialog by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
 
     // Le partage multi-sélection ne vaut que pour un dossier unique sélectionné,
@@ -396,6 +405,43 @@ fun FolderListScreen(
                 else -> FloatingNavBar(selected = selectedTab, onSelect = onTabSelected)
             }
         },
+        floatingActionButton = {
+            if (!selection.active && !uiState.moveMode) {
+                Box {
+                    SmallFloatingActionButton(
+                        onClick = { showCreateMenu = true },
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                    ) {
+                        Icon(
+                            Icons.Filled.Add,
+                            contentDescription = stringResource(R.string.create_option_title),
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = showCreateMenu,
+                        onDismissRequest = { showCreateMenu = false },
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.create_option_scan)) },
+                            leadingIcon = { Icon(Icons.Filled.DocumentScanner, contentDescription = null) },
+                            onClick = {
+                                showCreateMenu = false
+                                onOpenScan()
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.create_option_note)) },
+                            leadingIcon = { Icon(Icons.Filled.EditNote, contentDescription = null) },
+                            onClick = {
+                                showCreateMenu = false
+                                showNoteDialog = true
+                            },
+                        )
+                    }
+                }
+            }
+        },
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
     ) { padding ->
         Column(
@@ -436,6 +482,16 @@ fun FolderListScreen(
             onConfirm = { name ->
                 showCreateDialog = false
                 viewModel.createFolderInBrowse(name)
+            },
+        )
+    }
+
+    if (showNoteDialog) {
+        NoteDialog(
+            onDismiss = { showNoteDialog = false },
+            onConfirm = { title, body ->
+                showNoteDialog = false
+                viewModel.createNote(title, body)
             },
         )
     }
@@ -1108,4 +1164,51 @@ private fun formatSize(bytes: Long): String {
     }
     val mb = bytes / (1_024f * 1_024f)
     return String.format(Locale.getDefault(), "%.1f %s", mb, stringResource(R.string.unit_megabytes))
+}
+
+/** Création d'une note : titre requis, corps de texte libre. */
+@Composable
+private fun NoteDialog(
+    onDismiss: () -> Unit,
+    onConfirm: (title: String, body: String) -> Unit,
+) {
+    var title by remember { mutableStateOf("") }
+    var body by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.note_dialog_title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = { title = it },
+                    label = { Text(stringResource(R.string.note_title_label)) },
+                    placeholder = { Text(stringResource(R.string.note_title_hint)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = body,
+                    onValueChange = { body = it },
+                    label = { Text(stringResource(R.string.note_body_label)) },
+                    minLines = 4,
+                    maxLines = 8,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirm(title, body) },
+                enabled = title.isNotBlank(),
+            ) {
+                Text(stringResource(R.string.note_create))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.note_cancel))
+            }
+        },
+    )
 }
